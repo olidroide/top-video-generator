@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+
+{% block page_content %}
+    <div class="video-timeseries-container card">
+        <div class="card-content">
+            <div class="columns  is-mobile is-vcentered">
+                <div class="column is-narrow">
+                    <a class="button is-light" href="?daily={{ timeseries_previous_date.strftime("%Y-%m-%d") }}">
+                    <span class="icon">
+                        <i class="fa fa-caret-left"></i>
+                    </span>
+                    </a>
+                </div>
+                <div class="column">
+                    <div class="columns is-multiline is-centered">
+                        <div class="column is-full is-flex is-justify-content-center">
+                            <p >
+                                {{ timeseries_daily_date }}
+                            </p>
+                        </div>
+                        <div class="column is-flex is-justify-content-center">
+                            <div class="dropdown">
+                                <div class="dropdown-trigger">
+                                    <button class="button"
+                                            aria-haspopup="true"
+                                            aria-controls="dropdown-menu"
+                                            onclick="this.parentNode.parentNode.classList.toggle('is-active')"
+                                            >
+                                        <span>{{ 'Weekly' if timeseries_weekly_date else 'Daily' }}</span>
+                                        <span class="icon is-small"><i class="fas fa-angle-down" aria-hidden="true"></i></span>
+                                    </button>
+                                </div>
+                                <div class="dropdown-menu" id="dropdown-menu" role="menu">
+                                    <div class="dropdown-content">
+                                        <a href="?daily={{ timeseries_daily_date.strftime("%Y-%m-%d") }}"
+                                           class="dropdown-item {{ 'is-active' if not timeseries_weekly_date }}">Daily</a>
+                                        <a href="?weekly={{ timeseries_daily_date.strftime("%Y-%m-%d") }}"
+                                           class="dropdown-item {{ 'is-active' if timeseries_weekly_date }}">Weekly</a>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        <div class="column is-flex is-justify-content-center">
+                            <form action="/retry?method=fetch" method="post">
+                                <input type="submit" value="retry">
+                            </form>
+                            <form action="/retry?method=daily" method="post">
+                                <input type="submit" value="daily">
+                            </form>
+                            <form action="/retry?method=weekly" method="post">
+                                <input type="submit" value="weekly">
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-narrow">
+                    {% if timeseries_next_date %}
+                        <a class="button is-light is-pulled-right"
+                           href="?daily={{ timeseries_next_date.strftime("%Y-%m-%d") }}">
+                        <span class="icon">
+                        <i class="fa fa-caret-right"></i>
+                    </span>
+                    {% endif %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% for video in video_list %}
+        <div class="block video-row" style="--my-color-var: url('{{ video.yt_video_thumbnail_url }}')">
+            <div class="columns is-vcentered columns-video-row">
+                <div class="column is-2">
+                    <div class="card">
+                        <div class="card-content">
+                            <p class="video-score title is-family-monospace ">{{ video.score }}</p>
+                        </div>
+                        <footer class="card-footer">
+                            <p class="video-score-status  card-footer-item">
+                                <span class="is-family-monospace">
+                                    {{ macros.score_status_badge(video.score_status) }}
+                                </span>
+                            </p>
+                            <p class="card-footer-item">
+                                  <span class="subtitle is-6 is-family-monospace">
+                                    {{ video.score_previous or '-' }}
+                                  </span>
+                            </p>
+                        </footer>
+                    </div>
+                </div>
+                <div class="column ">
+                    <p class="title is-6">{{ video.yt_video_title_cleaned }}</p>
+                </div>
+                <div class="column ">
+                    <p class="channel-name ">
+                        {{ video.channel.name }}
+                    </p>
+                </div>
+                <div class="column ">
+                    <a href="{{ video.yt_video_url }}">
+                        <figure class="image is-fullwidth">
+                            <img src="{{ video.yt_video_thumbnail_url }}">
+                        </figure>
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+{% endblock %}
+
+

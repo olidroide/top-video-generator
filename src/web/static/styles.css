@@ -1,0 +1,58 @@
+* {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.probando {
+    background-color: #fc2b4c;
+}
+
+.columns-video-row {
+    padding: 0.8em;
+}
+
+.video-timeseries-container {
+    margin-top: 1.8em;
+    margin-bottom: 1.8em;
+}
+
+.video-timeseries {
+    text-align: center;
+}
+
+.video-score {
+    text-align: center;
+}
+
+.channel-name {
+    text-align: center;
+}
+
+.video-score-status:not(:last-child) {
+    border: 0;
+}
+
+.video-row {
+    position: relative;
+    z-index: 0;
+    display: inline-block;
+    overflow: hidden; /* hide the overflow here not on the pseudo element */
+    border-bottom: gainsboro 1px solid;
+    border-top: gainsboro 1px solid;
+
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.video-row::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    width: 100%;
+    height: 200%;
+    background: var(--my-color-var) 0 0 repeat;
+    background-size: 100%;
+    transform: translateY(-50%);
+    opacity: 0.05;
+}

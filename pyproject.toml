@@ -1,0 +1,21 @@
+[project]
+name = "top-video-generator"
+version = "1.0.0"
+requires-python = ">=3.11"
+readme = "README.md"
+authors = [
+  {name = "olidroide",email = "top-video-generator@olidroide.es"},
+]
+maintainers = [
+  {name = "olidroide", email = "top-video-generator@olidroide.es"}
+]
+keywords = ["youtube","top","video"]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 120
+target-version = 'py311'
+include = ["*.py"]

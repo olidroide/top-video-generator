@@ -1,0 +1,19 @@
+{% macro score_status_badge(score_status) %}
+    {% if score_status == "UP" %}
+        <span class="icon has-text-success">
+            <i class="fa fa-long-arrow-alt-up"></i>
+        </span>
+    {% elif score_status == "DOWN" %}
+        <span class="icon has-text-danger">
+            <i class="fa fa-long-arrow-alt-down"></i>
+        </span>
+    {% elif score_status == "EQUAL" %}
+        <span class="icon has-text-info">
+            <i class="fa fa-equals"></i>
+        </span>
+    {% elif score_status == "NEW" %}
+        <span class="icon has-text-warning">
+            <i class="fa fa-bolt"></i>
+        </span>
+    {% endif %}
+{% endmacro %}
