@@ -1,6 +1,6 @@
 from datetime import timedelta, date
 
-import structlog
+from src.logger import get_logger
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,7 @@ from src.settings import get_app_settings
 from src.tiktok_client import TikTokClient
 from src.yt_client import get_yt_client
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 app = FastAPI()
 

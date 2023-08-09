@@ -12,6 +12,7 @@ services:
       - ./prod:/app/db
       - ./prod/videos:/app/videos
       - ./prod/yt_client_secret.json:/app/yt_client_secret.json
+      - ./prod/logs:/app/logs
     env_file:
       - ./docker-environment.env
     deploy:

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import TypeVar
 
 import aiohttp
-import structlog
+from src.logger import get_logger
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from src.db_client import DatabaseClient
 from src.settings import get_app_settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager

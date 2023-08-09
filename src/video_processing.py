@@ -4,7 +4,7 @@ import shutil
 
 import requests
 import segno as segno
-import structlog
+from src.logger import get_logger
 from PIL import Image, ImageFont, ImageDraw
 from millify import millify
 from moviepy import Clip
@@ -21,7 +21,7 @@ from src.db_client import Video, VideoScoreStatus
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class VideoProcessing:

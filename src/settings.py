@@ -22,6 +22,7 @@ class AppSettings(BaseSettings):
     app_secret_key: str
     cpu_workers: int = 0
     threads_workers: int = 1
+    log_file_path: str = "top_music.log"
 
     yt_client_secret_file: str
     yt_redirect_uri: str

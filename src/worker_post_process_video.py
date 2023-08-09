@@ -2,13 +2,13 @@ import asyncio
 import gc
 import sys
 
-import structlog
+from src.logger import get_logger
 import zmq
 
 from src.db_client import Video
 from src.video_processing import VideoProcessing
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 def main_main(port, screen_orientation):

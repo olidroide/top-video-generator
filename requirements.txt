@@ -5,7 +5,7 @@ uvicorn==0.22.0
 itsdangerous==2.1.2
 structlog==23.1.0
 python-dotenv==1.0.0
-aiohttp[speedups]==3.8.4
+aiohttp[speedups]==3.8.5
 aiofiles==23.1.0
 moviepy==1.0.3
 pyzmq==25.1.0

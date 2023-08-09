@@ -5,14 +5,14 @@ import sys
 from typing import Iterator
 
 import math
-import structlog
+from src.logger import get_logger
 import zmq
 from zmq import Context
 
 from src.db_client import Video
 from src.settings import get_app_settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class WorkerFactory:

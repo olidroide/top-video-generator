@@ -3,14 +3,14 @@ from datetime import datetime, timezone, timedelta, date
 from enum import Enum
 from typing import Iterator
 
-import structlog
 from pydantic import BaseModel, PastDate
 from tinydb import TinyDB, Query
 from tinyflux import TinyFlux, Point, TagQuery, TimeQuery
 
+from src.logger import get_logger
 from src.settings import get_app_settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class TikTokAuth(BaseModel):

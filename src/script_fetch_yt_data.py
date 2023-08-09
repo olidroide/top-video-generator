@@ -2,12 +2,12 @@ import asyncio
 from datetime import datetime, timezone
 
 import isodate
-import structlog
+from src.logger import get_logger
 
 from src.db_client import DatabaseClient, Video, VideoPoint, Channel, VideoPointTools
 from src.yt_client import get_yt_client
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def is_passed_enough_time_from_last_fetch(

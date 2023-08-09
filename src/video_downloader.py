@@ -1,12 +1,12 @@
 import pathlib
 
-import structlog
+from src.logger import get_logger
 from yt_dlp import YoutubeDL
 
 from src.db_client import Video
 from src.settings import get_app_settings
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 class VideoDownloader:

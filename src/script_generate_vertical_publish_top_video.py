@@ -2,7 +2,7 @@ import asyncio
 import datetime
 from datetime import date
 
-import structlog
+from src.logger import get_logger
 
 from src.db_client import DatabaseClient, Video, TimeseriesRange
 from src.settings import get_app_settings
@@ -12,7 +12,7 @@ from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
 from src.yt_client import get_yt_client
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 async def generate_yt_title(video_list: list[Video]) -> str:
