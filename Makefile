@@ -12,7 +12,7 @@ build-local-image:
 #	docker build -t top-video-generator .
 
 run-web:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=web" -p 8080:8080 --rm top-video-generator
+	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=web" -p 8080:8080 --detach --rm top-video-generator
 
 run-fetch-data:
 	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=fetch_data" --rm top-video-generator

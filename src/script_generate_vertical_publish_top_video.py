@@ -2,9 +2,8 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags
 from src.logger import get_logger
-
-from src.db_client import DatabaseClient, Video, TimeseriesRange
 from src.settings import get_app_settings
 from src.tiktok_client import TikTokClient
 from src.video_downloader import VideoDownloader
@@ -15,9 +14,12 @@ from src.yt_client import get_yt_client
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video]) -> str:
+async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
     text_date = datetime.datetime.utcnow().strftime("%d/%m/%Y")
-    yt_title = f"[{text_date}] #top{len(video_list)} #Bollywood #Songs #Today: Hottest Hits and Hidden Gems"
+    hashtags = " ".join(hashtag_list) if hashtag_list else ""
+    yt_title = (
+        f"[{text_date}] #top{len(video_list)} #Bollywood #Songs #Today: Hottest Hits and Hidden Gems \n{hashtags}"
+    )
     return yt_title
 
 
@@ -64,7 +66,8 @@ async def main():
         vertical=True,
     )
 
-    yt_title = await generate_yt_title(video_list)
+    hashtag_list = video_list_mapper_hashtags(video_list)
+    yt_title = await generate_yt_title(video_list, hashtag_list=hashtag_list)
     logger.debug("generated title: ", yt_title=yt_title)
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
@@ -85,6 +88,7 @@ async def main():
             description=yt_description,
             thumbnail_path=None,
             playlist_id=playlist_id,
+            tags=hashtag_list,
         )
     except Exception as e:
         logger.error("Failed to upload Youtube", error=e)

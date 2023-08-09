@@ -2,9 +2,8 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags
 from src.logger import get_logger
-
-from src.db_client import DatabaseClient, Video, TimeseriesRange
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
@@ -65,7 +64,7 @@ async def main():
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
     thumbnail_path = await video_processor.generate_thumbnail(video_list[-4:])
-
+    hashtag_list = video_list_mapper_hashtags(video_list)
     try:
         playlist_id = get_app_settings().yt_playlist_id_daily
 
@@ -75,6 +74,7 @@ async def main():
             description=yt_description,
             thumbnail_path=thumbnail_path,
             playlist_id=playlist_id,
+            tags=hashtag_list,
         )
     except Exception as e:
         logger.error("Failed to upload Youtube", error=e)

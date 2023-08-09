@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import TypeVar
 
 import aiohttp
-from src.logger import get_logger
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -13,6 +12,7 @@ from googleapiclient.http import MediaFileUpload
 from pydantic import BaseModel
 
 from src.db_client import DatabaseClient
+from src.logger import get_logger
 from src.settings import get_app_settings
 
 logger = get_logger(__name__)
@@ -137,7 +137,44 @@ class YTClient:
         data = YTRoot.parse_obj(await self._fetch_video_details(video_id=video_id))
         return data
 
-    async def upload_video(self, video_path, title, description, thumbnail_path: str = None, playlist_id: str = None):
+    async def upload_video(
+        self,
+        video_path,
+        title,
+        description,
+        thumbnail_path: str = None,
+        playlist_id: str = None,
+        tags: list[str] = None,
+    ):
+        yt_tags = [
+            "top 25",
+            "top viewed songs",
+            "bollywood",
+            "songs",
+            "past 7 days",
+            "latest bollywood songs",
+            "latest hindi songs",
+            "latest punjabi songs",
+            "new romantic songs",
+            "new songs sad",
+            "love songs",
+            "romantic hits",
+            "shorts bollywood",
+            "top 5",
+            f"hindi songs {datetime.utcnow().year}",
+            "hindi songs new",
+            f"bollywood songs {datetime.utcnow().year}",
+            f"bollywood movies {datetime.utcnow().year}",
+            "hindi songs",
+            "hindi dance songs",
+            "hindi songs bollywood",
+            "New songs",
+            "Bollywood Romantic Songs",
+            "Video Song",
+        ]
+
+        yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
+
         try:
             youtube = self.get_authenticated_service()
             media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
@@ -155,32 +192,7 @@ class YTClient:
                             "description": description,
                             "categoryId": "10",
                             "defaultAudioLanguage": "hi",
-                            "tags": [
-                                "top 25",
-                                "top viewed songs",
-                                "bollywood",
-                                "songs",
-                                "past 7 days",
-                                "latest bollywood songs",
-                                "latest hindi songs",
-                                "latest punjabi songs",
-                                "new romantic songs",
-                                "new songs sad",
-                                "love songs",
-                                "romantic hits",
-                                "shorts bollywood",
-                                "top 5",
-                                f"hindi songs {datetime.utcnow().year}",
-                                "hindi songs new",
-                                f"bollywood songs {datetime.utcnow().year}",
-                                f"bollywood movies {datetime.utcnow().year}",
-                                "hindi songs",
-                                "hindi dance songs",
-                                "hindi songs bollywood",
-                                "New songs",
-                                "Bollywood Romantic Songs",
-                                "Video Song",
-                            ],
+                            "tags": yt_tags,
                         },
                         "status": {
                             # "privacyStatus": "private",

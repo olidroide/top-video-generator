@@ -273,6 +273,6 @@ class TikTokClient:
 
         async with get_default_client() as client:
             response = await client.post(url=publish_video_init_url, headers=auth_header, data=data)
-            data = await response.json()
+            publish_status_response = await response.json()
 
-        logger.debug("publish status:", data=data)
+        logger.debug("publish status:", response=publish_status_response)

@@ -1,3 +1,4 @@
+import re
 from abc import abstractmethod
 from datetime import datetime, timezone, timedelta, date
 from enum import Enum
@@ -57,6 +58,12 @@ class Video(BaseModel):
     description: str | None
     channel: Channel | None
     duration: int | None
+
+    @property
+    def hashtags_in_description(self) -> list[str]:
+        regex = "#(\w+)"
+        hashtag_list = re.findall(regex, self.description)
+        return [f"#{hashtag}" for hashtag in hashtag_list]
 
     @property
     def yt_video_thumbnail_url(self) -> str:
@@ -229,6 +236,15 @@ class DatabaseClient:
             return None
 
         return Video.parse_obj(results[0])
+
+    def search_video(
+        self,
+        video_id: str = None,
+    ) -> list[Video]:
+        table_video = self._tiny_db.table("video")
+        results = table_video.search(Query().video_id.matches(video_id, flags=re.IGNORECASE))
+        # results = table_video.search(Query().video_id.search("b+"))
+        return [Video.parse_obj(result) for result in results]
 
     def update_video_point(
         self,
@@ -426,3 +442,13 @@ class DatabaseClient:
             score=point.fields["score"] if "score" in point.fields else None,
             score_status=point.tags["score_status"] if "score_status" in point.tags else None,
         )
+
+
+def video_list_mapper_hashtags(video_list: list[Video] = None) -> list[str]:
+    hashtag_list = set()
+    if not video_list:
+        return []
+
+    for video in video_list:
+        hashtag_list.update(video.hashtags_in_description)
+    return list(hashtag_list)
