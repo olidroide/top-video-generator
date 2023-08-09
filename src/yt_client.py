@@ -179,6 +179,9 @@ class YTClient:
             youtube = self.get_authenticated_service()
             media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
+            title_max_length = 95
+            title_formatted = title[:title_max_length]
+
             video = (
                 youtube.videos()
                 .insert(
@@ -188,7 +191,7 @@ class YTClient:
                     part="snippet,status",
                     body={
                         "snippet": {
-                            "title": title,
+                            "title": title_formatted,
                             "description": description,
                             "categoryId": "10",
                             "defaultAudioLanguage": "hi",
