@@ -38,6 +38,7 @@ class YTClient:
         self._yt_client_secret_file_name: str = get_app_settings().yt_client_secret_file
         self._yt_redirect_uri: str = get_app_settings().yt_redirect_uri
         self._yt_search_region_code: str = get_app_settings().yt_search_region_code
+        self._yt_search_language_code: str = get_app_settings().yt_search_language_code
         self._yt_search_category_code: str = get_app_settings().yt_search_category_code
         self._yt_auth_user_id: str = get_app_settings().yt_auth_user_id
 
@@ -94,7 +95,7 @@ class YTClient:
                 .list(
                     part="contentDetails",
                     chart="mostPopular",
-                    hl="hi",
+                    hl=self._yt_search_language_code,
                     maxResults=max_results,
                     regionCode=self._yt_search_region_code,
                     videoCategoryId=self._yt_search_category_code,
@@ -146,34 +147,53 @@ class YTClient:
         playlist_id: str = None,
         tags: list[str] = None,
     ):
+        # yt_tags = [
+        #     "top 25",
+        #     "top viewed songs",
+        #     "bollywood",
+        #     "songs",
+        #     "past 7 days",
+        #     "latest bollywood songs",
+        #     "latest hindi songs",
+        #     "latest punjabi songs",
+        #     "new romantic songs",
+        #     "new songs sad",
+        #     "love songs",
+        #     "romantic hits",
+        #     "shorts bollywood",
+        #     "top 5",
+        #     f"hindi songs {datetime.utcnow().year}",
+        #     "hindi songs new",
+        #     f"bollywood songs {datetime.utcnow().year}",
+        #     f"bollywood movies {datetime.utcnow().year}",
+        #     "hindi songs",
+        #     "hindi dance songs",
+        #     "hindi songs bollywood",
+        #     "New songs",
+        #     "Bollywood Romantic Songs",
+        #     "Video Song",
+        # ]
         yt_tags = [
-            "top 25",
             "top viewed songs",
             "bollywood",
             "songs",
-            "past 7 days",
-            "latest bollywood songs",
-            "latest hindi songs",
-            "latest punjabi songs",
+            "latest",
             "new romantic songs",
             "new songs sad",
             "love songs",
             "romantic hits",
             "shorts bollywood",
-            "top 5",
             f"hindi songs {datetime.utcnow().year}",
-            "hindi songs new",
             f"bollywood songs {datetime.utcnow().year}",
             f"bollywood movies {datetime.utcnow().year}",
-            "hindi songs",
             "hindi dance songs",
             "hindi songs bollywood",
             "New songs",
             "Bollywood Romantic Songs",
-            "Video Song",
         ]
 
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
+        max_tags = 30
 
         try:
             youtube = self.get_authenticated_service()
@@ -193,9 +213,9 @@ class YTClient:
                         "snippet": {
                             "title": title_formatted,
                             "description": description,
-                            "categoryId": "10",
-                            "defaultAudioLanguage": "hi",
-                            "tags": yt_tags,
+                            "categoryId": self._yt_search_category_code,
+                            "defaultAudioLanguage": self._yt_search_language_code,
+                            "tags": yt_tags[:max_tags],
                         },
                         "status": {
                             # "privacyStatus": "private",

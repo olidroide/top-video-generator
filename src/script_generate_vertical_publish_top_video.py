@@ -38,7 +38,7 @@ Last Day on Youtube India
     yt_description += "\n\nPlease subscribe for more videos!\n"
     yt_description += "🔔 Turn on notifications so you don't miss a new video! 🔔\n\n"
     yt_description += "🙏Thanks For Watching🙏\n"
-    yt_description += "🎶 SAT DEVA SINGH🎶"
+    yt_description += "🎶 SAT DEVA SINGH 🎶"
     yt_description += f"""
 ➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
 Disclaimer 

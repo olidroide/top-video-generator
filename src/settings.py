@@ -27,6 +27,7 @@ class AppSettings(BaseSettings):
     yt_client_secret_file: str
     yt_redirect_uri: str
     yt_search_region_code: str
+    yt_search_language_code: str
     yt_search_category_code: str
     yt_playlist_id_daily: str = None
     yt_playlist_id_weekly: str = None
