@@ -2,9 +2,9 @@ import asyncio
 from datetime import datetime, timezone
 
 import isodate
-from src.logger import get_logger
 
 from src.db_client import DatabaseClient, Video, VideoPoint, Channel, VideoPointTools
+from src.logger import get_logger
 from src.yt_client import get_yt_client
 
 logger = get_logger(__name__)
@@ -33,10 +33,6 @@ async def main():
         return
 
     yt_client = get_yt_client()
-
-    # last_timeseries_videos_fetched: dict[str, VideoPoint] = {
-    #     video_point.video_id: video_point for video_point in db_client.get_last_timeseries_videos()
-    # }
     last_timeseries_videos_fetched: list[VideoPoint] = list(db_client.get_last_timeseries_videos())
 
     current_timeseries_videos_fetched: list[VideoPoint] = []
@@ -71,23 +67,7 @@ async def main():
             likes=video_item.statistics.likeCount,
         )
 
-        # last_video_point.views_growth = VideoPointTools.calculate_view_growth(
-        #     last_video=last_video_point,
-        #     previous_video=last_timeseries_videos_fetched.get(video_item.id),
-        # )
         current_timeseries_videos_fetched.append(last_video_point)
-
-    # if len(current_timeseries_videos_fetched) != len(video_id_list):
-    #     raise Exception("required same yt fetched size than processed")
-    #
-    # current_timeseries_videos_fetched.sort(key=lambda x: x.views_growth, reverse=True)
-    # for index, video_point in enumerate(current_timeseries_videos_fetched):
-    #     video_point.score = index + 1
-    #     previous_video = last_timeseries_videos_fetched.get(video_point.video_id)
-    #     video_point.score_status = VideoPointTools.map_score_video_score_status(
-    #         current_score=video_point.score,
-    #         previous_score=previous_video.score if previous_video else None,
-    #     )
 
     for video_point in VideoPointTools.generate_top_list_compared(
         current_video_list=current_timeseries_videos_fetched,
@@ -96,7 +76,6 @@ async def main():
         db_client.add_video_point(video_point=video_point)
 
     logger.info("Finish fetch YT Data", current_timeseries_videos_fetched=current_timeseries_videos_fetched)
-    # get_video_visualizations(db_client=db_client)
 
 
 if __name__ == "__main__":

@@ -29,9 +29,12 @@ class AppSettings(BaseSettings):
     yt_search_region_code: str
     yt_search_language_code: str
     yt_search_category_code: str
+    yt_title_template: str = ""
+    yt_description_template: str = ""
     yt_playlist_id_daily: str = None
     yt_playlist_id_weekly: str = None
     yt_auth_user_id: str = None
+    yt_tags: str = ""
 
     tiktok_client_key: str
     tiktok_client_secret: str

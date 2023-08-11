@@ -13,34 +13,36 @@ from src.yt_client import get_yt_client
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video]) -> str:
+async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
     text_date = datetime.datetime.utcnow().strftime("%d/%m/%Y")
-    yt_title = f"[{text_date}] Past 7 days Top {len(video_list)} viewed songs from India"
-    return yt_title
+    hashtags = " ".join(hashtag_list) if hashtag_list else ""
+    format_yt_title = get_app_settings().yt_title_template
+    format_yt_title = format_yt_title.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
+    format_yt_title = format_yt_title.replace("@@HASHTAGS@@", f"\n{hashtags}")
+    return format_yt_title
 
 
 async def generate_yt_description(video_list: list[Video]) -> str:
     text_date = datetime.datetime.utcnow().strftime("%d / %m / %Y")
-    yt_description = ""
-    yt_description += f"""Top 25 Most Viewed Indian Songs 
-Last Week on Youtube India
-{text_date} Trending Songs of the Week\n\n"""
-
     channels_names = list(set([video.channel.name for video in video_list]))
-    yt_description += f"""
-➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+    disclaimer = f"""
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
 Disclaimer 
-    · This publication and the information included in it are not intended to serve a substitute for consultation with an attonery.\n
-    · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {",".join(channels_names)}.\n 
-    · As per the 3rd section of fair use guidelines borrowing small bits of material from an original work is more likely to be considered fair use. Copyright disclaimer under section 107 of the copyright act 1976, allowance is made for fair use\n
-➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n\n"""
-    for video in video_list:
-        yt_description += f"{video.score}.- {video.yt_video_url} © {video.channel.name}\n"
+  · This publication and the information included in it are not intended to serve a substitute for consultation with an attonery.\n
+  · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {",".join(channels_names)}.\n 
+  · As per the 3rd section of fair use guidelines borrowing small bits of material from an original work is more likely to be considered fair use. Copyright disclaimer under section 107 of the copyright act 1976, allowance is made for fair use\n
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+    """
 
-    yt_description += """\n\nPlease subscribe for more videos!\n
-🔔 Turn on notifications so you don't miss a new video! 🔔\n\n"""
-    yt_description += "🙏Thanks For Watching🙏\n"
-    yt_description += "🎶 SAT DEVA SINGH 🎶"
+    video_list_names = ""
+    for video in video_list:
+        video_list_names += f"{video.score}.- {video.yt_video_title_cleaned} {video.yt_video_url} \n"
+        video_list_names += f"© {video.channel.name}\n\n"
+
+    yt_description = get_app_settings().yt_description_template
+    yt_description = yt_description.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
+    yt_description = yt_description.replace("@@VIDEO_LIST@@", f"{video_list_names}")
+    yt_description = yt_description.replace("@@DISCLAIMER@@", f"{disclaimer}")
 
     return yt_description
 

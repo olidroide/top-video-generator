@@ -41,6 +41,7 @@ class YTClient:
         self._yt_search_language_code: str = get_app_settings().yt_search_language_code
         self._yt_search_category_code: str = get_app_settings().yt_search_category_code
         self._yt_auth_user_id: str = get_app_settings().yt_auth_user_id
+        self._yt_tags: list[str] = get_app_settings().yt_tags.split(",")
 
     def get_authenticated_service(self):
         yt_auth = DatabaseClient().get_yt_auth(self._yt_auth_user_id)
@@ -147,51 +148,7 @@ class YTClient:
         playlist_id: str = None,
         tags: list[str] = None,
     ):
-        # yt_tags = [
-        #     "top 25",
-        #     "top viewed songs",
-        #     "bollywood",
-        #     "songs",
-        #     "past 7 days",
-        #     "latest bollywood songs",
-        #     "latest hindi songs",
-        #     "latest punjabi songs",
-        #     "new romantic songs",
-        #     "new songs sad",
-        #     "love songs",
-        #     "romantic hits",
-        #     "shorts bollywood",
-        #     "top 5",
-        #     f"hindi songs {datetime.utcnow().year}",
-        #     "hindi songs new",
-        #     f"bollywood songs {datetime.utcnow().year}",
-        #     f"bollywood movies {datetime.utcnow().year}",
-        #     "hindi songs",
-        #     "hindi dance songs",
-        #     "hindi songs bollywood",
-        #     "New songs",
-        #     "Bollywood Romantic Songs",
-        #     "Video Song",
-        # ]
-        yt_tags = [
-            "top viewed songs",
-            "bollywood",
-            "songs",
-            "latest",
-            "new romantic songs",
-            "new songs sad",
-            "love songs",
-            "romantic hits",
-            "shorts bollywood",
-            f"hindi songs {datetime.utcnow().year}",
-            f"bollywood songs {datetime.utcnow().year}",
-            f"bollywood movies {datetime.utcnow().year}",
-            "hindi dance songs",
-            "hindi songs bollywood",
-            "New songs",
-            "Bollywood Romantic Songs",
-        ]
-
+        yt_tags = [tag.replace("@@YEAR@@", str(datetime.utcnow().year)) for tag in self._yt_tags]
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
         max_tags = 30
 
@@ -209,6 +166,9 @@ class YTClient:
                     notifySubscribers=True,
                     stabilize=False,
                     part="snippet,status",
+                    # TODO future support multiple managed yt accounts?
+                    # onBehalfOfContentOwner="",
+                    # onBehalfOfContentOwnerChannel="",
                     body={
                         "snippet": {
                             "title": title_formatted,

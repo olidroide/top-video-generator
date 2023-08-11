@@ -140,7 +140,8 @@ class VideoPointTools:
 
     @staticmethod
     def generate_top_list_compared(
-        current_video_list: list[VideoPoint], previous_video_list: list[VideoPoint]
+        current_video_list: list[VideoPoint],
+        previous_video_list: list[VideoPoint],
     ) -> list[VideoPoint]:
         map_previous_video_list_by_id = {video_point.video_id: video_point for video_point in previous_video_list}
 
@@ -166,6 +167,7 @@ class VideoPointTools:
                 if previous_video_list
                 else video_point.score_status
             )
+            video_point.score_status = video_point.score_status if video_point.score_status else VideoScoreStatus.NEW
 
         return current_video_list
 
@@ -378,7 +380,10 @@ class DatabaseClient:
         return video_point
 
     def get_last_timeseries_videos(self) -> Iterator[VideoPoint]:
-        for point in self._db.search(TimeQuery() == self.get_last_timeseries_datetime()):
+        if not (last_timeseries_datetime := self.get_last_timeseries_datetime()):
+            return
+
+        for point in self._db.search(TimeQuery() == last_timeseries_datetime):
             yield self._map_and_enrich(point)
 
     def get_today_timeseries_videos(self) -> Iterator[VideoPoint]:
