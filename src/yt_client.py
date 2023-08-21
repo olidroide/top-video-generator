@@ -159,7 +159,7 @@ class YTClient:
             title_max_length = 95
             title_formatted = title[:title_max_length]
 
-            description_max_length = 4995
+            description_max_length = 4900
             description_formatted = description[:description_max_length]
 
             video = (

@@ -81,7 +81,7 @@ async def main():
     except Exception as e:
         logger.error("Failed to upload Youtube", error=e)
 
-    await video_processor.delete_processed_videos()
+    # await video_processor.delete_processed_videos()
 
 
 if __name__ == "__main__":
