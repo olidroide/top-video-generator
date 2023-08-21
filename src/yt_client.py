@@ -159,6 +159,9 @@ class YTClient:
             title_max_length = 95
             title_formatted = title[:title_max_length]
 
+            description_max_length = 4995
+            description_formatted = description[:description_max_length]
+
             video = (
                 youtube.videos()
                 .insert(
@@ -172,7 +175,7 @@ class YTClient:
                     body={
                         "snippet": {
                             "title": title_formatted,
-                            "description": description,
+                            "description": description_formatted,
                             "categoryId": self._yt_search_category_code,
                             "defaultAudioLanguage": self._yt_search_language_code,
                             "tags": yt_tags[:max_tags],

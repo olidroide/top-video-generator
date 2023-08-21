@@ -23,15 +23,15 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = N
 
 
 async def generate_yt_description(video_list: list[Video]) -> str:
-    text_date = datetime.datetime.utcnow().strftime("%d / %m / %Y")
+    text_date = datetime.datetime.utcnow().strftime("%d/%m/%Y")
     channels_names = list(set([video.channel.name for video in video_list]))
     disclaimer = f"""
-➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+➖➖➖➖➖➖
 Disclaimer 
   · This publication and the information included in it are not intended to serve a substitute for consultation with an attonery.\n
   · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {",".join(channels_names)}.\n 
   · As per the 3rd section of fair use guidelines borrowing small bits of material from an original work is more likely to be considered fair use. Copyright disclaimer under section 107 of the copyright act 1976, allowance is made for fair use\n
-➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+➖➖➖➖➖➖
     """
 
     video_list_names = ""

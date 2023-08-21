@@ -5,9 +5,9 @@ services:
     image: top-video-generator
     ports:
       - "8080:8080"
-    cpus: 1.5
-    mem_limit: 2500M
-    mem_reservation: 128M
+    # cpus: 1.5
+    # mem_limit: 2500M
+    # mem_reservation: 128M
     volumes:
       - ./prod:/app/db
       - ./prod/videos:/app/videos
@@ -18,8 +18,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.5'
+          cpus: '2.0'
           memory: 2500M
         reservations:
-          cpus: '0.2'
-          memory: 128M
+          cpus: '0.15'
+          memory: 64M
