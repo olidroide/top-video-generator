@@ -20,7 +20,7 @@
                 <div class="column">
                     <div class="columns is-multiline is-centered">
                         <div class="column is-full is-flex is-justify-content-center">
-                            <p >
+                            <p>
                                 {{ timeseries_daily_date }}
                             </p>
                         </div>
@@ -31,7 +31,7 @@
                                             aria-haspopup="true"
                                             aria-controls="dropdown-menu"
                                             onclick="this.parentNode.parentNode.classList.toggle('is-active')"
-                                            >
+                                    >
                                         <span>{{ 'Weekly' if timeseries_weekly_date else 'Daily' }}</span>
                                         <span class="icon is-small"><i class="fas fa-angle-down" aria-hidden="true"></i></span>
                                     </button>
@@ -47,17 +47,28 @@
                             </div>
 
                         </div>
-                        <div class="column is-flex is-justify-content-center">
-                            <form action="/retry?method=fetch" method="post">
-                                <input type="submit" value="retry">
-                            </form>
-                            <form action="/retry?method=daily" method="post">
-                                <input type="submit" value="daily">
-                            </form>
-                            <form action="/retry?method=weekly" method="post">
-                                <input type="submit" value="weekly">
-                            </form>
-                        </div>
+
+                        {% if credentials_owner %}
+                            <div class="column is-flex is-justify-content-center">
+                                {% if not video_list %}
+                                    <form action="/retry?method=fetch" method="post">
+                                        <input type="submit" value="Force Fetch Data">
+                                    </form>
+                                {% endif %}
+
+                                {% if not yt_video_published and not timeseries_weekly_date %}
+                                    <form action="/retry?method=daily" method="post">
+                                        <input type="submit" value="Force Generate & Publish Daily Video">
+                                    </form>
+                                {% endif %}
+                                {% if not yt_video_published and timeseries_weekly_date %}
+                                    <form action="/retry?method=weekly" method="post">
+                                        <input type="submit" value="Force Generate & Publish Weekly Video">
+                                    </form>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
                     </div>
                 </div>
                 <div class="column is-narrow">

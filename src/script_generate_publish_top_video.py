@@ -2,7 +2,7 @@ import asyncio
 import datetime
 from datetime import date
 
-from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags
+from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags, Release, ReleasePlatform
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
@@ -70,7 +70,7 @@ async def main():
     try:
         playlist_id = get_app_settings().yt_playlist_id_daily
 
-        await get_yt_client().upload_video(
+        yt_video_id = await get_yt_client().upload_video(
             video_path=file_path,
             title=yt_title,
             description=yt_description,
@@ -80,6 +80,19 @@ async def main():
         )
     except Exception as e:
         logger.error("Failed to upload Youtube", error=e)
+        yt_video_id = None
+
+    try:
+        DatabaseClient().add_or_update_release(
+            release=Release(
+                platform=ReleasePlatform.YT.value,
+                client_id=get_app_settings().yt_auth_user_id,
+                release_id=yt_video_id,
+                published_at=datetime.datetime.now().timestamp(),
+            )
+        )
+    except Exception as e:
+        logger.error("Failed to save Youtube Release", error=e)
 
     # await video_processor.delete_processed_videos()
 

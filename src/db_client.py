@@ -30,6 +30,18 @@ class YtAuth(BaseModel):
     scopes: list[str] | None
 
 
+class ReleasePlatform(str, Enum):
+    YT = "YT"
+    TIKTOK = "TIKTOK"
+
+
+class Release(BaseModel):
+    platform: str | None  # ReleasePlatform
+    client_id: str | None
+    release_id: str | None
+    published_at: float | None
+
+
 class VideoScoreStatus(str, Enum):
     UP = "UP"
     DOWN = "DOWN"
@@ -323,6 +335,49 @@ class DatabaseClient:
         table_yt_auth = self._tiny_db.table("yt_auth")
         table_yt_auth.insert(yt_auth.dict())
         return yt_auth
+
+    def update_release(
+        self,
+        release: Release,
+    ) -> Release | None:
+        table_release = self._tiny_db.table("release")
+        table_release.update(release.dict(), Query().release_id == release.release_id)
+        return release
+
+    def is_release_at_date(
+        self,
+        release_platform: ReleasePlatform,
+        release_date: date,
+    ) -> bool:
+        table_release = self._tiny_db.table("release")
+        from_datetime = datetime.combine(release_date, datetime.min.time())
+        to_datetime = datetime.combine(release_date, datetime.max.time())
+        results = table_release.search(
+            (Query().release_platform == release_platform.value)
+            & (from_datetime.timestamp() < Query().published_at < to_datetime.timestamp())
+        )
+        return True if results and len(results) > 0 else False
+
+    def get_release(
+        self,
+        release_id: str,
+    ) -> Release | None:
+        table_release = self._tiny_db.table("release")
+        if not (results := table_release.search(Query().release_id == release_id)):
+            return None
+
+        return Release.parse_obj(results[0])
+
+    def add_or_update_release(
+        self,
+        release: Release,
+    ) -> Release:
+        table_release = self._tiny_db.table("release")
+        if self.get_release(release_id=release.release_id):
+            return self.update_release(release)
+
+        table_release.insert(release.dict())
+        return release
 
     def _get_all_points_by_video(
         self,

@@ -6,13 +6,13 @@
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-        <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+        <script defer src="https://use.fontawesome.com/releases/v5.13.1/js/all.js"></script>
         <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
         <title>Item Details</title>
     {% endblock %}
 </head>
-<body>
 
+<body>
 <nav class="navbar probando" role="navigation" aria-label="main navigation">
     <div class="navbar-brand">
         <a class="navbar-item" href="{{ url_for('static', path='/index.html') }}">
@@ -20,29 +20,7 @@
         </a>
     </div>
     <div class="navbar-end">
-        <div class="navbar-item">
-            <div class="buttons">
-                {%  if tiktok_authentication_url %}
-                    <a class="button is-light" href="{{ tiktok_authentication_url }}">
-                        TikTok
-                    </a>
-                {% elif tiktok_credentials %}
-                    <a class="button is-light">
-                        TikTok OK
-                    </a>
-                {% endif %}
 
-                {%  if yt_authentication_url %}
-                    <a class="button is-light" href="{{ yt_authentication_url }}">
-                        YOUTUBE
-                    </a>
-                {% elif yt_credentials %}
-                    <a class="button is-light">
-                        YOUTUBE OK
-                    </a>
-                {% endif %}
-            </div>
-        </div>
     </div>
 </nav>
 

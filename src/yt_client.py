@@ -66,7 +66,7 @@ class YTClient:
         flow.redirect_uri = self._yt_redirect_uri
         return flow
 
-    def step_1_get_authentication_url(self):
+    async def step_1_get_authentication_url(self):
         flow = self._get_flow()
         authorization_url, state = flow.authorization_url(
             access_type="offline",
@@ -110,6 +110,38 @@ class YTClient:
 
         return response
 
+    async def _get_uploads_playlist(self) -> str | None:
+        playlist_id = None
+        try:
+            youtube = self.get_authenticated_service()
+            response = youtube.channels().list(part="contentDetails", mine=True).execute()
+            playlist_id = (
+                response.get("items", []).pop().get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+            )
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+
+        return playlist_id
+
+    async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
+        try:
+            youtube = self.get_authenticated_service()
+            response = (
+                youtube.playlistItems()
+                .list(
+                    part="contentDetails",
+                    playlistId=playlist_id,
+                    maxResults=max_results,
+                )
+                .execute()
+            )
+
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+            response = {}
+
+        return response
+
     async def _fetch_video_details(self, video_id: str) -> dict:
         try:
             youtube = self.get_authenticated_service()
@@ -135,6 +167,11 @@ class YTClient:
         data = YTRoot.parse_obj(await self._fetch_popular_videos(max_results=max_results))
         return data
 
+    async def get_videos_published(self):
+        playlist_id = await self._get_uploads_playlist()
+        data = YTRoot.parse_obj(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
+        return data
+
     async def get_video_details(self, video_id: str):
         data = YTRoot.parse_obj(await self._fetch_video_details(video_id=video_id))
         return data
@@ -147,7 +184,7 @@ class YTClient:
         thumbnail_path: str = None,
         playlist_id: str = None,
         tags: list[str] = None,
-    ):
+    ) -> str | None:
         yt_tags = [tag.replace("@@YEAR@@", str(datetime.utcnow().year)) for tag in self._yt_tags]
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
         max_tags = 30
@@ -190,15 +227,16 @@ class YTClient:
                 .execute()
             )
 
-            logger.debug("Uploaded video:", video=video["id"])
+            video_id = video["id"]
+            logger.debug("Uploaded video:", video=video_id)
 
             if thumbnail_path:
-                logger.debug("set thumbnail video", video=video["id"], playlist_id=thumbnail_path)
+                logger.debug("set thumbnail video", video=video_id, playlist_id=thumbnail_path)
 
-                youtube.thumbnails().set(videoId=video["id"], media_body=MediaFileUpload(thumbnail_path)).execute()
+                youtube.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path)).execute()
 
             if playlist_id:
-                logger.debug("insert video into playlist", video=video["id"], playlist_id=playlist_id)
+                logger.debug("insert video into playlist", video=video_id, playlist_id=playlist_id)
 
                 youtube.playlistItems().insert(
                     part="snippet",
@@ -207,7 +245,7 @@ class YTClient:
                             "playlistId": playlist_id,
                             "resourceId": {
                                 "kind": "youtube#video",
-                                "videoId": video["id"],
+                                "videoId": video_id,
                             },
                         }
                     },
@@ -215,11 +253,54 @@ class YTClient:
 
         except HttpError as e:
             logger.error("An error occurred", error=e)
-            return False
-        return True
+            return None
+        return video_id
 
 
 class YTClientFake(YTClient):
+    async def _get_uploads_playlist(self) -> str | None:
+        return "U*****_____w"
+
+    async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
+        return {
+            "kind": "youtube#playlistItemListResponse",
+            "etag": "zoTYDdEofF4fSsktxSrXZrSu9OA",
+            "nextPageToken": "EAAaBlBUOkNBTQ",
+            "items": [
+                {
+                    "kind": "youtube#playlistItem",
+                    "etag": "lSpcQC3nkRqT89JgCqXVHprgMfp",
+                    "id": "VVVkdVF2UUQxZThkZkc0SWRfbVg5VTh3LmV3UWFKY2ZsMVFR",
+                    "contentDetails": {
+                        "videoId": "miQaJcfl1RR",
+                        "videoPublishedAt": "2023-08-21T16:23:19Z",
+                    },
+                },
+                {
+                    "kind": "youtube#playlistItem",
+                    "etag": "ixsz8c7RTifBOQpJLOfUUXo73Yp",
+                    "id": "HGNkdVF2UUQxZThkZkc0SWRfbVg5VTh3LjVwVWlPN3ZYN9NZ",
+                    "contentDetails": {
+                        "videoId": "7pUiO2vN7CY",
+                        "videoPublishedAt": "2023-08-21T12:24:58Z",
+                    },
+                },
+                {
+                    "kind": "youtube#playlistItem",
+                    "etag": "YYVewPeIn5MjF37bGh4-q_vxuyU",
+                    "id": "VVVkdVF2UUQxZThkZkc0SWRfbVg5VTh3LkdwSktpU2tLX25N",
+                    "contentDetails": {
+                        "videoId": "NpSKlSkK_nM",
+                        "videoPublishedAt": "2023-08-20T16:27:21Z",
+                    },
+                },
+            ],
+            "pageInfo": {
+                "totalResults": 66,
+                "resultsPerPage": 3,
+            },
+        }
+
     async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
         return {
             "kind": "youtube#videoListResponse",
@@ -683,7 +764,15 @@ class YTClientFake(YTClient):
             "pageInfo": {"totalResults": 1, "resultsPerPage": 1},
         }
 
-    async def upload_video(self, video_path, title, description, thumbnail_path=None):
+    async def upload_video(
+        self,
+        video_path,
+        title,
+        description,
+        thumbnail_path: str = None,
+        playlist_id: str = None,
+        tags: list[str] = None,
+    ):
         return True
 
 
@@ -703,6 +792,7 @@ class YTPageInfo(BaseModel):
 class YTBase(BaseModel):
     kind: str
     etag: str
+    nextPageToken: str | None
     pageInfo: YTPageInfo | None
 
 
@@ -714,6 +804,8 @@ class YTVideoContentDetails(BaseModel):
     licensedContent: bool | None
     contentRating: dict | None
     projection: str | None  # rectangular
+    videoId: str | None
+    videoPublishedAt: datetime | None
 
 
 class YTThumbnail(BaseModel):

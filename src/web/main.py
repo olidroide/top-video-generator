@@ -1,6 +1,5 @@
 from datetime import timedelta, date
 
-from src.logger import get_logger
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +9,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT
 
-from src.db_client import DatabaseClient, TimeseriesRange, YtAuth, TikTokAuth
+from src.db_client import DatabaseClient, TimeseriesRange, YtAuth, TikTokAuth, ReleasePlatform
+from src.logger import get_logger
 from src.script_fetch_yt_data import main as script_fetch_yt_data
 from src.script_generate_publish_top_video import main as script_weekly
 from src.script_generate_vertical_publish_top_video import main as script_daily
@@ -142,9 +142,16 @@ async def index(
     weekly: TimeseriesDailyDate = None,
 ):
     try:
-        video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=daily)
+        db_client = DatabaseClient()
+        video_list = db_client.get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=daily)
+        yt_video_published = db_client.is_release_at_date(release_platform=ReleasePlatform.YT, release_date=daily)
     except Exception:
         video_list = []
+        yt_video_published = False
+
+    credentials_owner = (
+        True if (request.session.get("yt_credentials") or request.session.get("tiktok_credentials")) else None
+    )
 
     data_context = {
         "request": request,
@@ -154,6 +161,24 @@ async def index(
         "timeseries_daily_date": daily,
         "timeseries_next_date": daily + timedelta(days=1) if daily < date.today() else None,
         "timeseries_previous_date": daily - timedelta(days=1),
+        "yt_video_published": yt_video_published,
+        "credentials_owner": credentials_owner,
+    }
+
+    return templates.TemplateResponse(
+        "index.html",
+        data_context,
+    )
+
+
+@app.get("/setup", response_class=HTMLResponse)
+async def index(
+    request: Request,
+    daily: TimeseriesDailyDate = date.today(),
+    weekly: TimeseriesDailyDate = None,
+):
+    data_context = {
+        "request": request,
     }
 
     if yt_credentials := request.session.get("yt_credentials"):
@@ -161,7 +186,7 @@ async def index(
         yt_credentials_db = DatabaseClient().get_yt_auth(yt_client_id)
         data_context["yt_credentials"] = yt_credentials_db.dict()
     else:
-        data_context["yt_authentication_url"] = get_yt_client().step_1_get_authentication_url()
+        data_context["yt_authentication_url"] = await get_yt_client().step_1_get_authentication_url()
 
     if tiktok_credential := request.session.get("tiktok_credentials"):
         tiktok_client_id = tiktok_credential
@@ -171,7 +196,7 @@ async def index(
         data_context["tiktok_authentication_url"] = await TikTokClient().step_1_get_authentication_url()
 
     return templates.TemplateResponse(
-        "index.html",
+        "setup.html",
         data_context,
     )
 

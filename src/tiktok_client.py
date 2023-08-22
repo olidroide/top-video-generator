@@ -1,4 +1,5 @@
 import json
+import math
 import pathlib
 import random
 import string
@@ -6,11 +7,10 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
 import aiohttp
-import math
-from src.logger import get_logger
 from pydantic import BaseModel
 
 from src.db_client import DatabaseClient, TikTokAuth
+from src.logger import get_logger
 from src.settings import get_app_settings
 
 logger = get_logger(__name__)
@@ -198,7 +198,7 @@ class TikTokClient:
         self,
         video_path: str,
         title: str,
-    ):
+    ) -> str | None:
         access_token = await self.refresh_token()
         auth_header = {
             "Authorization": f"Bearer {access_token}",
@@ -265,9 +265,10 @@ class TikTokClient:
 
         publish_video_init_url = f"{self._base_url}/v2/post/publish/status/fetch/"
 
+        publish_id = response_publish_video_init_url.data.publish_id
         data = json.dumps(
             {
-                "publish_id": response_publish_video_init_url.data.publish_id,
+                "publish_id": publish_id,
             }
         )
 
@@ -276,3 +277,4 @@ class TikTokClient:
             publish_status_response = await response.json()
 
         logger.debug("publish status:", response=publish_status_response)
+        return publish_id

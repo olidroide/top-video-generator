@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+        <script defer src="https://use.fontawesome.com/releases/v5.13.1/js/all.js"></script>
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+        <title>Item Details</title>
+    {% endblock %}
+</head>
+
+<body>
+<section class="container">
+    <div class="columns is-multiline">
+        <div class="column is-8 is-offset-2 register">
+            <div class="columns">
+                <div class="column left">
+                    <h1 class="title is-1">Top Video Generator</h1>
+                    <h2 class="subtitle colored is-4"></h2>
+                    <p>Connect your social network accounts to automatically publish videos generated.</p>
+                </div>
+                <div class="column right has-text-centered">
+                    <h1 class="title is-4">Connect</h1>
+                    <p class="description"></p>
+                    <form>
+                        <div class="field">
+                            <div class="control">
+                                {% if tiktok_authentication_url %}
+                                    <a class="button is-block is-primary is-fullwidth is-medium is-success"
+                                       href="{{ tiktok_authentication_url }}">
+                                        <i class="fab fa-tiktok"></i> TikTok
+                                    </a>
+                                {% elif tiktok_credentials %}
+                                    <a class="button is-block is-primary is-fullwidth is-medium is-outlined" disabled>
+                                        <i class="fab fa-tiktok"></i> TikTok
+                                    </a>
+                                    <p class="detail-button"><i class="fas fa-check"></i> is connected</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="control">
+                                {% if yt_authentication_url %}
+                                    <a class="button is-block is-primary is-fullwidth is-medium"
+                                       href="{{ yt_authentication_url }}">
+                                        <i class="fab fa-youtube"></i> Youtube
+                                    </a>
+                                {% elif yt_credentials %}
+                                    <a class="button is-block is-success is-fullwidth is-medium is-outlined" disabled>
+                                        <i class="fab fa-youtube"></i> Youtube
+                                    </a>
+                                    <p class="detail-button is-success"><i class="fas fa-check"></i> is connected</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <br/>
+
+                        <small><em>You can disconnect it whenever you want.</em></small>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="column is-8 is-offset-2">
+            <br>
+            <nav class="level">
+                <div class="level-left">
+                    <div class="level-item">
+                    </div>
+                </div>
+                <div class="level-right">
+                    <small class="level-item" style="color: var(--textLight)">
+                        &copy; Top Video Generator. All Rights Reserved.
+                    </small>
+                </div>
+            </nav>
+        </div>
+    </div>
+</section>
+</body>
+
+<style>
+    :root {
+        --brandColor: #fc2b4c;
+        --background: rgb(247, 247, 247);
+        --textDark: hsla(0, 0%, 0%, 0.66);
+        --textLight: hsla(0, 0%, 0%, 0.33);
+        --textSuccess: #48c78e;
+    }
+
+    body {
+        background: var(--background);
+        height: 100vh;
+        color: var(--textDark);
+    }
+
+    .button.is-primary {
+        background-color: #fc2b4c;
+        border-color: transparent;
+        color: #fff
+    }
+
+    .button.is-primary.is-hovered,
+    .button.is-primary:hover {
+        background-color: #c71f38;
+        border-color: transparent;
+        color: #fff
+    }
+
+    .button.is-primary.is-active,
+    .button.is-primary:active {
+        background-color: #c74358;
+        border-color: transparent;
+        color: #fff
+    }
+
+    .field:not(:last-child) {
+        margin-bottom: 1rem;
+    }
+
+    .register {
+        margin-top: 5rem;
+        background: white;
+        border-radius: 10px;
+    }
+
+    .left,
+    .right {
+        padding: 4.5rem;
+    }
+
+    .left {
+        border-right: 5px solid var(--background);
+    }
+
+    .left .title {
+        font-weight: 800;
+        letter-spacing: -2px;
+    }
+
+    .left .colored {
+        color: var(--brandColor);
+        font-weight: 500;
+        margin-top: 1rem !important;
+        letter-spacing: -1px;
+    }
+
+    .left p {
+        color: var(--textLight);
+        font-size: 1.15rem;
+    }
+
+    .right .title {
+        font-weight: 800;
+        letter-spacing: -1px;
+    }
+
+    .right .description {
+        margin-top: 1rem;
+        margin-bottom: 1rem !important;
+        color: var(--textLight);
+        font-size: 1.15rem;
+    }
+
+    .right .detail-button {
+        margin-top: 0rem;
+        margin-bottom: 1rem !important;
+        color: var(--textSuccess);
+        font-size: 0.9rem;
+    }
+
+    .right small {
+        color: var(--textLight);
+    }
+
+    input {
+        font-size: 1rem;
+    }
+
+    input:focus {
+        border-color: var(--brandColor) !important;
+        box-shadow: 0 0 0 1px var(--brandColor) !important;
+    }
+
+    .fab,
+    .fas {
+        color: var(--textLight);
+        margin-right: 1rem;
+    }
+
+</style>
+
+
+
