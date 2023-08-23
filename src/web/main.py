@@ -6,8 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ConstrainedDate
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import RedirectResponse
-from starlette.status import HTTP_307_TEMPORARY_REDIRECT
+from starlette.responses import RedirectResponse, JSONResponse
+from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
 from src.db_client import DatabaseClient, TimeseriesRange, YtAuth, TikTokAuth, ReleasePlatform
 from src.logger import get_logger
@@ -31,6 +31,21 @@ app = FastAPI()
 # )
 
 
+async def request_had_any_credentials(request: Request) -> bool:
+    return True if (request.session.get("yt_credentials") or request.session.get("tiktok_credentials")) else None
+
+
+async def already_finish_setup() -> bool:
+    db_client = DatabaseClient()
+    if not db_client.get_yt_auth(settings.yt_auth_user_id):
+        return False
+
+    if not db_client.get_tiktok_auth(settings.tiktok_user_openid):
+        return False
+
+    return True
+
+
 @app.middleware("http")
 async def validate_user(request: Request, call_next):
     # print(request.session)
@@ -51,6 +66,12 @@ async def read_item(
     background_tasks: BackgroundTasks,
     method: str = None,
 ):
+    if not await request_had_any_credentials(request):
+        return JSONResponse(
+            content={"message": f"Method {method} forbidden"},
+            status_code=HTTP_403_FORBIDDEN,
+        )
+
     task = None
     if method == "fetch":
         task = script_fetch_yt_data
@@ -70,7 +91,7 @@ async def read_item(
     response_class=RedirectResponse,
     status_code=HTTP_307_TEMPORARY_REDIRECT,
 )
-async def read_item(
+async def yt_auth(
     request: Request,
     code: str | None = None,
 ):
@@ -82,7 +103,7 @@ async def read_item(
         url_requested=str(request.url),
     )
 
-    yt_auth = DatabaseClient().add_or_update_yt_auth(
+    yt_auth_response = DatabaseClient().add_or_update_yt_auth(
         YtAuth(
             token=oauth_credentials.get("token"),
             refresh_token=oauth_credentials.get("refresh_token"),
@@ -92,7 +113,7 @@ async def read_item(
             scopes=oauth_credentials.get("scopes"),
         )
     )
-    request.session["yt_credentials"] = yt_auth.client_id
+    request.session["yt_credentials"] = yt_auth_response.client_id
 
     return RedirectResponse("/")
 
@@ -118,7 +139,7 @@ async def tiktok_auth(
         user_code=code,
     )
 
-    tiktok_auth = DatabaseClient().add_or_update_tiktok_auth(
+    tiktok_auth_response = DatabaseClient().add_or_update_tiktok_auth(
         TikTokAuth(
             token=oauth_credentials.get("access_token"),
             refresh_token=oauth_credentials.get("refresh_token"),
@@ -126,7 +147,7 @@ async def tiktok_auth(
             scopes=oauth_credentials.get("scope").split(","),
         )
     )
-    request.session["tiktok_credentials"] = tiktok_auth.client_id
+    request.session["tiktok_credentials"] = tiktok_auth_response.client_id
 
     return RedirectResponse("/")
 
@@ -149,9 +170,7 @@ async def index(
         video_list = []
         yt_video_published = False
 
-    credentials_owner = (
-        True if (request.session.get("yt_credentials") or request.session.get("tiktok_credentials")) else None
-    )
+    credentials_owner = await request_had_any_credentials(request)
 
     data_context = {
         "request": request,
@@ -174,9 +193,10 @@ async def index(
 @app.get("/setup", response_class=HTMLResponse)
 async def index(
     request: Request,
-    daily: TimeseriesDailyDate = date.today(),
-    weekly: TimeseriesDailyDate = None,
 ):
+    if await already_finish_setup():
+        return RedirectResponse("/")
+
     data_context = {
         "request": request,
     }
