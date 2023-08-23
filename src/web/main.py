@@ -194,8 +194,8 @@ async def index(
 async def index(
     request: Request,
 ):
-    if await already_finish_setup():
-        return RedirectResponse("/")
+    # if await already_finish_setup():
+    #     return RedirectResponse("/")
 
     data_context = {
         "request": request,
