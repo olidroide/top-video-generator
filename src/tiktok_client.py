@@ -197,7 +197,7 @@ class TikTokClient:
     async def upload_video(
         self,
         video_path: str,
-        title: str,
+        title: str = None,
     ) -> str | None:
         access_token = await self.refresh_token()
         auth_header = {
@@ -241,7 +241,8 @@ class TikTokClient:
 
         async with get_default_client() as client:
             response = await client.post(url=publish_video_init_url, headers=auth_header, data=data)
-            response_publish_video_init_url = TiktokResponsePublishVideoInitUrl.parse_obj(await response.json())
+            response_body = await response.json()
+            response_publish_video_init_url = TiktokResponsePublishVideoInitUrl.parse_obj(response_body)
 
         logger.debug("publish_video_init", response_publish_video_init_url=response_publish_video_init_url)
 

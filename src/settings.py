@@ -33,6 +33,7 @@ class AppSettings(BaseSettings):
     yt_description_template: str = ""
     yt_playlist_id_daily: str = None
     yt_playlist_id_weekly: str = None
+    yt_playlist_id_links_original: str = None
     yt_auth_user_id: str = None
     yt_tags: str = ""
 

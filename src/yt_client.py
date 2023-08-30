@@ -160,6 +160,69 @@ class YTClient:
 
         return response
 
+    async def _fetch_playlist_items(self, playlist_id: str) -> dict:
+        try:
+            youtube = self.get_authenticated_service()
+            response = (
+                youtube.playlistItems()
+                .list(
+                    part="snippet",
+                    playlistId=playlist_id,
+                )
+                .execute()
+            )
+
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+            response = {}
+
+        return response
+
+    async def _delete_playlist_item(
+        self,
+        playlist_item_id: str,
+    ) -> dict:
+        try:
+            youtube = self.get_authenticated_service()
+            response = youtube.playlistItems().delete(id=playlist_item_id).execute()
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+            response = {}
+
+        return response
+
+    async def _add_playlist_item(
+        self,
+        playlist_id: str,
+        video_id: str,
+        position: int,
+    ) -> dict:
+        try:
+            youtube = self.get_authenticated_service()
+            response = (
+                youtube.playlistItems()
+                .insert(
+                    part="snippet",
+                    body={
+                        "snippet": {
+                            "playlistId": playlist_id,
+                            "resourceId": {
+                                "kind": "youtube#video",
+                                "videoId": video_id,
+                            },
+                            "position": position,
+                        }
+                    },
+                )
+                .execute()
+            )
+
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+            response = {}
+
+        return response
+
     async def get_popular_videos(
         self,
         max_results: int = 25,
@@ -175,6 +238,66 @@ class YTClient:
     async def get_video_details(self, video_id: str):
         data = YTRoot.parse_obj(await self._fetch_video_details(video_id=video_id))
         return data
+
+    async def get_playlist_details(self, playlist_id: str):
+        data = YTRoot.parse_obj(await self._fetch_playlist_items(playlist_id=playlist_id))
+        return data
+
+    async def delete_playlist_item(self, playlist_item_id: str):
+        await self._delete_playlist_item(playlist_item_id=playlist_item_id)
+
+    async def add_playlist_item(
+        self,
+        playlist_id: str,
+        video_id: str,
+        position: int,
+    ):
+        data = YTVideo.parse_obj(
+            await self._add_playlist_item(
+                playlist_id=playlist_id,
+                video_id=video_id,
+                position=position,
+            )
+        )
+        return data
+
+    async def update_link_original_playlist(
+        self,
+        playlist_id: str = None,
+        yt_video_id_list: list[str] = None,
+    ) -> bool | None:
+        if not playlist_id:
+            logger.warning("cannot update link original playlist without playlist_id param")
+            return
+
+        if not yt_video_id_list:
+            logger.warning("cannot update link original playlist without yt video id list param")
+            return
+
+        playlist_details = await self.get_playlist_details(playlist_id=playlist_id)
+        for playlist_item in playlist_details.items:
+            try:
+                await self.delete_playlist_item(playlist_item_id=playlist_item.id)
+            except HttpError as e:
+                logger.error("fail to remove", playlist_item_id=playlist_item.id, error=e)
+
+        for index, yt_video_id in enumerate(yt_video_id_list):
+            try:
+                await self.add_playlist_item(
+                    playlist_id=playlist_id,
+                    video_id=yt_video_id,
+                    position=index,
+                )
+            except HttpError as e:
+                logger.error(
+                    "fail to add playlist item ",
+                    playlist_id=playlist_id,
+                    video_id=yt_video_id,
+                    position=index,
+                    error=e,
+                )
+
+        return True
 
     async def upload_video(
         self,
@@ -764,6 +887,103 @@ class YTClientFake(YTClient):
             "pageInfo": {"totalResults": 1, "resultsPerPage": 1},
         }
 
+    async def _fetch_playlist_items(self, playlist_id: str) -> dict:
+        return {
+            "kind": "youtube#playlistItemListResponse",
+            "etag": "NQfXmbGsngTrhVitGh2wj1EEH-M",
+            "items": [
+                {
+                    "kind": "youtube#playlistItem",
+                    "etag": "3bHdPctYgExIi9YmhiR3WeZ_Na0",
+                    "id": "UExaQUkzTGM3T3lnczJ3WkZaUnduNFRTVkJ5NDZBRGhMUy41NkI0NEY2RDEwNTU3Q0M2",
+                    "snippet": {
+                        "publishedAt": "2023-08-30T09:25:36Z",
+                        "channelId": "UCduQvQD1e8dfG4Id_mX9U8w",
+                        "title": "Jawan: Not Ramaiya Vastavaiya | Shah Rukh Khan | Atlee | Anirudh | Nayanthara | Vishal D | Shilpa R",
+                        "description": 'Get ready to groove like never before as "Not Ramaiya Vastavaiya", the latest dance track from the highly-anticipated Atlee directorial, Jawan, is out now. The film stars Shah Rukh Khan, Vijay Sethupathi, Nayanthara, and Deepika Padukone (in a special appearance) and is set to release in cinemas on September 7, 2023, in Hindi, Tamil, and Telugu!\n\n#NotRamaiyaVastavaiya out now!\n\n♪Full Song Available on♪ \nJioSaavn: https://bit.ly/3srnLI5\nSpotify: https://bit.ly/3ssmbG1\nHungama: https://bit.ly/3OW4upT\nApple Music: https://bit.ly/3OYPyau\nAmazon Prime Music: https://bit.ly/44vEozG\nWynk: https://bit.ly/3L0roLy\nResso: https://bit.ly/47UA7Zy\nYouTube Music: https://bit.ly/3OWNbov\n\nMusic Credits:\nLanguage - Hindi\nSong Title - Not Ramaiya Vastavaiya \nAlbum / Movie - Jawan\nComposed by Anirudh Ravichander\nLyrics - Kumaar\nVocals - Anirudh Ravichander, Vishal Dadlani & Shilpa Rao\nChoreographer - Vaibhavi Merchant \n\nComposed, Arranged & Programmed by Anirudh Ravichander\nKeyboard, Synth & Rhythm Programmed by Anirudh Ravichander\nWhistle - Satish Raghunathan\nTabla - MT Aditya\nAdditional Rhythm Programmed by Shashank Vijay\nAdditional Keyboard Programmed by Arish-Pradeep PJ\n\nMusic Advisor - Ananthakrrishnan\nCreative Consultant - Sajith Satya\nMusic Editor - Harish Ram L H\nRecorded at Albuquerque Records, Chennai. Engineered by Srinivasan M, Shivakiran S, Rajesh Kannan, Jishnu Vijayan\nYRF Studios, Mumbai, Engineered by Vijay Dayal & Chinmay\nMixed by Vinay Sridhar & Srinivasan M at Albuquerque Records, Chennai\nMastered by Luca Pretolesi at Studio DMI, Las Vegas Assisted by Alistair Pintus \nMusic Coordinator - Velavan B\n\nLyrics:\n\nDance with me now I can’t break away\nAaj sari fikreiin tu shake away\nShake away\nDil thirakta dance wale groove pe\nNachun mai to step mera vekh ve\n\nVekh ve\nAaj sare kaam kal pe talke\nTak dhina dhin nache jayein taal pe\nDisko jaz blues sare bhoolke\nDesi wale geet pe tu jhoolke\nPehle kiya chaiya chaiya re\nAb kar tha tha thaiyya\nRamiya vasta vaiya..!\nAntra\n\nSama mazedar hua houle houle\nThoda nashedar hua\nMan ye dole\nAaj koi nachta hua sa jadu\nSar pe swar hua\nDil ye bole\nDoobi khushiyon mein\nRaat apni jabse suraj dhala\nChodh sharmana aaj nachle pair chakkle zara\n\nPahle kiya chaiya chaiiya re\nAb kar tata thaiya\nRamiya vasta vaiyaa..!\n\n\n___________________________________\nEnjoy & stay connected with us!\n👉 Subscribe to T-Series: http://bit.ly/TSeriesYouTube\n👉 Like us on Facebook: https://www.facebook.com/tseriesmusic\n👉 Follow us on X: https://twitter.com/tseries\n👉 Follow us on Instagram: http://bit.ly/InstagramTseries',
+                        "thumbnails": {
+                            "default": {
+                                "url": "https://i.ytimg.com/vi/ohS06vkHjLE/default.jpg",
+                                "width": 120,
+                                "height": 90,
+                            },
+                            "medium": {
+                                "url": "https://i.ytimg.com/vi/ohS06vkHjLE/mqdefault.jpg",
+                                "width": 320,
+                                "height": 180,
+                            },
+                            "high": {
+                                "url": "https://i.ytimg.com/vi/ohS06vkHjLE/hqdefault.jpg",
+                                "width": 480,
+                                "height": 360,
+                            },
+                            "standard": {
+                                "url": "https://i.ytimg.com/vi/ohS06vkHjLE/sddefault.jpg",
+                                "width": 640,
+                                "height": 480,
+                            },
+                            "maxres": {
+                                "url": "https://i.ytimg.com/vi/ohS06vkHjLE/maxresdefault.jpg",
+                                "width": 1280,
+                                "height": 720,
+                            },
+                        },
+                        "channelTitle": "Sat Deva Singh",
+                        "playlistId": "PLZAI3Lc7Oygs2wZFZRwn4TSVBy46ADhLS",
+                        "position": 0,
+                        "resourceId": {"kind": "youtube#video", "videoId": "ohS06vkHjLE"},
+                        "videoOwnerChannelTitle": "T-Series",
+                        "videoOwnerChannelId": "UCq-Fj5jknLsUf-MWSy4_brA",
+                    },
+                },
+                {
+                    "kind": "youtube#playlistItem",
+                    "etag": "JbdvcmUtA5wFaCUfvMzVS3z34hQ",
+                    "id": "UExaQUkzTGM3T3lnczJ3WkZaUnduNFRTVkJ5NDZBRGhMUy4yODlGNEE0NkRGMEEzMEQy",
+                    "snippet": {
+                        "publishedAt": "2023-08-30T09:34:23Z",
+                        "channelId": "UCduQvQD1e8dfG4Id_mX9U8w",
+                        "title": "Udd Jaa Kaale Kaava | Gadar 2 | Sunny Deol, Ameesha | Mithoon, Udit N, Alka Y | Uttam S,Anand Bakshi",
+                        "description": "👉🏻 SUBSCRIBE to Zee Music Company - https://bit.ly/2yPcBkS\n\nTo Stream & Download Full Song: \nJioSaavn - https://bit.ly/3NTdexz\nResso - https://bit.ly/3JySKrl\nGaana - https://bit.ly/3XCTfqj\niTunes - https://apple.co/46pbpjp\nApple Music - https://apple.co/46pbpjp\nAmazon Prime Music - https://amzn.to/44k6cre\nWynk Music - https://wynk.in/u/G4zKQyQiw\nHungama - https://bit.ly/4417fMR\nYouTube Music - https://bit.ly/3XyW6ke\n\nSong: Udd Jaa Kaale Kaava\nSingers: Udit Narayan & Alka Yagnik\nSong Recreated and Rearranged by: Mithoon\nOriginal Composition: Uttam Singh\nLyrics: Anand Bakshi\nCreative Head: Anugrah\nMusic Production: Godswill Mergulhao & Kaushal Gohil\nMusic Assts: Anugrah, Godswill Mergulhao, Eli Rodrigues & Kaushal Gohil\nWorld Strokes: Tapas Roy\nSarangi: Dilshad Khan\nBass Guitar: Lemuel Mergulhao\nChorus: Shahzad Ali, Sudhir Yaduvanshi & Sahil Kumar\nSong Recorded at Living Water Music by: Eli Rodrigues\nSong Mixed & Mastered by: Eric Pillai at Future Sound Of Bombay\nMixing Asst: Michael Edwin Pillai\nProject Co-ordinated by: Kaushal Gohil\nManager to Mithoon: Vijay Iyer\nLegal Advisor to Mithoon: Shyam Dewani\n\n#Gadar2 in cinemas 11th August\n\nZee Studios Presents\nDirected by: Anil Sharma\nProduced by: Zee Studios\nProduced by: Anil Sharma Productions & Kamal Mukut\nCo-Producer: Suman Sharma\nWritten by: Shaktimaan Talwar\nDOP: Najeeb Khan\nChoreographer: Shabina Khan\n \nStarring: Sunny Deol, Ameesha Patel, Utkarsh Sharma, Manish Wadhwa, Gaurav Chopra & Luv Sinha\nIntroducing - Simratt Kaur Randhawa\n\n\nMusic on Zee Music Company\n\nConnect with us on :\nTwitter - https://www.twitter.com/ZeeMusicCompany\nFacebook - https://www.facebook.com/zeemusiccompany\nInstagram - https://www.instagram.com/zeemusiccompany\nYouTube - http://bit.ly/TYZMC",
+                        "thumbnails": {
+                            "default": {
+                                "url": "https://i.ytimg.com/vi/7VppHj0Rue0/default.jpg",
+                                "width": 120,
+                                "height": 90,
+                            },
+                            "medium": {
+                                "url": "https://i.ytimg.com/vi/7VppHj0Rue0/mqdefault.jpg",
+                                "width": 320,
+                                "height": 180,
+                            },
+                            "high": {
+                                "url": "https://i.ytimg.com/vi/7VppHj0Rue0/hqdefault.jpg",
+                                "width": 480,
+                                "height": 360,
+                            },
+                            "standard": {
+                                "url": "https://i.ytimg.com/vi/7VppHj0Rue0/sddefault.jpg",
+                                "width": 640,
+                                "height": 480,
+                            },
+                            "maxres": {
+                                "url": "https://i.ytimg.com/vi/7VppHj0Rue0/maxresdefault.jpg",
+                                "width": 1280,
+                                "height": 720,
+                            },
+                        },
+                        "channelTitle": "Sat Deva Singh",
+                        "playlistId": "PLZAI3Lc7Oygs2wZFZRwn4TSVBy46ADhLS",
+                        "position": 1,
+                        "resourceId": {"kind": "youtube#video", "videoId": "7VppHj0Rue0"},
+                        "videoOwnerChannelTitle": "Zee Music Company",
+                        "videoOwnerChannelId": "UCFFbwnve3yF62-tVXkTyHqg",
+                    },
+                },
+            ],
+            "pageInfo": {"totalResults": 2, "resultsPerPage": 5},
+        }
+
     async def upload_video(
         self,
         video_path,
@@ -827,6 +1047,10 @@ class YTVideoSnippetLocalized(BaseModel):
     description: str | None
 
 
+class YTVideoSnippetResource(BaseModel):
+    videoId: str
+
+
 class YTVideoSnippet(BaseModel):
     publishedAt: datetime | None
     channelId: str | None
@@ -839,6 +1063,11 @@ class YTVideoSnippet(BaseModel):
     liveBroadcastContent: str | None
     localized: YTVideoSnippetLocalized | None
     defaultAudioLanguage: str | None
+    position: int | None
+    playlistId: str | None
+    videoOwnerChannelTitle: str | None
+    videoOwnerChannelId: str | None
+    resourceId: YTVideoSnippetResource | None
 
 
 class YTVideContentStatistics(BaseModel):

@@ -49,7 +49,9 @@ Disclaimer
 
 
 async def main():
-    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=date.today())[:5]
+    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=date.today())
+    yt_video_id_list = [video.video_id for video in video_list]
+    video_list = video_list[:5]
     video_list.sort(key=lambda x: x.score, reverse=True)
     await VideoDownloader().download_video(video_list)
 
@@ -115,6 +117,14 @@ async def main():
         )
     except Exception as e:
         logger.error("Failed to save Youtube Release", error=e)
+
+    try:
+        await get_yt_client().update_link_original_playlist(
+            playlist_id=get_app_settings().yt_playlist_id_links_original,
+            yt_video_id_list=yt_video_id_list,
+        )
+    except Exception as e:
+        logger.error("Failed to update YT original playlist", error=e)
 
     # await video_processor.delete_processed_videos()
 

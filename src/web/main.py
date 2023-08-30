@@ -159,12 +159,14 @@ class TimeseriesDailyDate(ConstrainedDate):
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
-    daily: TimeseriesDailyDate = date.today(),
+    daily: TimeseriesDailyDate = None,
     weekly: TimeseriesDailyDate = None,
 ):
+    timeseries_range = TimeseriesRange.WEEKLY if weekly else TimeseriesRange.DAILY
+    daily = date.today() if not daily else daily
     try:
         db_client = DatabaseClient()
-        video_list = db_client.get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=daily)
+        video_list = db_client.get_top_25_videos(timeseries_range=timeseries_range, day=weekly if weekly else daily)
         yt_video_published = db_client.is_release_at_date(release_platform=ReleasePlatform.YT, release_date=daily)
     except Exception:
         video_list = []
@@ -175,7 +177,7 @@ async def index(
     data_context = {
         "request": request,
         "video_list": video_list,
-        "timeseries_range": TimeseriesRange.DAILY.value,
+        "timeseries_range": timeseries_range.value,
         "timeseries_weekly_date": weekly,
         "timeseries_daily_date": daily,
         "timeseries_next_date": daily + timedelta(days=1) if daily < date.today() else None,
