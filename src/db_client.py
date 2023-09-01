@@ -14,6 +14,13 @@ from src.settings import get_app_settings
 logger = get_logger(__name__)
 
 
+class SpotifyAuth(BaseModel):
+    token: str | None
+    refresh_token: str | None
+    client_id: str | None
+    scopes: list[str] | None
+
+
 class TikTokAuth(BaseModel):
     token: str | None
     refresh_token: str | None
@@ -33,6 +40,7 @@ class YtAuth(BaseModel):
 class ReleasePlatform(str, Enum):
     YT = "YT"
     TIKTOK = "TIKTOK"
+    SPOTIFY = "SPOTIFY"
 
 
 class Release(BaseModel):
@@ -277,6 +285,35 @@ class DatabaseClient:
                 "score": video_point.score,
             },
         )
+
+    def get_spotify_auth(
+        self,
+        client_id: str,
+    ) -> SpotifyAuth | None:
+        table_spotify = self._tiny_db.table("spotify_auth")
+        if not (results := table_spotify.search(Query().client_id == client_id)):
+            return None
+
+        return SpotifyAuth.parse_obj(results[0])
+
+    def update_spotify_auth(
+        self,
+        spotify_auth: SpotifyAuth,
+    ) -> SpotifyAuth | None:
+        table_spotify = self._tiny_db.table("spotify_auth")
+        table_spotify.update(spotify_auth.dict(), Query().client_id == spotify_auth.client_id)
+        return spotify_auth
+
+    def add_or_update_spotify_auth(
+        self,
+        spotify_auth: SpotifyAuth,
+    ) -> SpotifyAuth:
+        if self.get_tiktok_auth(spotify_auth.client_id):
+            return self.update_spotify_auth(spotify_auth)
+
+        table_spotify = self._tiny_db.table("spotify_auth")
+        table_spotify.insert(spotify_auth.dict())
+        return spotify_auth
 
     def get_tiktok_auth(
         self,

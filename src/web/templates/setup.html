@@ -57,6 +57,22 @@
                                 {% endif %}
                             </div>
                         </div>
+
+                        <div class="field">
+                            <div class="control">
+                                {% if spotify_authentication_url %}
+                                    <a class="button is-block is-primary is-fullwidth is-medium"
+                                       href="{{ spotify_authentication_url }}">
+                                        <i class="fab fa-spotify"></i> Spotify
+                                    </a>
+                                {% elif spotify_credentials %}
+                                    <a class="button is-block is-success is-fullwidth is-medium is-outlined" disabled>
+                                        <i class="fab fa-spotify"></i> Spotify
+                                    </a>
+                                    <p class="detail-button is-success"><i class="fas fa-check"></i> is connected</p>
+                                {% endif %}
+                            </div>
+                        </div>
                         <br/>
 
                         <small><em>You can disconnect it whenever you want.</em></small>

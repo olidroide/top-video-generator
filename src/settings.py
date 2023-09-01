@@ -43,6 +43,12 @@ class AppSettings(BaseSettings):
     tiktok_app_id: str
     tiktok_user_openid: str
 
+    spotify_client_id: str
+    spotify_client_secret: str
+    spotify_redirect_uri: str
+    spotify_user_id: str
+    spotify_playlist_original: str
+
     db_timeseries_file: str
     db_data_file: str
 

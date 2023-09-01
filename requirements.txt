@@ -14,6 +14,7 @@ pillow==9.5.0
 segno==1.5.2
 millify==0.1.1
 isodate==0.6.1
+emoji-country-flag==1.3.2
 
 # databse
 tinyflux==0.4.0

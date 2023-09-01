@@ -1,5 +1,6 @@
 from datetime import timedelta, date
 
+import flag
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,12 +10,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse, JSONResponse
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
-from src.db_client import DatabaseClient, TimeseriesRange, YtAuth, TikTokAuth, ReleasePlatform
+from src.db_client import DatabaseClient, TimeseriesRange, YtAuth, TikTokAuth, ReleasePlatform, SpotifyAuth
 from src.logger import get_logger
 from src.script_fetch_yt_data import main as script_fetch_yt_data
 from src.script_generate_publish_top_video import main as script_weekly
 from src.script_generate_vertical_publish_top_video import main as script_daily
 from src.settings import get_app_settings
+from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
 from src.yt_client import get_yt_client
 
@@ -32,7 +34,15 @@ app = FastAPI()
 
 
 async def request_had_any_credentials(request: Request) -> bool:
-    return True if (request.session.get("yt_credentials") or request.session.get("tiktok_credentials")) else None
+    return (
+        True
+        if (
+            request.session.get("yt_credentials")
+            or request.session.get("tiktok_credentials")
+            or request.session.get("spotify_credentials")
+        )
+        else None
+    )
 
 
 async def already_finish_setup() -> bool:
@@ -41,6 +51,9 @@ async def already_finish_setup() -> bool:
         return False
 
     if not db_client.get_tiktok_auth(settings.tiktok_user_openid):
+        return False
+
+    if not db_client.get_spotify_auth(settings.spotify_user_id):
         return False
 
     return True
@@ -152,6 +165,40 @@ async def tiktok_auth(
     return RedirectResponse("/")
 
 
+@app.get(
+    "/spotify_auth/",
+    response_class=RedirectResponse,
+    status_code=HTTP_307_TEMPORARY_REDIRECT,
+)
+async def tiktok_auth(
+    request: Request,
+    code: str | None = None,
+    scopes: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
+    if not code:
+        logger.warning("Not CODE received in callback Spotify Auth", request=request.url)
+        return RedirectResponse("/")
+
+    oauth_credentials = await SpotifyClient().step_2_exchange_code_authentication(
+        user_code=code,
+    )
+
+    spotify_auth_response = DatabaseClient().add_or_update_spotify_auth(
+        SpotifyAuth(
+            token=oauth_credentials.get("access_token"),
+            refresh_token=oauth_credentials.get("refresh_token"),
+            client_id=oauth_credentials.get("client_id"),
+            scopes=oauth_credentials.get("scope").split(" "),
+        )
+    )
+    request.session["spotify_credentials"] = spotify_auth_response.client_id
+
+    return RedirectResponse("/")
+
+
 class TimeseriesDailyDate(ConstrainedDate):
     la = date.today
 
@@ -173,7 +220,7 @@ async def index(
         yt_video_published = False
 
     credentials_owner = await request_had_any_credentials(request)
-
+    title_flag = flag.flag(get_app_settings().yt_search_region_code)
     data_context = {
         "request": request,
         "video_list": video_list,
@@ -184,6 +231,7 @@ async def index(
         "timeseries_previous_date": daily - timedelta(days=1),
         "yt_video_published": yt_video_published,
         "credentials_owner": credentials_owner,
+        "title_page": f"{title_flag} 🔝 VIDEO GENERATOR",
     }
 
     return templates.TemplateResponse(
@@ -216,6 +264,13 @@ async def index(
         data_context["tiktok_credentials"] = tiktok_credentials_db.dict()
     else:
         data_context["tiktok_authentication_url"] = await TikTokClient().step_1_get_authentication_url()
+
+    if spotify_credential := request.session.get("spotify_credentials"):
+        spotify_client_id = spotify_credential
+        spotify_credentials_db = DatabaseClient().get_spotify_auth(spotify_client_id)
+        data_context["spotify_credentials"] = spotify_credentials_db.dict()
+    else:
+        data_context["spotify_authentication_url"] = await SpotifyClient().step_1_get_authentication_url()
 
     return templates.TemplateResponse(
         "setup.html",

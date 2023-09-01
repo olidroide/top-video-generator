@@ -5,6 +5,7 @@ from datetime import date
 from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags, Release, ReleasePlatform
 from src.logger import get_logger
 from src.settings import get_app_settings
+from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
@@ -50,6 +51,16 @@ Disclaimer
 
 async def main():
     video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=date.today())
+
+    try:
+        yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list]
+        await SpotifyClient().update_link_original_playlist(
+            playlist_id=get_app_settings().spotify_playlist_original,
+            song_title_list=yt_video_title_list,
+        )
+    except Exception as e:
+        logger.error("Failed to update Spotify original playlist", error=e)
+
     yt_video_id_list = [video.video_id for video in video_list]
     video_list = video_list[:5]
     video_list.sort(key=lambda x: x.score, reverse=True)
