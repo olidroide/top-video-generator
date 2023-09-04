@@ -7,6 +7,7 @@ import aiohttp
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.discovery_cache.base import Cache
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from pydantic import BaseModel
@@ -29,6 +30,16 @@ async def get_default_client():
         yield client
 
 
+class MemoryCache(Cache):
+    _CACHE = {}
+
+    def get(self, url):
+        return MemoryCache._CACHE.get(url)
+
+    def set(self, url, content):
+        MemoryCache._CACHE[url] = content
+
+
 class YTClient:
     YT_API_SERVICE_NAME = "youtube"
     YT_API_VERSION = "v3"
@@ -42,16 +53,21 @@ class YTClient:
         self._yt_search_category_code: str = get_app_settings().yt_search_category_code
         self._yt_auth_user_id: str = get_app_settings().yt_auth_user_id
         self._yt_tags: list[str] = get_app_settings().yt_tags.split(",")
+        self._memory_cache = MemoryCache()
+        self._authenticated_service = None
 
     def get_authenticated_service(self):
         yt_auth = DatabaseClient().get_yt_auth(self._yt_auth_user_id)
         credentials = Credentials(**yt_auth.dict())
-
-        return build(
-            serviceName=self.YT_API_SERVICE_NAME,
-            version=self.YT_API_VERSION,
-            credentials=credentials,
-        )
+        if not self._authenticated_service:
+            self._authenticated_service = build(
+                serviceName=self.YT_API_SERVICE_NAME,
+                version=self.YT_API_VERSION,
+                credentials=credentials,
+                cache=self._memory_cache,
+                # cache_discovery=False,
+            )
+        return self._authenticated_service
 
     def _get_flow(self) -> Flow:
         flow = Flow.from_client_secrets_file(
@@ -168,6 +184,7 @@ class YTClient:
                 .list(
                     part="snippet",
                     playlistId=playlist_id,
+                    maxResults=50,
                 )
                 .execute()
             )

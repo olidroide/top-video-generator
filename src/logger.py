@@ -51,7 +51,7 @@ structlog.configure(
 # Use a StreamHandler with a ConsoleRenderer.
 handler_stream = logging.StreamHandler(sys.stdout)
 handler_stream.setFormatter(ProcessorFormatter(processor=structlog.dev.ConsoleRenderer()))
-handler_stream.setLevel(logging.DEBUG)
+handler_stream.setLevel(logging.INFO)
 
 
 handler_file = handlers.TimedRotatingFileHandler(
@@ -69,7 +69,7 @@ handler_file.setFormatter(
         foreign_pre_chain=pre_chain,
     )
 )
-handler_file.setLevel(logging.DEBUG)
+handler_file.setLevel(logging.INFO)
 
 
 # Library logger to info level.
@@ -77,7 +77,9 @@ handler_file.setLevel(logging.DEBUG)
 # logger.setLevel(logging.DEBUG)
 
 # Apply the handlers only to the root logger.
-logging.root.setLevel(logging.DEBUG)
+logging.root.setLevel(logging.INFO)
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.INFO)
+logging.getLogger('PIL').setLevel(logging.INFO)
 logging.root.addHandler(handler_stream)
 logging.root.addHandler(handler_file)
 
