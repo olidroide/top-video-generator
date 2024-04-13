@@ -48,8 +48,8 @@ async def main():
         db_client.add_or_update_video(
             video=Video(
                 video_id=video_item.id,
-                views=video_item.statistics.viewCount,
-                likes=video_item.statistics.likeCount,
+                views=video_item.statistics.viewCount or 0,
+                likes=video_item.statistics.likeCount or 0,
                 title=video_item.snippet.title,
                 description=video_item.snippet.description,
                 duration=duration.total_seconds(),
@@ -63,8 +63,8 @@ async def main():
         last_video_point = VideoPoint(
             time=start_process_datetime,
             video_id=video_item.id,
-            views=video_item.statistics.viewCount,
-            likes=video_item.statistics.likeCount,
+            views=video_item.statistics.viewCount or 0,
+            likes=video_item.statistics.likeCount or 0,
         )
 
         current_timeseries_videos_fetched.append(last_video_point)
