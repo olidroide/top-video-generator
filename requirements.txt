@@ -1,7 +1,8 @@
 # core
-fastapi==0.99.1
-jinja2==3.1.2
-uvicorn==0.22.0
+fastapi==0.115.12
+pydantic-settings==2.9.1
+jinja2==3.1.6
+uvicorn==0.34.2
 itsdangerous==2.1.2
 structlog==23.1.0
 python-dotenv==1.0.0
@@ -21,9 +22,11 @@ tinyflux==0.4.0
 tinydb==4.8.0
 
 # 3rd parties
-yt-dlp==2023.7.6
+yt-dlp==2025.4.30
 google-api-python-client==2.91.0
 google-auth-oauthlib==1.0.0
 google-auth==2.21.0
 google-auth-httplib2==0.1.0
+
+instagrapi==2.1.3
 

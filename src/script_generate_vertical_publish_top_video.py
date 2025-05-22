@@ -2,10 +2,10 @@ import asyncio
 import datetime
 from datetime import date
 
-from src.db_client import DatabaseClient, Video, TimeseriesRange, video_list_mapper_hashtags, Release, ReleasePlatform
+from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
+from src.instagram_client import InstagramClient
 from src.logger import get_logger
 from src.settings import get_app_settings
-from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
@@ -39,7 +39,8 @@ Disclaimer
     video_list_names = ""
     for video in video_list:
         video_list_names += f"{video.score}.- {video.yt_video_title_cleaned} {video.yt_video_url} \n"
-        video_list_names += f"© {video.channel.name}\n\n"
+        if video.channel:
+            video_list_names += f"© {video.channel.name}\n\n"
 
     yt_description = get_app_settings().yt_description_template
     yt_description = yt_description.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
@@ -50,7 +51,8 @@ Disclaimer
 
 
 async def main():
-    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=date.today())
+    day = date.today()
+    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
 
     try:
         yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list]
@@ -69,7 +71,6 @@ async def main():
     # with 0mq
     WorkerFactory().start_vertical_workers(video_list)
 
-    # file_path = "../videos/20230703_vertical_format.mp4"
     video_processor = VideoProcessing()
     file_path = await video_processor.join_processed_videos(
         video_id_list=[video.video_id for video in video_list],
@@ -82,6 +83,46 @@ async def main():
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
 
+    await publish_instagram(file_path=file_path, yt_title=yt_title)
+    await publish_tiktok(file_path=file_path, yt_title=yt_title)
+    await publish_yt(
+        file_path=file_path,
+        yt_title=yt_title,
+        yt_description=yt_description,
+        yt_video_id_list=yt_video_id_list,
+        hashtag_list=hashtag_list,
+    )
+
+    # await video_processor.delete_processed_videos()
+
+
+async def publish_instagram(file_path: str, yt_title: str):
+    try:
+        instagram_publish_video_id = await InstagramClient().upload_video(
+            video_path=file_path,
+            caption=yt_title,
+        )
+    except Exception as e:
+        logger.error("Failed to upload Instagram", error=e)
+        instagram_publish_video_id = None
+
+    try:
+        DatabaseClient().add_or_update_release(
+            release=Release(
+                platform=ReleasePlatform.INSTAGRAM.value,
+                client_id=get_app_settings().instagram_client_username,
+                release_id=instagram_publish_video_id,
+                published_at=datetime.datetime.now().timestamp(),
+            )
+        )
+    except Exception as e:
+        logger.error("Failed to save Instagram Release", error=e)
+
+
+async def publish_tiktok(
+    file_path: str,
+    yt_title: str,
+) -> None:
     try:
         tiktok_publish_video_id = await TikTokClient().upload_video(
             video_path=file_path,
@@ -103,6 +144,14 @@ async def main():
     except Exception as e:
         logger.error("Failed to save TikTok Release", error=e)
 
+
+async def publish_yt(
+    file_path: str,
+    yt_title: str,
+    yt_description: str,
+    yt_video_id_list: list[str],
+    hashtag_list: list[str],
+) -> None:
     try:
         playlist_id = get_app_settings().yt_playlist_id_daily
         yt_video_id = await get_yt_client().upload_video(
@@ -136,8 +185,6 @@ async def main():
         )
     except Exception as e:
         logger.error("Failed to update YT original playlist", error=e)
-
-    # await video_processor.delete_processed_videos()
 
 
 if __name__ == "__main__":

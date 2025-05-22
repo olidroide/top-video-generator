@@ -69,7 +69,7 @@ handler_file.setFormatter(
         foreign_pre_chain=pre_chain,
     )
 )
-handler_file.setLevel(logging.INFO)
+handler_file.setLevel(logging.DEBUG)
 
 
 # Library logger to info level.
@@ -77,9 +77,9 @@ handler_file.setLevel(logging.INFO)
 # logger.setLevel(logging.DEBUG)
 
 # Apply the handlers only to the root logger.
-logging.root.setLevel(logging.INFO)
-logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.INFO)
-logging.getLogger('PIL').setLevel(logging.INFO)
+logging.root.setLevel(logging.DEBUG)
+logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.DEBUG)
+logging.getLogger("PIL").setLevel(logging.INFO)
 logging.root.addHandler(handler_stream)
 logging.root.addHandler(handler_file)
 

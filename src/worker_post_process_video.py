@@ -2,10 +2,10 @@ import asyncio
 import gc
 import sys
 
-from src.logger import get_logger
 import zmq
 
 from src.db_client import Video
+from src.logger import get_logger
 from src.video_processing import VideoProcessing
 
 logger = get_logger(__name__)
@@ -32,7 +32,7 @@ def main_main(port, screen_orientation):
         video_work_json = consumer_receiver.recv_json()
         logger.debug("Process videos: ", number_of_videos=len(video_work_json))
         for video_json in video_work_json:
-            video = Video.parse_raw(video_json)
+            video = Video.model_validate_json(video_json)
             asyncio.run(
                 map_screen_orientation_process.get(screen_orientation, VideoProcessing().post_process_video)(video)
             )

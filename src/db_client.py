@@ -1,12 +1,11 @@
 import re
-from abc import abstractmethod
-from datetime import datetime, timezone, timedelta, date
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Iterator
 
 from pydantic import BaseModel, PastDate
-from tinydb import TinyDB, Query
-from tinyflux import TinyFlux, Point, TagQuery, TimeQuery
+from tinydb import Query, TinyDB
+from tinyflux import Point, TagQuery, TimeQuery, TinyFlux
 
 from src.logger import get_logger
 from src.settings import get_app_settings
@@ -15,39 +14,40 @@ logger = get_logger(__name__)
 
 
 class SpotifyAuth(BaseModel):
-    token: str | None
-    refresh_token: str | None
-    client_id: str | None
-    scopes: list[str] | None
+    token: str | None = None
+    refresh_token: str | None = None
+    client_id: str | None = None
+    scopes: list[str] | None = None
 
 
 class TikTokAuth(BaseModel):
-    token: str | None
-    refresh_token: str | None
-    client_id: str | None
-    scopes: list[str] | None
+    token: str | None = None
+    refresh_token: str | None = None
+    client_id: str | None = None
+    scopes: list[str] | None = None
 
 
 class YtAuth(BaseModel):
-    token: str | None
-    refresh_token: str | None
-    token_uri: str | None
-    client_id: str | None
-    client_secret: str | None
-    scopes: list[str] | None
+    token: str | None = None
+    refresh_token: str | None = None
+    token_uri: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    scopes: list[str] | None = None
 
 
 class ReleasePlatform(str, Enum):
     YT = "YT"
     TIKTOK = "TIKTOK"
     SPOTIFY = "SPOTIFY"
+    INSTAGRAM = "INSTAGRAM"
 
 
 class Release(BaseModel):
-    platform: str | None  # ReleasePlatform
-    client_id: str | None
-    release_id: str | None
-    published_at: float | None
+    platform: str | None = None
+    client_id: str | None = None
+    release_id: str | None = None
+    published_at: float | None = None
 
 
 class VideoScoreStatus(str, Enum):
@@ -62,22 +62,22 @@ class TimePoint(BaseModel):
 
 
 class Channel(BaseModel):
-    channel_id: str | None
-    name: str | None
+    channel_id: str | None = None
+    name: str | None = None
 
 
 class Video(BaseModel):
     video_id: str
     views: int = 0
     likes: int = 0
-    views_growth: int | None
-    score: int | None
-    score_status: VideoScoreStatus | None
-    score_previous: int | None
-    title: str | None
-    description: str | None
-    channel: Channel | None
-    duration: int | None
+    views_growth: int | None = None
+    score: int | None = None
+    score_status: VideoScoreStatus | None = None
+    score_previous: int | None = None
+    title: str | None = None
+    description: str | None = None
+    channel: Channel | None = None
+    duration: int | None = None
 
     @property
     def hashtags_in_description(self) -> list[str]:
@@ -204,10 +204,6 @@ class DatabaseClient:
 
         self._db = TinyFlux(db_timeseries_file)
         self._tiny_db = TinyDB(db_data_file)
-
-    @abstractmethod
-    def _get_timeseries_range(self) -> str:
-        pass
 
     def add_video_point(
         self,
