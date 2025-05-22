@@ -1,9 +1,10 @@
 import pathlib
 
-from src.logger import get_logger
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
 
 from src.db_client import Video
+from src.logger import get_logger
 from src.settings import get_app_settings
 
 logger = get_logger(__name__)
@@ -23,7 +24,7 @@ class VideoDownloader:
     def _ydl_opts(self):
         return {
             "outtmpl": f"{self.video_yt_resources_folder}/%(id)s",
-            "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best/bestvideo+bestaudio/best",
             "noplaylist": True,
             "quiet": True,
             "postprocessor_args": ["-ss", "00:00:30.00", "-to", "00:01:30.00"],
