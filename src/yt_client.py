@@ -244,20 +244,20 @@ class YTClient:
         self,
         max_results: int = 25,
     ):
-        data = YTRoot.parse_obj(await self._fetch_popular_videos(max_results=max_results))
+        data = YTRoot.model_validate(await self._fetch_popular_videos(max_results=max_results))
         return data
 
     async def get_videos_published(self):
         playlist_id = await self._get_uploads_playlist()
-        data = YTRoot.parse_obj(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
+        data = YTRoot.model_validate(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
         return data
 
     async def get_video_details(self, video_id: str):
-        data = YTRoot.parse_obj(await self._fetch_video_details(video_id=video_id))
+        data = YTRoot.model_validate(await self._fetch_video_details(video_id=video_id))
         return data
 
     async def get_playlist_details(self, playlist_id: str):
-        data = YTRoot.parse_obj(await self._fetch_playlist_items(playlist_id=playlist_id))
+        data = YTRoot.model_validate(await self._fetch_playlist_items(playlist_id=playlist_id))
         return data
 
     async def delete_playlist_item(self, playlist_item_id: str):
@@ -269,7 +269,7 @@ class YTClient:
         video_id: str,
         position: int,
     ):
-        data = YTVideo.parse_obj(
+        data = YTVideo.model_validate(
             await self._add_playlist_item(
                 playlist_id=playlist_id,
                 video_id=video_id,
@@ -280,16 +280,16 @@ class YTClient:
 
     async def update_link_original_playlist(
         self,
-        playlist_id: str = None,
-        yt_video_id_list: list[str] = None,
+        playlist_id: str | None = None,
+        yt_video_id_list: list[str] | None = None,
     ) -> bool | None:
         if not playlist_id:
             logger.warning("cannot update link original playlist without playlist_id param")
-            return
+            return None
 
         if not yt_video_id_list:
             logger.warning("cannot update link original playlist without yt video id list param")
-            return
+            return None
 
         playlist_details = await self.get_playlist_details(playlist_id=playlist_id)
         for playlist_item in playlist_details.items:
@@ -321,9 +321,9 @@ class YTClient:
         video_path,
         title,
         description,
-        thumbnail_path: str = None,
-        playlist_id: str = None,
-        tags: list[str] = None,
+        thumbnail_path: str | None = None,
+        playlist_id: str | None = None,
+        tags: list[str] | None = None,
     ) -> str | None:
         yt_tags = [tag.replace("@@YEAR@@", str(datetime.utcnow().year)) for tag in self._yt_tags]
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
@@ -1029,20 +1029,20 @@ class YTPageInfo(BaseModel):
 class YTBase(BaseModel):
     kind: str
     etag: str
-    nextPageToken: str | None
-    pageInfo: YTPageInfo | None
+    nextPageToken: str | None = None
+    pageInfo: YTPageInfo | None = None
 
 
 class YTVideoContentDetails(BaseModel):
-    duration: str | None
-    dimension: str | None  # 2d
-    definition: str | None  # hd
-    caption: str | None
-    licensedContent: bool | None
-    contentRating: dict | None
-    projection: str | None  # rectangular
-    videoId: str | None
-    videoPublishedAt: datetime | None
+    duration: str | None = None
+    dimension: str | None = None  # 2d
+    definition: str | None = None  # hd
+    caption: str | None = None
+    licensedContent: bool | None = None
+    contentRating: dict | None = None
+    projection: str | None = None  # rectangular
+    videoId: str | None = None
+    videoPublishedAt: datetime | None = None
 
 
 class YTThumbnail(BaseModel):
@@ -1052,16 +1052,16 @@ class YTThumbnail(BaseModel):
 
 
 class YTVideoSnippetThumbnail(BaseModel):
-    default: YTThumbnail | None
-    medium: YTThumbnail | None
-    high: YTThumbnail | None
-    standard: YTThumbnail | None
-    maxres: YTThumbnail | None
+    default: YTThumbnail | None = None
+    medium: YTThumbnail | None = None
+    high: YTThumbnail | None = None
+    standard: YTThumbnail | None = None
+    maxres: YTThumbnail | None = None
 
 
 class YTVideoSnippetLocalized(BaseModel):
-    title: str | None
-    description: str | None
+    title: str | None = None
+    description: str | None = None
 
 
 class YTVideoSnippetResource(BaseModel):
@@ -1069,76 +1069,76 @@ class YTVideoSnippetResource(BaseModel):
 
 
 class YTVideoSnippet(BaseModel):
-    publishedAt: datetime | None
-    channelId: str | None
-    title: str | None
-    description: str | None
-    thumbnails: YTVideoSnippetThumbnail | None
-    channelTitle: str | None
-    tags: list[str] | None
-    categoryId: str | None
-    liveBroadcastContent: str | None
-    localized: YTVideoSnippetLocalized | None
-    defaultAudioLanguage: str | None
-    position: int | None
-    playlistId: str | None
-    videoOwnerChannelTitle: str | None
-    videoOwnerChannelId: str | None
-    resourceId: YTVideoSnippetResource | None
+    publishedAt: datetime | None = None
+    channelId: str | None = None
+    title: str | None = None
+    description: str | None = None
+    thumbnails: YTVideoSnippetThumbnail | None = None
+    channelTitle: str | None = None
+    tags: list[str] | None = None
+    categoryId: str | None = None
+    liveBroadcastContent: str | None = None
+    localized: YTVideoSnippetLocalized | None = None
+    defaultAudioLanguage: str | None = None
+    position: int | None = None
+    playlistId: str | None = None
+    videoOwnerChannelTitle: str | None = None
+    videoOwnerChannelId: str | None = None
+    resourceId: YTVideoSnippetResource | None = None
 
 
 class YTVideContentStatistics(BaseModel):
-    viewCount: int | None
-    likeCount: int | None
-    favoriteCount: int | None
-    commentCount: int | None
+    viewCount: int | None = None
+    likeCount: int | None = None
+    favoriteCount: int | None = None
+    commentCount: int | None = None
 
 
 class YTVideoStatus(BaseModel):
-    embeddable: bool | None
-    license: str | None  # "youtube
-    privacyStatus: str | None  # "unlisted", "public", "private"
-    publicStatsViewable: bool | None
+    embeddable: bool | None = None
+    license: str | None = None  # "youtube
+    privacyStatus: str | None = None  # "unlisted", "public", "private"
+    publicStatsViewable: bool | None = None
     # publishAt
-    selfDeclaredMadeForKids: bool | None
-    madeForKids: bool | None
-    rejectionReason: str | None  #
-    uploadStatus: str | None
+    selfDeclaredMadeForKids: bool | None = None
+    madeForKids: bool | None = None
+    rejectionReason: str | None = None
+    uploadStatus: str | None = None
 
 
 class YTVideoAgeGating(BaseModel):
-    alcoholContent: bool | None
-    restricted: bool | None
-    videoGameRating: str | None
+    alcoholContent: bool | None = None
+    restricted: bool | None = None
+    videoGameRating: str | None = None
 
 
 class YTVideoMonetizationDetailsAccess(BaseModel):
-    allowed: bool | None
+    allowed: bool | None = None
 
 
 class YTVideoMonetizationDetails(BaseModel):
-    access: YTVideoMonetizationDetailsAccess | None
+    access: YTVideoMonetizationDetailsAccess | None = None
 
 
 class YTVideoTopicDetails(BaseModel):
-    relevantTopicIds: list[str] | None
-    topicCategories: list[str] | None
-    topicIds: list[str] | None
+    relevantTopicIds: list[str] | None = None
+    topicCategories: list[str] | None = None
+    topicIds: list[str] | None = None
 
 
 class YTVideo(YTBase):
     id: str
-    contentDetails: YTVideoContentDetails | None
-    snippet: YTVideoSnippet | None
-    statistics: YTVideContentStatistics | None
-    status: YTVideoStatus | None
-    ageGating: YTVideoAgeGating | None
-    monetizationDetails: YTVideoMonetizationDetails | None
-    topicDetails: YTVideoTopicDetails | None
+    contentDetails: YTVideoContentDetails | None = None
+    snippet: YTVideoSnippet | None = None
+    statistics: YTVideContentStatistics | None = None
+    status: YTVideoStatus | None = None
+    ageGating: YTVideoAgeGating | None = None
+    monetizationDetails: YTVideoMonetizationDetails | None = None
+    topicDetails: YTVideoTopicDetails | None = None
 
 
 class YTVideoUploadRequest(YTVideo):
-    id: str | None
+    id: str | None = None
 
 
 class YTRoot(YTBase):

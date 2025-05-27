@@ -21,38 +21,38 @@ class TiktokResponseData(BaseModel):
 
 
 class TiktokResponseDataPublishVideoInitUrl(TiktokResponseData):
-    publish_id: str | None
-    upload_url: str | None
+    publish_id: str | None = None
+    upload_url: str | None = None
 
 
 class TiktokResponseDataPublishQueryCreatorInfo(TiktokResponseData):
-    creator_avatar_url: str | None
-    creator_username: str | None
-    creator_nickname: str | None
-    privacy_level_options: list[str] | None
-    comment_disabled: bool | None
-    duet_disabled: bool | None
-    stitch_disabled: bool | None
-    max_video_post_duration_sec: int | None
+    creator_avatar_url: str | None = None
+    creator_username: str | None = None
+    creator_nickname: str | None = None
+    privacy_level_options: list[str] | None = None
+    comment_disabled: bool | None = None
+    duet_disabled: bool | None = None
+    stitch_disabled: bool | None = None
+    max_video_post_duration_sec: int | None = None
 
 
 class TiktokResponseError(BaseModel):
-    code: str | None
-    message: str | None
-    logid: str | None
+    code: str | None = None
+    message: str | None = None
+    logid: str | None = None
 
 
 class TiktokResponse(BaseModel):
-    data: TiktokResponseData | None
-    error: TiktokResponseError | None
+    data: TiktokResponseData | None = None
+    error: TiktokResponseError | None = None
 
 
 class TiktokResponsePublishQueryCreatorInfo(TiktokResponse):
-    data: TiktokResponseDataPublishQueryCreatorInfo | None
+    data: TiktokResponseDataPublishQueryCreatorInfo | None = None
 
 
 class TiktokResponsePublishVideoInitUrl(TiktokResponse):
-    data: TiktokResponseDataPublishVideoInitUrl | None
+    data: TiktokResponseDataPublishVideoInitUrl | None = None
 
 
 @asynccontextmanager

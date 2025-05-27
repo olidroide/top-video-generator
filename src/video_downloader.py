@@ -1,7 +1,6 @@
 import pathlib
 
 from yt_dlp import YoutubeDL
-from yt_dlp.utils import DownloadError
 
 from src.db_client import Video
 from src.logger import get_logger

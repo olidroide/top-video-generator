@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import isodate
 
-from src.db_client import DatabaseClient, Video, VideoPoint, Channel, VideoPointTools
+from src.db_client import Channel, DatabaseClient, Video, VideoPoint, VideoPointTools
 from src.logger import get_logger
 from src.yt_client import get_yt_client
 
