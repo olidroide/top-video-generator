@@ -1,5 +1,5 @@
-FROM python:3.11.3-slim-buster
-MAINTAINER top-video-generator@olidroide.es
+FROM python:3.12.8-slim-buster
+LABEL MAINTAINER="top-video-generator@olidroide.es"
 
 ENV PIP_DEFAULT_TIMEOUT=100 \
     # Allow statements and log messages to immediately appear
@@ -45,7 +45,7 @@ COPY ./src/web /app/web
 COPY pyproject.toml /app
 COPY Makefile /app
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-ENV PYTHONPATH /app
+ENV PYTHONPATH=/app
 USER app
 
 #EXPOSE 8080
