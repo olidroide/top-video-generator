@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import ConstrainedDate
+from pydantic import BaseModel, field_validator
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse, JSONResponse
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
@@ -199,22 +199,26 @@ async def tiktok_auth(
     return RedirectResponse("/")
 
 
-class TimeseriesDailyDate(ConstrainedDate):
-    la = date.today
+class TimeseriesDailyDateModel(BaseModel):
+    value: date
 
+    @field_validator("value")
+    def validate_date(cls, v):
+        return v
 
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
-    daily: TimeseriesDailyDate = None,
-    weekly: TimeseriesDailyDate = None,
+    daily: TimeseriesDailyDateModel = None,
+    weekly: TimeseriesDailyDateModel = None,
 ):
     timeseries_range = TimeseriesRange.WEEKLY if weekly else TimeseriesRange.DAILY
-    daily = date.today() if not daily else daily
+    daily_date = date.today() if not daily else daily.value
+    weekly_date = weekly.value if weekly else None
     try:
         db_client = DatabaseClient()
-        video_list = db_client.get_top_25_videos(timeseries_range=timeseries_range, day=weekly if weekly else daily)
-        yt_video_published = db_client.is_release_at_date(release_platform=ReleasePlatform.YT, release_date=daily)
+        video_list = db_client.get_top_25_videos(timeseries_range=timeseries_range, day=weekly_date if weekly_date else daily_date)
+        yt_video_published = db_client.is_release_at_date(release_platform=ReleasePlatform.YT, release_date=daily_date)
     except Exception:
         video_list = []
         yt_video_published = False
@@ -225,10 +229,10 @@ async def index(
         "request": request,
         "video_list": video_list,
         "timeseries_range": timeseries_range.value,
-        "timeseries_weekly_date": weekly,
-        "timeseries_daily_date": daily,
-        "timeseries_next_date": daily + timedelta(days=1) if daily < date.today() else None,
-        "timeseries_previous_date": daily - timedelta(days=1),
+        "timeseries_weekly_date": weekly_date,
+        "timeseries_daily_date": daily_date,
+        "timeseries_next_date": daily_date + timedelta(days=1) if daily_date < date.today() else None,
+        "timeseries_previous_date": daily_date - timedelta(days=1),
         "yt_video_published": yt_video_published,
         "credentials_owner": credentials_owner,
         "title_page": f"{title_flag} 🔝 VIDEO GENERATOR",
