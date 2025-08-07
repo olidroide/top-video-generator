@@ -1,5 +1,5 @@
 FROM python:3.11.3-slim-buster
-MAINTAINER top-video-generator@olidroide.es
+LABEL maintainer="top-video-generator@olidroide.es"
 
 ENV PIP_DEFAULT_TIMEOUT=100 \
     # Allow statements and log messages to immediately appear
@@ -19,8 +19,11 @@ RUN pip install --no-cache-dir -r /requirements.txt
 COPY ./src/resources/fonts/* /usr/local/share/fonts/
 COPY ./src/resources/fonts/* /usr/share/fonts/
 
-
-RUN apt-get -y update && apt-get -y upgrade &&  \
+# Fix Debian Buster sources for archive
+RUN sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.debian.org/debian-security|http://archive.debian.org/debian-security|g' /etc/apt/sources.list && \
+    apt-get -o Acquire::Check-Valid-Until=false update && \
+    apt-get -y upgrade && \
     apt-get install -y ffmpeg imagemagick fonts-liberation fonts-droid-fallback fonts-noto-mono fontconfig && \
     apt-get -y clean && rm -rf /var/lib/apt/lists/*
 
