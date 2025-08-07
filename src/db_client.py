@@ -81,7 +81,7 @@ class Video(BaseModel):
 
     @property
     def hashtags_in_description(self) -> list[str]:
-        regex = "#(\w+)"
+        regex = r"#(\w+)"
         hashtag_list = re.findall(regex, self.description)
         return [f"#{hashtag}" for hashtag in hashtag_list]
 
