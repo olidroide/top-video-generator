@@ -89,9 +89,13 @@ class VideoProcessing:
                 f"{self._video_yt_resources_folder}/{video.video_id}_qr.png", dark="pink", light="#323524", scale=8
             )
 
-        font_droid_sans = "Droid Sans Mono"
-        font_webdings = "Webdings"
-        font_monocraft = "Monocraft"
+        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
+        font_webdings_path = "/usr/share/fonts/webdings.ttf"
+        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
+        
+        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
+        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
+        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
         score_text_clip = (
             TextClip(
                 f"{video.score:02d}",
@@ -224,9 +228,15 @@ class VideoProcessing:
         views = millify(video.views, precision=2, drop_nulls=False)
         views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
 
-        font_droid_sans = "Droid Sans Mono"
-        font_webdings = "Webdings"
-        font_monocraft = "Monocraft"
+        # Use direct font file paths for better compatibility in Docker
+        # Fall back to font names if files don't exist
+        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
+        font_webdings_path = "/usr/share/fonts/webdings.ttf"
+        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
+        
+        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
+        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
+        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
         score_text_clip = (
             TextClip(
                 f"{video.score:02d}",

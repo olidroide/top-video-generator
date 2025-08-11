@@ -41,7 +41,11 @@ LABEL MAINTAINER="top-video-generator@olidroide.es"
 
 ENV PYTHONUNBUFFERED=1 \
     OAUTHLIB_INSECURE_TRANSPORT=1 \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    IMAGEIO_FFMPEG_EXE="/usr/bin/ffmpeg" \
+    MAGICK_HOME="/usr" \
+    MAGICK_CONFIGURE_PATH="/etc/ImageMagick-6" \
+    FONTCONFIG_PATH="/etc/fonts"
 
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
@@ -76,8 +80,17 @@ COPY ./src/resources/fonts/* /usr/local/share/fonts/
 COPY ./src/resources/fonts/* /usr/share/fonts/
 
 RUN sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml && \
+    sed -i 's/<policy domain="path" rights="none" pattern="@\*"/<policy domain="path" rights="read,write" pattern="@*"/g' /etc/ImageMagick-6/policy.xml && \
+    echo '<policy domain="resource" name="memory" value="256MiB"/>' >> /etc/ImageMagick-6/policy.xml && \
+    echo '<policy domain="resource" name="disk" value="1GiB"/>' >> /etc/ImageMagick-6/policy.xml && \
+    chmod 644 /usr/share/fonts/* && \
+    chmod 644 /usr/local/share/fonts/* && \
     fc-cache -fv && \
     dpkg-reconfigure -f noninteractive fontconfig && \
+    echo "Available fonts:" && \
+    fc-list | grep -i "droid\|mono\|webdings" || echo "Warning: Some fonts not found" && \
+    echo "Font files:" && \
+    ls -la /usr/share/fonts/ && \
     rm -rf /var/cache/*
 
 # Create non-root user
