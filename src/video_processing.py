@@ -1,23 +1,24 @@
 import datetime
 import pathlib
 import shutil
+from datetime import timezone
 
 import requests
 import segno as segno
-from src.logger import get_logger
-from PIL import Image, ImageFont, ImageDraw
 from millify import millify
 from moviepy import Clip
 from moviepy.audio.fx.audio_fadeout import audio_fadeout
-from moviepy.video.VideoClip import ImageClip, TextClip, ColorClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.compositing.transitions import crossfadein
 from moviepy.video.fx.crop import crop
 from moviepy.video.fx.mask_color import mask_color
 from moviepy.video.fx.resize import resize
 from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.video.VideoClip import ColorClip, ImageClip, TextClip
+from PIL import Image, ImageDraw, ImageFont
 
 from src.db_client import Video, VideoScoreStatus
+from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
 
@@ -35,7 +36,9 @@ class VideoProcessing:
         self._thumbnail_file = settings.video_template_thumbnail_file
         self._thumbnail_font_file = settings.video_template_thumbnail_font_file
         self._video_yt_resources_folder = VideoDownloader().video_yt_resources_folder
-        path = pathlib.Path(f"{settings.video_generated_folder}/{datetime.datetime.utcnow().strftime('%Y%m%d')}/")
+        path = pathlib.Path(
+            f"{settings.video_generated_folder}/{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}/"
+        )
         path.mkdir(parents=True, exist_ok=True)
         self._video_generated_folder = str(path)
 
@@ -221,7 +224,7 @@ class VideoProcessing:
         views = millify(video.views, precision=2, drop_nulls=False)
         views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
 
-        font_droid_sans = "DroidSansMono Nerd Font Mono"
+        font_droid_sans = "Droid Sans Mono"
         font_webdings = "Webdings"
         font_monocraft = "Monocraft"
         score_text_clip = (
@@ -504,7 +507,7 @@ class VideoProcessing:
 
         merged_clip = CompositeVideoClip(clips=composite_clips)
         return await self._render_clip(
-            merged_clip, datetime.datetime.utcnow().strftime("%Y%m%d") + f"{'_vertical' if vertical else ''}"
+            merged_clip, datetime.datetime.now(timezone.utc).strftime("%Y%m%d") + f"{'_vertical' if vertical else ''}"
         )
 
     async def generate_thumbnail(self, video_list: list[Video]):
@@ -537,10 +540,10 @@ class VideoProcessing:
         title_font = ImageFont.truetype(self._thumbnail_font_file, size=70)
         draw_surface = ImageDraw.Draw(canvas, "RGBA")
 
-        text_date = datetime.datetime.utcnow().strftime("%d / %m / %Y")
+        text_date = datetime.datetime.now(timezone.utc).strftime("%d / %m / %Y")
         draw_surface.text((996, 960), text_date, font=title_font, fill=(0, 0, 0, 0))
 
-        text_date_file = datetime.datetime.utcnow().strftime("%Y%m%d")
+        text_date_file = datetime.datetime.now(timezone.utc).strftime("%Y%m%d")
         path = f"{self._video_generated_folder}/{text_date_file}_thumbnail.jpg"
         canvas.save(path, quality=100, optimize=True)
         return path

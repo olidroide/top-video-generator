@@ -66,6 +66,7 @@ RUN apt-get update && \
         fonts-liberation \
         fonts-droid-fallback \
         fonts-noto-mono \
+        fonts-dejavu-core \
         fontconfig \
         && apt-get clean \
         && rm -rf /var/lib/apt/lists/* \
@@ -75,8 +76,8 @@ COPY ./src/resources/fonts/* /usr/local/share/fonts/
 COPY ./src/resources/fonts/* /usr/share/fonts/
 
 RUN sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml && \
-    dpkg-reconfigure fontconfig-config && \
-    fc-cache -f && \
+    fc-cache -fv && \
+    dpkg-reconfigure -f noninteractive fontconfig && \
     rm -rf /var/cache/*
 
 # Create non-root user

@@ -18,7 +18,7 @@ async def is_passed_enough_time_from_last_fetch(
         logger.debug("No timeseries found")
         return True
     last_timeseries_datetime = last_timeseries_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
-    current_datetime = datetime.utcnow().astimezone(timezone.utc)
+    current_datetime = datetime.now(timezone.utc)
     delta_from_last_recollection = current_datetime - last_timeseries_datetime
 
     if not (is_enough_time := delta_from_last_recollection.days >= min_days):
@@ -27,7 +27,7 @@ async def is_passed_enough_time_from_last_fetch(
 
 
 async def main():
-    start_process_datetime = datetime.utcnow().astimezone(timezone.utc)
+    start_process_datetime = datetime.now(timezone.utc)
     db_client = DatabaseClient()
     if not await is_passed_enough_time_from_last_fetch(db_client=db_client):
         return
