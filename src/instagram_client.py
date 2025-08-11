@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from instagrapi import Client as InstagrapiClientLib  # type: ignore
 from instagrapi.exceptions import LoginRequired  # type: ignore
 
@@ -10,7 +12,7 @@ logger = get_logger(__name__)
 def _get_instagram_client():
     USERNAME = get_app_settings().instagram_client_username
     PASSWORD = get_app_settings().instagram_client_password
-    settings_filename = get_app_settings().instagram_client_session_file
+    settings_file_path = Path(get_app_settings().instagram_client_session_file)
 
     instagram_client_instance = InstagrapiClientLib()
     login_via_session = False
@@ -18,7 +20,7 @@ def _get_instagram_client():
     session = None
 
     try:
-        session = instagram_client_instance.load_settings(settings_filename)
+        session = instagram_client_instance.load_settings(settings_file_path)
     except Exception as e:
         logger.info("Couldn't get session information: %s" % e)
 
@@ -35,7 +37,7 @@ def _get_instagram_client():
                 instagram_client_instance.set_settings({})
                 instagram_client_instance.set_uuids(old_session["uuids"])
                 instagram_client_instance.login(USERNAME, PASSWORD)
-                instagram_client_instance.dump_settings(settings_filename)
+                instagram_client_instance.dump_settings(settings_file_path)
             login_via_session = True
         except Exception as e:
             logger.info("Couldn't login user using session information: %s" % e)
@@ -45,7 +47,7 @@ def _get_instagram_client():
             logger.info("Attempting to login via username and password. username: %s" % USERNAME)
             if instagram_client_instance.login(USERNAME, PASSWORD):
                 login_via_pw = True
-                instagram_client_instance.dump_settings(settings_filename)
+                instagram_client_instance.dump_settings(settings_file_path)
         except Exception as e:
             logger.info("Couldn't login user using username and password: %s" % e)
 
@@ -57,27 +59,24 @@ def _get_instagram_client():
 
 class InstagramClient:
     async def upload_video(self, video_path: str, caption: str) -> str | None:
-        """
-        Sube un vídeo a Instagram como un Reel usando instagrapi.
-        """
         try:
-            logger.info(f"Intentando subir Reel desde la ruta: {video_path} con caption: '{caption}'")
+            logger.info(f"📸 Trying to upload Reel from path: {video_path} with caption: '{caption}'")
             client = _get_instagram_client()
-            media = client.clip_upload(path=video_path, caption=caption)
+            media = client.clip_upload(path=Path(video_path), caption=caption)
 
             if media and hasattr(media, "pk"):
-                logger.info(f"Reel subido exitosamente a Instagram. Media ID: {media.pk}")
+                logger.info(f"📸 Reel successfully uploaded to Instagram. Media ID: {media.pk}")
                 return str(media.pk)
             elif media and hasattr(media, "id"):
-                logger.info(f"Reel subido exitosamente a Instagram. Media ID: {media.id}")
+                logger.info(f"📸 Reel successfully uploaded to Instagram. Media ID: {media.id}")
                 return str(media.id)
             else:
-                logger.error("La subida del Reel a Instagram no devolvió un objeto media con 'pk' o 'id'.")
+                logger.error("📸 Upload to Instagram did not return a media object with 'pk' or 'id'.")
                 if media is not None:
-                    logger.debug(f"Objeto media devuelto: {repr(media)}")
+                    logger.debug(f"Returned media object: {repr(media)}")
                 else:
-                    logger.debug("instagrapi.clip_upload devolvió None.")
+                    logger.debug("instagrapi.clip_upload returned None.")
                 return None
         except Exception as e:
-            logger.error(f"Excepción durante la subida del Reel a Instagram: {e}", exc_info=True)
+            logger.error(f"📸 Exception during Reel upload to Instagram: {e}", exc_info=True)
             return None

@@ -6,6 +6,7 @@ from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRa
 from src.instagram_client import InstagramClient
 from src.logger import get_logger
 from src.settings import get_app_settings
+from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing

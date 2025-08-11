@@ -68,7 +68,6 @@ RUN apt-get update && \
         ffmpeg \
         imagemagick \
         fonts-liberation \
-        fonts-droid-fallback \
         fonts-noto-mono \
         fonts-dejavu-core \
         fontconfig \
@@ -76,21 +75,29 @@ RUN apt-get update && \
         && rm -rf /var/lib/apt/lists/* \
         && rm -rf /var/cache/apt/*
 
-COPY ./src/resources/fonts/* /usr/local/share/fonts/
-COPY ./src/resources/fonts/* /usr/share/fonts/
+# Install project-provided fonts in standard locations and expose predictable paths
+COPY ./src/resources/fonts/* /usr/local/share/fonts/truetype/custom/
+COPY ./src/resources/fonts/* /usr/share/fonts/truetype/custom/
 
 RUN sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml && \
     sed -i 's/<policy domain="path" rights="none" pattern="@\*"/<policy domain="path" rights="read,write" pattern="@*"/g' /etc/ImageMagick-6/policy.xml && \
     echo '<policy domain="resource" name="memory" value="256MiB"/>' >> /etc/ImageMagick-6/policy.xml && \
     echo '<policy domain="resource" name="disk" value="1GiB"/>' >> /etc/ImageMagick-6/policy.xml && \
-    chmod 644 /usr/share/fonts/* && \
-    chmod 644 /usr/local/share/fonts/* && \
-    fc-cache -fv && \
+    # Normalize permissions on installed fonts (recurse for nested dirs)
+    find /usr/share/fonts -type f \( -name "*.ttf" -o -name "*.otf" \) -exec chmod 644 {} + && \
+    find /usr/local/share/fonts -type f \( -name "*.ttf" -o -name "*.otf" \) -exec chmod 644 {} + && \
+    # Symlinks to match the hardcoded paths used by the app
+    ln -sf /usr/share/fonts/truetype/custom/droidsans.ttf /usr/share/fonts/droidsans.ttf && \
+    ln -sf /usr/share/fonts/truetype/custom/webdings.ttf /usr/share/fonts/webdings.ttf && \
+    ln -sf /usr/share/fonts/truetype/custom/monocraft.otf /usr/share/fonts/monocraft.otf && \
+    # Rebuild font cache and print a small diagnostic
+    fc-cache -f -v && \
     dpkg-reconfigure -f noninteractive fontconfig && \
-    echo "Available fonts:" && \
-    fc-list | grep -i "droid\|mono\|webdings" || echo "Warning: Some fonts not found" && \
-    echo "Font files:" && \
-    ls -la /usr/share/fonts/ && \
+    echo "Available fonts (filtered):" && \
+    fc-list | grep -i "droid\|monocraft\|webdings" || echo "Warning: Some fonts not found" && \
+    echo "Expected font paths:" && \
+    ls -la /usr/share/fonts/truetype/custom/ || true && \
+    ls -la /usr/share/fonts/ | grep -E "droidsans|webdings|monocraft" || true && \
     rm -rf /var/cache/*
 
 # Create non-root user
