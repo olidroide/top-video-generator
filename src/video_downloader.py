@@ -26,7 +26,7 @@ class VideoDownloader:
             "format": "best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best/mp4",
             "noplaylist": True,
             "quiet": True,
-            "postprocessor_args": ["-ss", "00:00:30.00", "-to", "00:01:30.00"],
+            "download_ranges": lambda info_dict, ydl: [{"start_time": 30, "end_time": 90}],
             "force_keyframes_at_cuts": True,
             "noprogress": True,
             "extractor_args": {
@@ -65,34 +65,32 @@ class VideoDownloader:
             if not self.is_already_downloaded(video) and (video.duration is not None and video.duration <= 60)
         ]
         if not yt_urls and not yt_shorts_urls:
-            logger.info("no videos to download")
+            logger.info("🚫 No videos to download!")
             return
 
-        logger.debug("download videos", video_list=yt_urls, video_shorts=yt_shorts_urls)
+        logger.debug("⬇️ Starting video downloads", video_list=yt_urls, video_shorts=yt_shorts_urls)
 
-        # Descargar videos largos (con postprocesamiento)
         if yt_urls:
             ytdl_options = self._ydl_opts()
             with YoutubeDL(ytdl_options) as ydl:
                 for url in yt_urls:
                     try:
-                        logger.info(f"Descargando video largo: {url}")
+                        logger.info(f"🎬 Downloading long video: {url}")
                         ydl.download([url])
                     except Exception as e:
-                        logger.error(f"Error descargando video {url}: {str(e)}")
+                        logger.error(f"❌ Error downloading long video {url}: {str(e)}")
                         continue
 
-        # Descargar videos cortos (sin postprocesamiento)
         if yt_shorts_urls:
             ytdl_options = self._ydl_opts()
-            ytdl_options.pop("postprocessor_args", None)
+            ytdl_options.pop("download_ranges", None)
             with YoutubeDL(ytdl_options) as ydl:
                 for url in yt_shorts_urls:
                     try:
-                        logger.info(f"Descargando video corto: {url}")
+                        logger.info(f"📱 Downloading short video: {url}")
                         ydl.download([url])
                     except Exception as e:
-                        logger.error(f"Error descargando video corto {url}: {str(e)}")
+                        logger.error(f"❌ Error downloading short video {url}: {str(e)}")
                         continue
 
-        logger.info("Finish to download videos", yt_urls=yt_urls, yt_short_urls=yt_shorts_urls)
+        logger.info(f"✅ Finished downloading videos! Long: {yt_urls} | Shorts: {yt_shorts_urls}")
