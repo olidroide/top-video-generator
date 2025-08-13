@@ -23,7 +23,7 @@ class VideoDownloader:
     def _ydl_opts(self):
         return {
             "outtmpl": f"{self.video_yt_resources_folder}/%(id)s",
-            "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+            "format": "best[height<=720][ext=mp4]/best[ext=mp4]/mp4/best",
 
             "noplaylist": True,
             "quiet": True,
@@ -32,13 +32,17 @@ class VideoDownloader:
             "noprogress": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["web"],
-                    "skip": ["dash", "hls"]
+                    "player_client": ["ios", "web"],
+                    "skip": ["dash", "hls"],
+                    "formats": "missing_pot"
                 }
             },
             "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+            },
+            "ignoreerrors": False,
+            "retries": 3,
+            "fragment_retries": 3
         }
 
     async def download_video(self, video_list: list[Video]):
