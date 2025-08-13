@@ -23,12 +23,21 @@ class VideoDownloader:
     def _ydl_opts(self):
         return {
             "outtmpl": f"{self.video_yt_resources_folder}/%(id)s",
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best/bestvideo+bestaudio/best",
+            "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+
             "noplaylist": True,
             "quiet": True,
             "postprocessor_args": ["-ss", "00:00:30.00", "-to", "00:01:30.00"],
             "force_keyframes_at_cuts": True,
             "noprogress": True,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            },
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
         }
 
     async def download_video(self, video_list: list[Video]):

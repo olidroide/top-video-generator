@@ -22,7 +22,7 @@ tinyflux==0.4.0
 tinydb==4.8.2
 
 # 3rd parties
-yt-dlp==2025.7.21
+yt-dlp==2025.8.11
 google-api-python-client==2.91.0
 google-auth-oauthlib==1.0.0
 google-auth==2.21.0
