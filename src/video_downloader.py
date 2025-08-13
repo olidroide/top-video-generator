@@ -32,17 +32,21 @@ class VideoDownloader:
             "noprogress": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["ios", "web"],
+                    "player_client": ["ios"],
                     "skip": ["dash", "hls"],
                     "formats": "missing_pot"
                 }
             },
             "http_headers": {
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+                "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+                "X-YouTube-Client-Name": "5",
+                "X-YouTube-Client-Version": "19.29.1"
             },
             "ignoreerrors": False,
-            "retries": 3,
-            "fragment_retries": 3
+            "retries": 5,
+            "fragment_retries": 5,
+            "force_json": True,
+            "cookiefile": None
         }
 
     async def download_video(self, video_list: list[Video]):
