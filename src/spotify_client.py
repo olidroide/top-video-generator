@@ -72,7 +72,7 @@ class SpotifyClient:
         self,
         user_code: str,
     ) -> dict:
-        authorize_url = f"https://accounts.spotify.com/api/token"
+        authorize_url = "https://accounts.spotify.com/api/token"
         data = {
             "code": user_code,
             "grant_type": "authorization_code",
@@ -96,7 +96,7 @@ class SpotifyClient:
         return response_dict
 
     async def refresh_token(self) -> str:
-        url = f"https://accounts.spotify.com/api/token"
+        url = "https://accounts.spotify.com/api/token"
         headers = {
             "Authorization": f"Basic {self._get_app_token_bearer_credentials()}",
         }

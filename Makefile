@@ -1,9 +1,10 @@
 .ONESHELL:
 
 install-requirements:
-	pip install -r requirements-dev.txt
-	pip install -r requirements.txt
+	uv sync --all-extras
 
+dev-install:
+	uv sync --all-extras --dev
 
 build-local-image:
 	docker buildx bake -f docker-bake.hcl top-video-generator-local
@@ -20,12 +21,29 @@ run-fetch-data:
 run-compose-daily:
 	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=vertical_publish" --rm top-video-generator
 
-
 format:
-	black .
+	uv run ruff format .
 
 lint:
-	ruff check src tests
+	uv run ruff check src tests
+
+type-check:
+	uv run ty src tests
+
+test:
+	uv run pytest tests/
 
 schedule:
-	python scheduler.py
+	uv run python scheduler.py
+
+web-run:
+	uv run python src/web/main.py
+
+fetch-run:
+	uv run python src/script_fetch_yt_data.py
+
+publish-run:
+	uv run python src/script_generate_publish_top_video.py
+
+vertical-publish-run:
+	uv run python src/script_generate_vertical_publish_top_video.py

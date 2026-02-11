@@ -9,6 +9,7 @@ ENV PIP_DEFAULT_TIMEOUT=100 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
+        curl \
         gcc \
         g++ \
         libzmq3-dev \
@@ -28,12 +29,17 @@ RUN apt-get update && \
         pkg-config \
         && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment and install packages
-RUN python -m venv /opt/venv
+# Create virtual environment and install packages with uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY ./requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
+COPY ./pyproject.toml /pyproject.toml
+COPY ./uv.lock /uv.lock
+RUN uv sync --no-dev --frozen
 
 # Runtime stage - minimal final image
 FROM python:3.12.8-slim-bookworm

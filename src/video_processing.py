@@ -92,7 +92,7 @@ class VideoProcessing:
         font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
         font_webdings_path = "/usr/share/fonts/webdings.ttf"
         font_monocraft_path = "/usr/share/fonts/monocraft.otf"
-        
+
         font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
@@ -233,7 +233,7 @@ class VideoProcessing:
         font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
         font_webdings_path = "/usr/share/fonts/webdings.ttf"
         font_monocraft_path = "/usr/share/fonts/monocraft.otf"
-        
+
         font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
