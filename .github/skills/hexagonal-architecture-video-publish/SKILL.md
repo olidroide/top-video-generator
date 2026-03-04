@@ -1,96 +1,111 @@
 ---
 name: hexagonal-architecture-video-publish
-description: "Hexagonal Architecture (Ports and Adapters) for video fetch and multi-platform publishing in this repository. Triggers on: hexagonal, ports, adapters, protocol, publisher registry, canonical models, vertical publish."
-compatibility: "Python 3.11+, Pydantic v2, asyncio.TaskGroup."
+description: "Hexagonal Architecture (Ports & Adapters) for the video publishing pipeline. Triggers on: VideoPublisher, VideoDataSource, CanonicalVideo, PublishingResult, publisher_registry, ports, adapters, domain, hexagonal, build_publishers, TaskGroup publish."
+compatibility: "Python 3.11+ required (asyncio.TaskGroup). Pydantic v2. typing.Protocol with runtime_checkable."
 ---
 
-# Hexagonal Architecture for Video Publish
+# Hexagonal Architecture — Video Publish Pipeline
 
-Use this skill when creating or refactoring fetch/publish flows for YouTube/TikTok/Instagram.
+## Pattern 1: New Publisher Adapter
 
-## Goal
+```python
+# src/adapters/x_twitter_publisher.py
+class XTwitterPublisher:
+    @property
+    def platform_name(self) -> Platform:
+        return Platform.X_TWITTER
 
-Keep core orchestration independent from external platforms by enforcing:
+    @property
+    def is_enabled(self) -> bool:
+        return bool(get_app_settings().x_twitter_bearer_token)
 
-- domain models as the canonical internal schema
-- protocols as ports
-- platform clients as adapters
-- registry-based dependency wiring
+    async def publish_video(
+        self, video_list: list[CanonicalVideo], file_path: str,
+        title: str, description: str,
+    ) -> PublishingResult:
+        try:
+            post_id = await _upload_to_x(file_path, title)
+            return PublishingResult(platform=self.platform_name, success=True,
+                                    published_id=post_id, published_at=datetime.now(timezone.utc))
+        except Exception as exc:
+            logger.error("publish failed", error=str(exc))
+            return PublishingResult(platform=self.platform_name, success=False,
+                                    published_at=datetime.now(timezone.utc), error=str(exc))
 
-## Required Structure
-
-```text
-src/
-├── domain/
-│   ├── models.py
-│   └── ports.py
-├── adapters/
-│   ├── youtube_source.py
-│   ├── youtube_publisher.py
-│   ├── tiktok_publisher.py
-│   └── instagram_publisher.py
-└── infrastructure/
-    └── publisher_registry.py
+assert isinstance(XTwitterPublisher(), VideoPublisher)
 ```
 
-## Layer Contracts
+## Pattern 2: Registry
 
-- `src/domain/models.py`
-- Define canonical models used internally: `CanonicalVideo`, `PublishingResult`, `Platform`, `VideoScoreStatus`.
-- Include helper/computed fields needed by multiple adapters (for example `yt_url`, `title_cleaned`).
+```python
+# src/infrastructure/publisher_registry.py
+def build_publishers() -> list[VideoPublisher]:
+    from src.adapters.instagram_publisher import InstagramPublisher
+    from src.adapters.tiktok_publisher import TikTokPublisher
+    from src.adapters.youtube_publisher import YouTubePublisher
 
-- `src/domain/ports.py`
-- Define protocol ports with `typing.Protocol` and `@runtime_checkable`.
-- `VideoDataSource` handles fetching and normalization into canonical models.
-- `VideoPublisher` handles platform publishing and returns `PublishingResult`.
+    candidates: list[VideoPublisher] = [
+        InstagramPublisher(), TikTokPublisher(), YouTubePublisher(),
+    ]
+    active = [p for p in candidates if p.is_enabled]
+    logger.info("Publishers loaded", active=[p.platform_name for p in active])
+    return active
+```
 
-- `src/adapters/*.py`
-- Each adapter must implement one port and translate external client data into canonical models.
-- Keep platform-specific auth and API usage inside adapters.
-- Wrap failures and return a failed `PublishingResult` instead of propagating fatal platform exceptions.
+## Pattern 3: Parallel Publish (TaskGroup)
 
-- `src/infrastructure/publisher_registry.py`
-- Build enabled publishers from settings.
-- Defer imports inside the builder function to avoid import-time hard failures from optional dependencies.
+```python
+async with asyncio.TaskGroup() as tg:
+    for publisher in active_publishers:
+        tg.create_task(publisher.publish_video(
+            video_list=video_list, file_path=file_path,
+            title=title, description=description,
+        ))
+```
 
-## Script Refactor Pattern
+## Pattern 4: MockPublisher for tests
 
-For `src/script_generate_vertical_publish_top_video.py`:
+```python
+class MockPublisher:
+    def __init__(self, platform: Platform, succeed: bool = True) -> None:
+        self._platform = platform
+        self._succeed = succeed
+        self.calls: list[dict] = []
 
-- Fetch or load videos as canonical models.
-- Render media pipeline as today (downloader/workers/video processing).
-- Build publishers via `build_publishers()`.
-- Publish concurrently with `asyncio.TaskGroup`.
-- Persist each platform result independently.
+    @property
+    def platform_name(self) -> Platform: return self._platform
+    @property
+    def is_enabled(self) -> bool: return True
+
+    async def publish_video(self, video_list, file_path, title, description) -> PublishingResult:
+        self.calls.append({"file_path": file_path, "title": title})
+        return PublishingResult(
+            platform=self._platform, success=self._succeed,
+            published_id="mock-id-123" if self._succeed else None,
+            published_at=datetime.now(timezone.utc),
+            error=None if self._succeed else "mock error",
+        )
+```
 
 ## Non-Negotiable Rules
 
-- Domain must not depend on concrete external clients.
-- Orchestrator must not import concrete publisher classes.
-- New platform support requires only:
-  1. new adapter implementing `VideoPublisher`
-  2. registry registration
-- A failure in one platform must not stop publishing on others.
+- `domain/` has zero imports from `src/` — only stdlib + pydantic.
+- Adapters never import from other adapters.
+- Scripts never reference `InstagramClient`, `TikTokClient`, `YTClient` directly.
+- Every adapter file ends with `assert isinstance(MyAdapter(), VideoPublisher)`.
+- `PublishingResult.success=False` is valid — adapters must never raise up to orchestrators.
 
 ## Quality Gates
 
-- Type checks pass for protocol signatures.
-- Lint/format pass (`ruff`, `ruff format`).
-- Vertical publish script supports test doubles by port interface.
-- Logs use `src/logger.py` and include platform identifiers for publish outcomes.
+- [ ] `ty check src/domain/` → zero errors.
+- [ ] `assert isinstance(adapter, VideoPublisher)` in every adapter file.
+- [ ] `build_publishers()` test: mock settings → verify enabled/disabled adapters.
+- [ ] Parallel test: `MockPublisher(succeed=False)` on one platform → others complete.
 
-## Copilot Task Prompt Template
+## Copilot Prompt Template
 
-```text
-Create/update domain ports and adapters using Hexagonal Architecture for publishing.
-Requirements:
-1) Canonical models in src/domain/models.py
-2) Protocol ports in src/domain/ports.py
-3) Adapters in src/adapters/ for YouTube/TikTok/Instagram
-4) build_publishers() registry in src/infrastructure/publisher_registry.py
-5) Refactor src/script_generate_vertical_publish_top_video.py to publish in parallel using asyncio.TaskGroup and persist per-platform results.
-Constraints:
-- Orchestrator cannot import concrete publisher adapters directly.
-- Domain cannot import external clients.
-- Return failed PublishingResult on platform exceptions.
-```
+> "Create `src/adapters/{platform}_publisher.py` implementing the `VideoPublisher` protocol
+> from `src/domain/ports.py`. Use `asyncio.to_thread` if the client is synchronous.
+> Return `PublishingResult` on both success and failure — never raise.
+> Add `assert isinstance({Platform}Publisher(), VideoPublisher)` at module level.
+> Register it in `src/infrastructure/publisher_registry.py`."
