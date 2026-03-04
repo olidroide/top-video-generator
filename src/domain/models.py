@@ -1,12 +1,14 @@
+from datetime import UTC, datetime
 from enum import StrEnum
-from datetime import datetime, timezone
-from typing import Annotated
+
 from pydantic import BaseModel, computed_field
+
 
 class Platform(StrEnum):
     YOUTUBE = "YOUTUBE"
     TIKTOK = "TIKTOK"
     INSTAGRAM = "INSTAGRAM"
+
 
 class VideoScoreStatus(StrEnum):
     NEW = "NEW"
@@ -23,11 +25,11 @@ class CanonicalVideo(BaseModel, frozen=True):
     views_growth: int
     score: float
     score_previous: float
-    score_status: VideoScoreStatus
-    thumbnail_url: str
     description: str = ""
     duration_seconds: float = 0.0
     likes: int = 0
+    score_previous: float | None = None
+    thumbnail_url: str | None = None
 
     @computed_field
     @property
@@ -37,12 +39,17 @@ class CanonicalVideo(BaseModel, frozen=True):
     @computed_field
     @property
     def title_cleaned(self) -> str:
-        # Simple cleaning: strip and collapse whitespace
+        # Limpieza: elimina tokens de ruido y colapsa espacios
+        tokens = ["(Video)", "(Music Video)", "Official Video", "#Video", "Full Video", "(video)"]
+        title = self.title.strip()
+        for token in tokens:
+            title = title.replace(token, "")
         return " ".join(self.title.strip().split())
+
 
 class PublishingResult(BaseModel, frozen=True):
     platform: Platform
     success: bool
     published_id: str | None = None
-    published_at: datetime = datetime.now(timezone.utc)
+    published_at: datetime = datetime.now(UTC)
     error: str | None = None

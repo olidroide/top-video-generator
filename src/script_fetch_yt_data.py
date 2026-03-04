@@ -1,12 +1,10 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import isodate
-
-from src.db_client import Channel, DatabaseClient, Video, VideoPoint, VideoPointTools
-from src.logger import get_logger
-from src.domain.models import CanonicalVideo
 from src.adapters.youtube_source import YouTubeSource
+from src.db_client import Channel, DatabaseClient, Video, VideoPoint, VideoPointTools
+from src.domain.models import CanonicalVideo
+from src.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -19,7 +17,7 @@ async def is_passed_enough_time_from_last_fetch(
         logger.debug("No timeseries found")
         return True
     last_timeseries_datetime = last_timeseries_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
-    current_datetime = datetime.now(timezone.utc)
+    current_datetime = datetime.now(UTC)
     delta_from_last_recollection = current_datetime - last_timeseries_datetime
 
     if not (is_enough_time := delta_from_last_recollection.days >= min_days):
@@ -28,18 +26,17 @@ async def is_passed_enough_time_from_last_fetch(
 
 
 async def main():
-    start_process_datetime = datetime.now(timezone.utc)
+    start_process_datetime = datetime.now(UTC)
     db_client = DatabaseClient()
     if not await is_passed_enough_time_from_last_fetch(db_client=db_client):
         return
-
 
     yt_source = YouTubeSource()
     last_timeseries_videos_fetched: list[VideoPoint] = list(db_client.get_last_timeseries_videos())
     current_timeseries_videos_fetched: list[VideoPoint] = []
 
     # Paso 1: obtener videos trending (solo ids)
-    trending: list[CanonicalVideo] = await yt_source.fetch_top_videos(region="ES", limit=25)
+    trending: list[CanonicalVideo] = await yt_source.fetch_trending_videos(region="ES", limit=25)
     video_id_list = [v.video_id for v in trending]
 
     # Paso 2: obtener detalles completos en batch
