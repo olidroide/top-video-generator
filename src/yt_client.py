@@ -1,6 +1,7 @@
+import asyncio
 import random
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypeVar
 
 import aiohttp
@@ -107,8 +108,9 @@ class YTClient:
     async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = (
-                youtube.videos()
+            # delegate blocking execute to a thread
+            response = await asyncio.to_thread(
+                lambda: youtube.videos()
                 .list(
                     part="contentDetails",
                     chart="mostPopular",
@@ -130,7 +132,9 @@ class YTClient:
         playlist_id = None
         try:
             youtube = self.get_authenticated_service()
-            response = youtube.channels().list(part="contentDetails", mine=True).execute()
+            response = await asyncio.to_thread(
+                lambda: youtube.channels().list(part="contentDetails", mine=True).execute()
+            )
             playlist_id = (
                 response.get("items", []).pop().get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
             )
@@ -142,8 +146,8 @@ class YTClient:
     async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = (
-                youtube.playlistItems()
+            response = await asyncio.to_thread(
+                lambda: youtube.playlistItems()
                 .list(
                     part="contentDetails",
                     playlistId=playlist_id,
@@ -158,11 +162,13 @@ class YTClient:
 
         return response
 
+    # the fake client will override the batch helper as well
+
     async def _fetch_video_details(self, video_id: str) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = (
-                youtube.videos()
+            response = await asyncio.to_thread(
+                lambda: youtube.videos()
                 .list(
                     part="snippet,contentDetails,statistics",
                     id=video_id,
@@ -176,11 +182,36 @@ class YTClient:
 
         return response
 
+    async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict:
+        """Internal helper that requests details for multiple videos at once.
+
+        The YouTube API accepts a comma-separated ``id`` parameter, so we
+        join the list before making the call.  The discovery client is
+        blocking, therefore we delegate the ``execute`` call to
+        :pyfunc:`asyncio.to_thread` so the event loop is not blocked.
+        """
+        try:
+            youtube = self.get_authenticated_service()
+            ids_param = ",".join(video_ids)
+            # run the blocking execute in a thread
+            response = await asyncio.to_thread(
+                lambda: youtube.videos()
+                .list(
+                    part="snippet,contentDetails,statistics",
+                    id=ids_param,
+                )
+                .execute()
+            )
+        except HttpError as e:
+            logger.error("An error occurred", error=e)
+            response = {}
+        return response
+
     async def _fetch_playlist_items(self, playlist_id: str) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = (
-                youtube.playlistItems()
+            response = await asyncio.to_thread(
+                lambda: youtube.playlistItems()
                 .list(
                     part="snippet",
                     playlistId=playlist_id,
@@ -201,7 +232,9 @@ class YTClient:
     ) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = youtube.playlistItems().delete(id=playlist_item_id).execute()
+            response = await asyncio.to_thread(
+                lambda: youtube.playlistItems().delete(id=playlist_item_id).execute()
+            )
         except HttpError as e:
             logger.error("An error occurred", error=e)
             response = {}
@@ -216,8 +249,8 @@ class YTClient:
     ) -> dict:
         try:
             youtube = self.get_authenticated_service()
-            response = (
-                youtube.playlistItems()
+            response = await asyncio.to_thread(
+                lambda: youtube.playlistItems()
                 .insert(
                     part="snippet",
                     body={
@@ -254,6 +287,15 @@ class YTClient:
 
     async def get_video_details(self, video_id: str):
         data = YTRoot.model_validate(await self._fetch_video_details(video_id=video_id))
+        return data
+
+    async def get_video_details_batch(self, video_ids: list[str]):
+        """Public wrapper around ``_fetch_video_details_batch``.
+
+        The returned object is validated to ``YTRoot`` just like the
+        single-id helper so callers can treat the result uniformly.
+        """
+        data = YTRoot.model_validate(await self._fetch_video_details_batch(video_ids=video_ids))
         return data
 
     async def get_playlist_details(self, playlist_id: str):
@@ -325,11 +367,11 @@ class YTClient:
         playlist_id: str | None = None,
         tags: list[str] | None = None,
     ) -> str | None:
-        yt_tags = [tag.replace("@@YEAR@@", str(datetime.utcnow().year)) for tag in self._yt_tags]
+        yt_tags = [tag.replace("@@YEAR@@", str(datetime.now(timezone.utc).year)) for tag in self._yt_tags]
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
         max_tags = 30
 
-        try:
+        def _do_upload():
             youtube = self.get_authenticated_service()
             media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
@@ -367,17 +409,11 @@ class YTClient:
                 .execute()
             )
 
-            video_id = video["id"]
-            logger.debug("Uploaded video:", video=video_id)
+            video_id_local = video.get("id")
+            if thumbnail_path and video_id_local:
+                youtube.thumbnails().set(videoId=video_id_local, media_body=MediaFileUpload(thumbnail_path)).execute()
 
-            if thumbnail_path:
-                logger.debug("set thumbnail video", video=video_id, playlist_id=thumbnail_path)
-
-                youtube.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path)).execute()
-
-            if playlist_id:
-                logger.debug("insert video into playlist", video=video_id, playlist_id=playlist_id)
-
+            if playlist_id and video_id_local:
                 youtube.playlistItems().insert(
                     part="snippet",
                     body={
@@ -385,12 +421,16 @@ class YTClient:
                             "playlistId": playlist_id,
                             "resourceId": {
                                 "kind": "youtube#video",
-                                "videoId": video_id,
+                                "videoId": video_id_local,
                             },
                         }
                     },
                 ).execute()
 
+            return video_id_local
+
+        try:
+            video_id = await asyncio.to_thread(_do_upload)
         except HttpError as e:
             logger.error("An error occurred", error=e)
             return None
@@ -902,6 +942,19 @@ class YTClientFake(YTClient):
                 }
             ],
             "pageInfo": {"totalResults": 1, "resultsPerPage": 1},
+        }
+
+    async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict:
+        # fake batch just concatenates the results from the single-id helper
+        items = []
+        for vid in video_ids:
+            res = await self._fetch_video_details(vid)
+            items.extend(res.get("items", []))
+        return {
+            "kind": "youtube#videoListResponse",
+            "etag": "batch-fake",
+            "items": items,
+            "pageInfo": {"totalResults": len(items), "resultsPerPage": len(items)},
         }
 
     async def _fetch_playlist_items(self, playlist_id: str) -> dict:

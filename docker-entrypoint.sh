@@ -1,8 +1,7 @@
 #!/bin/bash
 #!/usr/bin/env python3
 
-
-#set -exo pipefail
+set -euo pipefail
 
 
 arg1=${STEP:-NO}

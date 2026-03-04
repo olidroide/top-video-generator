@@ -1,6 +1,6 @@
 import asyncio
 import datetime
-from datetime import date
+from datetime import date, timezone
 
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
 from src.instagram_client import InstagramClient
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 
 async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
-    text_date = datetime.datetime.utcnow().strftime("%d/%m/%Y")
+    text_date = datetime.datetime.now(timezone.utc).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
     format_yt_title = format_yt_title.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
@@ -26,7 +26,7 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = N
 
 
 async def generate_yt_description(video_list: list[Video]) -> str:
-    text_date = datetime.datetime.utcnow().strftime("%d / %m / %Y")
+    text_date = datetime.datetime.now(timezone.utc).strftime("%d / %m / %Y")
     channels_names = list(set([video.channel.name for video in video_list]))
     disclaimer = f"""
 ➖➖➖➖➖➖
@@ -53,6 +53,15 @@ Disclaimer
 
 async def main():
     day = date.today()
+
+    # idempotency: if we've already recorded a YouTube release for today, skip
+    if DatabaseClient().is_release_at_date(
+        release_platform=ReleasePlatform.YT,
+        release_date=day,
+    ):
+        logger.info("vertical video already published today, exiting early")
+        return
+
     video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
 
     try:

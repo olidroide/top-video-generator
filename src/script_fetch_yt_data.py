@@ -39,9 +39,10 @@ async def main():
 
     popular_videos_result = await yt_client.get_popular_videos()
     video_id_list = [video.id for video in popular_videos_result.items]
-    for video_id in video_id_list:
-        video_details = await yt_client.get_video_details(video_id)
-        video_item = video_details.items.pop()
+
+    # Use the new batch endpoint to avoid N+1 calls
+    batch_details = await yt_client.get_video_details_batch(video_ids=video_id_list)
+    for video_item in batch_details.items:
         logger.debug("video details", video_details=video_item)
         duration = isodate.parse_duration(video_item.contentDetails.duration)
 

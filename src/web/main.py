@@ -1,13 +1,15 @@
+import subprocess
 from datetime import date, timedelta
+from pathlib import Path
 
 import flag
 from fastapi import BackgroundTasks, FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, field_validator
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import RedirectResponse
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
 from src.db_client import DatabaseClient, ReleasePlatform, SpotifyAuth, TikTokAuth, TimeseriesRange, YtAuth
@@ -287,3 +289,111 @@ async def setup_page(
 
 settings = get_app_settings()
 app.add_middleware(SessionMiddleware, secret_key=settings.app_secret_key)
+
+
+# Health check and metrics storage
+_health_status = {"status": "healthy", "checks": {}}
+_metrics = {
+    "fetch_count": 0,
+    "fetch_errors": 0,
+    "upload_count": 0,
+    "upload_errors": 0,
+    "processing_count": 0,
+    "processing_errors": 0,
+}
+
+
+class HealthCheck(BaseModel):
+    status: str
+    version: str = "1.0.0"
+    checks: dict
+
+
+class MetricsResponse(BaseModel):
+    fetch_count: int
+    fetch_errors: int
+    upload_count: int
+    upload_errors: int
+    processing_count: int
+    processing_errors: int
+
+
+def _check_ffmpeg() -> dict:
+    """Check if ffmpeg is available."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return {
+            "status": "ok" if result.returncode == 0 else "error",
+            "message": "ffmpeg available" if result.returncode == 0 else "ffmpeg error"
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"ffmpeg not found: {e}"}
+
+
+def _check_templates() -> dict:
+    """Check if required template files exist."""
+    settings = get_app_settings()
+    required_files = [
+        settings.video_template_file,
+        settings.video_template_vertical_file,
+        settings.video_template_thumbnail_file,
+        settings.video_template_thumbnail_font_file,
+    ]
+    
+    missing = [f for f in required_files if not Path(f).exists()]
+    
+    return {
+        "status": "ok" if not missing else "error",
+        "message": "All templates present" if not missing else f"Missing templates: {missing}"
+    }
+
+
+def _check_database() -> dict:
+    """Check database connectivity."""
+    try:
+        db = DatabaseClient()
+        # Try to get some data to verify connection
+        _ = db.get_top_25_videos(TimeseriesRange.DAILY, date.today())
+        return {"status": "ok", "message": "Database accessible"}
+    except Exception as e:
+        return {"status": "error", "message": f"Database error: {e}"}
+
+
+@app.get("/health", response_model=HealthCheck)
+async def health_check():
+    """Health check endpoint for monitoring."""
+    checks = {
+        "ffmpeg": _check_ffmpeg(),
+        "templates": _check_templates(),
+        "database": _check_database(),
+    }
+    
+    # Overall status is error if any check fails
+    overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
+    
+    return HealthCheck(
+        status=overall_status,
+        checks=checks
+    )
+
+
+@app.get("/metrics")
+async def metrics():
+    """Metrics endpoint for monitoring."""
+    return MetricsResponse(**_metrics)
+
+
+@app.post("/metrics/increment/{metric_name}")
+async def increment_metric(metric_name: str, error: bool = False):
+    """Internal endpoint to increment metrics (used by background tasks)."""
+    if metric_name in _metrics:
+        if error:
+            _metrics[f"{metric_name}_errors"] += 1
+        else:
+            _metrics[metric_name] += 1
+    return {"status": "ok"}

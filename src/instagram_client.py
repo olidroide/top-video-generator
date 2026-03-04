@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from instagrapi import Client as InstagrapiClientLib  # type: ignore
@@ -61,8 +62,12 @@ class InstagramClient:
     async def upload_video(self, video_path: str, caption: str) -> str | None:
         try:
             logger.info(f"📸 Trying to upload Reel from path: {video_path} with caption: '{caption}'")
-            client = _get_instagram_client()
-            media = client.clip_upload(path=Path(video_path), caption=caption)
+
+            def _do_upload():
+                client = _get_instagram_client()
+                return client.clip_upload(path=Path(video_path), caption=caption)
+
+            media = await asyncio.to_thread(_do_upload)
 
             if media and hasattr(media, "pk"):
                 logger.info(f"📸 Reel successfully uploaded to Instagram. Media ID: {media.pk}")
