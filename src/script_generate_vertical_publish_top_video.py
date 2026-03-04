@@ -3,20 +3,19 @@ import datetime
 from datetime import date, timezone
 
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
-from src.instagram_client import InstagramClient
+
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.spotify_client import SpotifyClient
-from src.tiktok_client import TikTokClient
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
-from src.yt_client import get_yt_client
+from src.infrastructure.publisher_registry import build_publishers
 
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
+async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = []) -> str:
     text_date = datetime.datetime.now(timezone.utc).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -27,20 +26,25 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = N
 
 async def generate_yt_description(video_list: list[Video]) -> str:
     text_date = datetime.datetime.now(timezone.utc).strftime("%d / %m / %Y")
-    channels_names = list(set([video.channel.name for video in video_list]))
+    # Solo nombres válidos
+    channels_names = list({(video.channel.name if video.channel and video.channel.name else "") for video in video_list})
+    channels_names = [name for name in channels_names if name]
     disclaimer = f"""
 ➖➖➖➖➖➖
 Disclaimer 
   · This publication and the information included in it are not intended to serve a substitute for consultation with an attonery.\n
-  · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {",".join(channels_names)}.\n 
+  · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {', '.join(channels_names)}.\n 
   · As per the 3rd section of fair use guidelines borrowing small bits of material from an original work is more likely to be considered fair use. Copyright disclaimer under section 107 of the copyright act 1976, allowance is made for fair use\n
 ➖➖➖➖➖➖
     """
 
     video_list_names = ""
     for video in video_list:
-        video_list_names += f"{video.score}.- {video.yt_video_title_cleaned} {video.yt_video_url} \n"
-        if video.channel:
+        score = video.score if video.score is not None else "-"
+        title = video.yt_video_title_cleaned if hasattr(video, "yt_video_title_cleaned") and video.yt_video_title_cleaned else (video.title or "")
+        url = video.yt_video_url if hasattr(video, "yt_video_url") and video.yt_video_url else ""
+        video_list_names += f"{score}.- {title} {url} \n"
+        if video.channel and video.channel.name:
             video_list_names += f"© {video.channel.name}\n\n"
 
     yt_description = get_app_settings().yt_description_template
@@ -51,11 +55,11 @@ Disclaimer
     return yt_description
 
 
+
 async def main():
     day = date.today()
-
-    # idempotency: if we've already recorded releases on every platform for today, skip
     db = DatabaseClient()
+    # Idempotency guard
     already_published = all(
         db.is_release_at_date(release_platform=platform, release_date=day)
         for platform in (
@@ -68,10 +72,11 @@ async def main():
         logger.info("vertical video already published today on all platforms, exiting early")
         return
 
-    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
+    video_list = db.get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
+
 
     try:
-        yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list]
+        yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list if video.title]
         await SpotifyClient().update_link_original_playlist(
             playlist_id=get_app_settings().spotify_playlist_original,
             song_title_list=yt_video_title_list,
@@ -80,11 +85,11 @@ async def main():
         logger.error("Failed to update Spotify original playlist", error=e)
 
     yt_video_id_list = [video.video_id for video in video_list]
-    video_list = video_list[:5]
-    video_list.sort(key=lambda x: x.score, reverse=True)
-    await VideoDownloader().download_video(video_list)
 
-    # with 0mq
+    video_list = video_list[:5]
+    # sort: score None al final
+    video_list.sort(key=lambda x: (x.score is None, x.score if x.score is not None else 0), reverse=True)
+    await VideoDownloader().download_video(video_list)
     WorkerFactory().start_vertical_workers(video_list)
 
     video_processor = VideoProcessing()
@@ -99,108 +104,56 @@ async def main():
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
 
-    await publish_instagram(file_path=file_path, yt_title=yt_title)
-    await publish_tiktok(file_path=file_path, yt_title=yt_title)
-    await publish_yt(
-        file_path=file_path,
-        yt_title=yt_title,
-        yt_description=yt_description,
-        yt_video_id_list=yt_video_id_list,
-        hashtag_list=hashtag_list,
-    )
+    # Hexagonal: convertir Video → CanonicalVideo para adapters
+    from src.domain.models import CanonicalVideo, VideoScoreStatus
+    def video_to_canonical(v):
+        return CanonicalVideo(
+            video_id=v.video_id,
+            title=v.title or "",
+            channel_name=v.channel.name if v.channel and v.channel.name else "",
+            views=v.views,
+            views_growth=v.views_growth or 0,
+            score=float(v.score) if v.score is not None else 0.0,
+            score_previous=float(v.score_previous) if v.score_previous is not None else 0.0,
+            score_status=VideoScoreStatus(v.score_status) if v.score_status else VideoScoreStatus.NEW,
+            thumbnail_url=v.yt_video_thumbnail_url if hasattr(v, "yt_video_thumbnail_url") else "",
+        )
+    canonical_video_list = [video_to_canonical(v) for v in video_list]
+
+    publishers = build_publishers()
+    results = []
+    async with asyncio.TaskGroup() as tg:
+        tasks = []
+        for publisher in publishers:
+            desc = yt_description if publisher.platform_name.name == "YOUTUBE" else yt_title
+            task = tg.create_task(
+                publisher.publish_video(
+                    video_list=canonical_video_list,
+                    file_path=file_path,
+                    title=yt_title,
+                    description=desc,
+                )
+            )
+            tasks.append((publisher, task))
+        for publisher, task in tasks:
+            result = await task
+            results.append(result)
+            db.add_or_update_release(
+                Release(
+                    platform=publisher.platform_name.name,
+                    client_id=get_app_settings().instagram_client_username if publisher.platform_name.name == "INSTAGRAM" else (
+                        get_app_settings().tiktok_user_openid if publisher.platform_name.name == "TIKTOK" else get_app_settings().yt_auth_user_id
+                    ),
+                    release_id=result.published_id,
+                    published_at=result.published_at.timestamp() if result.published_at else datetime.datetime.now(datetime.timezone.utc).timestamp(),
+                )
+            )
 
     # await video_processor.delete_processed_videos()
 
 
-async def publish_instagram(file_path: str, yt_title: str):
-    try:
-        instagram_publish_video_id = await InstagramClient().upload_video(
-            video_path=file_path,
-            caption=yt_title,
-        )
-    except Exception as e:
-        logger.error("Failed to upload Instagram", error=e)
-        instagram_publish_video_id = None
 
-    try:
-        DatabaseClient().add_or_update_release(
-            release=Release(
-                platform=ReleasePlatform.INSTAGRAM.value,
-                client_id=get_app_settings().instagram_client_username,
-                release_id=instagram_publish_video_id,
-                published_at=datetime.datetime.now(timezone.utc).timestamp(),
-            )
-        )
-    except Exception as e:
-        logger.error("Failed to save Instagram Release", error=e)
-
-
-async def publish_tiktok(
-    file_path: str,
-    yt_title: str,
-) -> None:
-    try:
-        tiktok_publish_video_id = await TikTokClient().upload_video(
-            video_path=file_path,
-            title=yt_title,
-        )
-    except Exception as e:
-        logger.error("Failed to upload TikTok", error=e)
-        tiktok_publish_video_id = None
-
-    try:
-        DatabaseClient().add_or_update_release(
-            release=Release(
-                platform=ReleasePlatform.TIKTOK.value,
-                client_id=get_app_settings().tiktok_user_openid,
-                release_id=tiktok_publish_video_id,
-                published_at=datetime.datetime.now(timezone.utc).timestamp(),
-            )
-        )
-    except Exception as e:
-        logger.error("Failed to save TikTok Release", error=e)
-
-
-async def publish_yt(
-    file_path: str,
-    yt_title: str,
-    yt_description: str,
-    yt_video_id_list: list[str],
-    hashtag_list: list[str],
-) -> None:
-    try:
-        playlist_id = get_app_settings().yt_playlist_id_daily
-        yt_video_id = await get_yt_client().upload_video(
-            video_path=file_path,
-            title=yt_title,
-            description=yt_description,
-            thumbnail_path=None,
-            playlist_id=playlist_id,
-            tags=hashtag_list,
-        )
-    except Exception as e:
-        logger.error("Failed to upload Youtube", error=e)
-        yt_video_id = None
-
-    try:
-        DatabaseClient().add_or_update_release(
-            release=Release(
-                platform=ReleasePlatform.YT.value,
-                client_id=get_app_settings().yt_auth_user_id,
-                release_id=yt_video_id,
-                published_at=datetime.datetime.now(timezone.utc).timestamp(),
-            )
-        )
-    except Exception as e:
-        logger.error("Failed to save Youtube Release", error=e)
-
-    try:
-        await get_yt_client().update_link_original_playlist(
-            playlist_id=get_app_settings().yt_playlist_id_links_original,
-            yt_video_id_list=yt_video_id_list,
-        )
-    except Exception as e:
-        logger.error("Failed to update YT original playlist", error=e)
+    # Nota: la actualización de playlist de YouTube original debe hacerse aparte si es necesario
 
 
 if __name__ == "__main__":

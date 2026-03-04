@@ -48,44 +48,87 @@
 - If changing auth flows or publish steps, keep backward compatibility for stored TinyDB auth records.
 - Add minimal validation for user-provided parameters in the web routes.
 
-## Foundational Architecture Values (Hexagonal - Phase 1)
+---
 
-- Use Ports and Adapters as the default pattern for publish/fetch workflows.
-- Keep orchestration scripts platform-agnostic: scripts can call ports, never concrete clients directly.
-- Put canonical business models in `src/domain/models.py` and use them as the single internal contract.
-- Define external boundaries in `src/domain/ports.py` with `typing.Protocol`.
-- Implement platform integrations only under `src/adapters/`.
-- Build adapter wiring in `src/infrastructure/publisher_registry.py`; defer imports for optional dependencies.
-- Prefer parallel publishing with `asyncio.TaskGroup` so one platform failure does not block others.
-- Persist publish outcomes per platform, including partial failures.
+## Foundational Architecture: Hexagonal (Ports & Adapters)
 
-### Target Layout
+This project follows **Hexagonal Architecture** for all publishing and data-source logic.
+Copilot MUST respect these rules in every code change.
+
+### Directory Layout (enforced)
 
 ```
 src/
-├── domain/
-│   ├── models.py
-│   └── ports.py
-├── adapters/
-│   ├── youtube_source.py
-│   ├── youtube_publisher.py
-│   ├── tiktok_publisher.py
-│   └── instagram_publisher.py
+├── domain/          # Pure Python — NO external imports allowed here
+│   ├── models.py    # CanonicalVideo, PublishingResult (Pydantic, frozen=True)
+│   └── ports.py     # VideoDataSource, VideoPublisher (typing.Protocol)
+├── adapters/        # One file per external integration
+│   ├── youtube_source.py      # Implements VideoDataSource
+│   ├── youtube_publisher.py   # Implements VideoPublisher
+│   ├── tiktok_publisher.py    # Implements VideoPublisher
+│   └── instagram_publisher.py # Implements VideoPublisher
 └── infrastructure/
-	└── publisher_registry.py
+    └── publisher_registry.py  # build_publishers() — reads settings, returns list[VideoPublisher]
 ```
 
-### Hard Rules for New Code
+### Layer Dependency Rules (non-negotiable)
 
-- Domain layer must not import infrastructure clients (`yt_client`, `tiktok_client`, `instagram_client`, DB clients).
-- Adapters may import concrete clients, but must return domain models (`CanonicalVideo`, `PublishingResult`).
-- Orchestrators may import `build_publishers()` and domain ports/models, not concrete publisher classes.
-- New platforms are added by implementing `VideoPublisher` plus a single registry registration.
-- Avoid `print`; use `src/logger.py` structured logs.
+- `domain/` → imports nothing from `src/` (only stdlib + pydantic).
+- `adapters/` → imports from `domain/` and the specific external client. Never cross-imports between adapters.
+- `infrastructure/` → imports from `adapters/` and `domain/`. Builds the wiring.
+- Scripts → import from `infrastructure/` and `domain/` only. They are orchestrators, NOT business logic owners.
 
-### Acceptance Checklist
+### Ports (typing.Protocol)
 
-- Script runs if one publisher fails; successful publishers still persist release IDs.
-- `build_publishers()` returns only enabled publishers from settings.
-- Publish/fetch interfaces are type-checkable protocols.
-- Vertical publish script is compatible with mock publishers in tests.
+Use `typing.Protocol` with `@runtime_checkable`. Never use ABC inheritance.
+
+```python
+@runtime_checkable
+class VideoPublisher(Protocol):
+    @property
+    def platform_name(self) -> Platform: ...
+    @property
+    def is_enabled(self) -> bool: ...
+    async def publish_video(
+        self, video_list: list[CanonicalVideo], file_path: str,
+        title: str, description: str,
+    ) -> PublishingResult: ...
+```
+
+After every new adapter add a structural check:
+
+```python
+assert isinstance(MyNewPublisher(), VideoPublisher)  # fails fast at import time
+```
+
+### Canonical Models
+
+- `CanonicalVideo` and `PublishingResult` are the **only** types that cross layer boundaries.
+- Adapters translate external API responses into canonical models before returning.
+- Scripts must NEVER handle raw dicts or platform-specific objects.
+
+### Parallel Publishing (asyncio.TaskGroup)
+
+Publishing to multiple platforms MUST be concurrent, never sequential.
+A failure on one platform must never block the others.
+
+### Idempotency Guard
+
+Every publish entry point must check all platforms before running:
+
+```python
+if all(db.is_release_at_date(p, day) for p in Platform):
+    logger.info("already published today on all platforms")
+    return
+```
+
+### Adding a New Platform
+
+1. Create `src/adapters/{platform}_publisher.py` implementing `VideoPublisher`.
+2. Add `assert isinstance(MyPublisher(), VideoPublisher)` at module level.
+3. Register in `src/infrastructure/publisher_registry.py` → `build_publishers()`.
+4. Zero changes required in scripts or domain.
+
+### Skill Reference
+
+For detailed patterns and templates, load skill: `hexagonal-architecture-video-publish`
