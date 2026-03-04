@@ -13,7 +13,7 @@ logger = structlog.get_logger()
 
 @dataclass(frozen=True)
 class PublishVideoRequest:
-    video_list: list[CanonicalVideo]
+    video_list: tuple[CanonicalVideo, ...]
     file_path: str
     title: str
     description: str
@@ -21,15 +21,15 @@ class PublishVideoRequest:
 
 @dataclass(frozen=True)
 class PublishVideoResult:
-    results: list[PublishingResult]
+    results: tuple[PublishingResult, ...]
 
     @property
     def all_succeeded(self) -> bool:
         return all(r.success for r in self.results)
 
     @property
-    def failed(self) -> list[PublishingResult]:
-        return [r for r in self.results if not r.success]
+    def failed(self) -> tuple[PublishingResult, ...]:
+        return tuple(r for r in self.results if not r.success)
 
 
 class PublishVideoUseCase:
@@ -67,4 +67,4 @@ class PublishVideoUseCase:
             else:
                 logger.error("publish.failed", platform=result.platform, error=result.error)
 
-        return PublishVideoResult(results=results)
+        return PublishVideoResult(results=tuple(results))

@@ -15,9 +15,12 @@ class FetchTrendingRequest:
 
 @dataclass(frozen=True)
 class FetchTrendingResult:
-    videos: list[CanonicalVideo]
+    videos: tuple[CanonicalVideo, ...]
     region: str
-    fetched_count: int
+
+    @property
+    def fetched_count(self) -> int:
+        return len(self.videos)
 
 
 class FetchTrendingUseCase:
@@ -29,9 +32,13 @@ class FetchTrendingUseCase:
             region=request.region,
             date=request.date,
         )
-        top = sorted(videos, key=lambda v: v.score, reverse=True)[: request.limit]
+        # Score-based sort only makes sense once scoring is applied.
+        # Until db_client scoring logic is migrated, separate scored from unscored.
+        scored = [v for v in videos if v.score > 0.0]
+        unscored = [v for v in videos if v.score == 0.0]
+        # Prefer scored if available, fallback to raw order for unscored
+        ordered = (sorted(scored, key=lambda v: v.score, reverse=True) + unscored)[: request.limit]
         return FetchTrendingResult(
-            videos=top,
+            videos=tuple(ordered),
             region=request.region,
-            fetched_count=len(top),
         )

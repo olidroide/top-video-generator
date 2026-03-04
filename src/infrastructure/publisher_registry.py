@@ -5,6 +5,11 @@ from src.adapters.tiktok_publisher import TikTokPublisher
 from src.adapters.youtube_publisher import YouTubePublisher
 from src.domain.ports import VideoPublisher
 
+# NOTE (tech debt): Imports are at module-level, but a true circular dependency remains:
+# adapters import from src.yt_client (repo root).
+# Solution: move yt_client.py → infrastructure/youtube/api_client.py in Phase 3
+# Then all adapters can be imported cleanly without deferred imports or circular refs.
+
 
 def build_publishers() -> list[VideoPublisher]:
     logger = structlog.get_logger()

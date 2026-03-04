@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 from .models import CanonicalVideo, Platform, PublishingResult
@@ -18,7 +19,7 @@ class VideoPublisher(Protocol):
     def is_enabled(self) -> bool: ...
     async def publish_video(
         self,
-        video_list: list[CanonicalVideo],
+        video_list: Sequence[CanonicalVideo],
         file_path: str,
         title: str,
         description: str,
