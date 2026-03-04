@@ -1,22 +1,23 @@
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Environment(str, Enum):
+class Environment(StrEnum):
     PRODUCTION = "production"
     DEVELOPMENT = "development"
 
 
 class AppSettings(BaseSettings):
-    class Config:
-        env_file = str(Path(__file__).parent / ".env")
-        env_file_encoding = "utf-8"
-        env_prefix = "TOP_MUSIC_"
-        case_sensitive = False
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).parent / ".env"),
+        env_file_encoding="utf-8",
+        env_prefix="TOP_MUSIC_",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     env: Environment = Environment.PRODUCTION
     days_between_top: int = 7
@@ -44,32 +45,40 @@ class AppSettings(BaseSettings):
     tiktok_app_id: str | None = None
     tiktok_user_openid: str | None = None
 
-    spotify_client_id: str
-    spotify_client_secret: str
-    spotify_redirect_uri: str
-    spotify_user_id: str
-    spotify_playlist_original: str
+    spotify_client_id: str | None = None
+    spotify_client_secret: str | None = None
+    spotify_redirect_uri: str | None = None
+    spotify_user_id: str | None = None
+    spotify_playlist_original: str | None = None
 
-    instagram_client_username: str
-    instagram_client_password: str
-    instagram_client_session_file: str
+    instagram_client_username: str | None = None
+    instagram_client_password: str | None = None
+    instagram_client_session_file: str | None = None
 
-    db_timeseries_file: str
-    db_data_file: str
+    db_timeseries_file: str = "db/db_timeseries.csv"
+    db_data_file: str = "db/db_data.json"
 
-    video_template_end_screen_file: str
-    video_template_start_screen_file: str
-    video_template_file: str
-    video_template_vertical_file: str
-    video_template_thumbnail_file: str
-    video_template_thumbnail_font_file: str
-    video_generated_folder: str
+    video_template_end_screen_file: str | None = None
+    video_template_start_screen_file: str | None = None
+    video_template_file: str | None = None
+    video_template_vertical_file: str | None = None
+    video_template_thumbnail_file: str | None = None
+    video_template_thumbnail_font_file: str | None = None
+    video_generated_folder: str = "videos"
 
     @property
     def is_production_env(self) -> bool:
         return self.env == Environment.PRODUCTION
 
+    @property
+    def is_spotify_configured(self) -> bool:
+        return all([self.spotify_client_id, self.spotify_client_secret, self.spotify_user_id])
 
-@lru_cache()
+    @property
+    def is_instagram_configured(self) -> bool:
+        return all([self.instagram_client_username, self.instagram_client_password])
+
+
+@lru_cache
 def get_app_settings() -> AppSettings:
     return AppSettings()

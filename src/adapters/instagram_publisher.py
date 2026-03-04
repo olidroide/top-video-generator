@@ -1,7 +1,7 @@
+from src.domain.models import CanonicalVideo, Platform, PublishingResult
 from src.instagram_client import InstagramClient
 from src.settings import get_app_settings
-from src.domain.models import PublishingResult, Platform, CanonicalVideo
-from src.domain.ports import VideoPublisher
+
 
 class InstagramPublisher:
     @property
@@ -12,12 +12,12 @@ class InstagramPublisher:
     def is_enabled(self) -> bool:
         return bool(get_app_settings().instagram_client_username)
 
-    async def publish_video(self, video_list: list[CanonicalVideo], file_path: str, title: str, description: str) -> PublishingResult:
+    async def publish_video(
+        self, video_list: list[CanonicalVideo], file_path: str, title: str, description: str
+    ) -> PublishingResult:
         try:
             client = InstagramClient()
             published_id = await client.upload_video(file_path, title)
             return PublishingResult(platform=self.platform_name, success=True, published_id=published_id)
         except Exception as exc:
             return PublishingResult(platform=self.platform_name, success=False, error=str(exc))
-
-assert isinstance(InstagramPublisher(), VideoPublisher)

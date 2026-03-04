@@ -2,7 +2,7 @@
 name = "top-video-generator"
 version = "1.0.0"
 description = "Automated video pipeline with Hexagonal Architecture"
-requires-python = ">=3.12"
+requires-python = ">=3.13,<3.14"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -58,7 +58,7 @@ dev = [
 
 [tool.ruff]
 line-length = 110
-target-version = "py312"
+target-version = "py313"
 lint.select = ["E", "F", "I", "N", "UP", "ASYNC", "S"]
 lint.ignore = ["S101"]
 

@@ -1,7 +1,20 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, computed_field
+
+_NOISE_TOKENS: frozenset[str] = frozenset(
+    {
+        "(Video)",
+        "(Music Video)",
+        "Official Video",
+        "#Video",
+        "Full Video",
+        "(video)",
+    }
+)
 
 
 class Platform(StrEnum):
@@ -22,13 +35,12 @@ class CanonicalVideo(BaseModel, frozen=True):
     title: str
     channel_name: str
     views: int
-    views_growth: int
-    score: float
-    score_previous: float
+    views_growth: int = 0
+    score: float = 0.0
+    score_previous: float | None = None
     description: str = ""
     duration_seconds: float = 0.0
     likes: int = 0
-    score_previous: float | None = None
     thumbnail_url: str | None = None
 
     @computed_field
@@ -39,12 +51,10 @@ class CanonicalVideo(BaseModel, frozen=True):
     @computed_field
     @property
     def title_cleaned(self) -> str:
-        # Limpieza: elimina tokens de ruido y colapsa espacios
-        tokens = ["(Video)", "(Music Video)", "Official Video", "#Video", "Full Video", "(video)"]
         title = self.title.strip()
-        for token in tokens:
+        for token in _NOISE_TOKENS:
             title = title.replace(token, "")
-        return " ".join(self.title.strip().split())
+        return " ".join(title.split())
 
 
 class PublishingResult(BaseModel, frozen=True):

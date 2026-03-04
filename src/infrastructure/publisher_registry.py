@@ -1,12 +1,13 @@
-from src.domain.ports import VideoPublisher
 import structlog
+
+from src.adapters.instagram_publisher import InstagramPublisher
+from src.adapters.tiktok_publisher import TikTokPublisher
+from src.adapters.youtube_publisher import YouTubePublisher
+from src.domain.ports import VideoPublisher
+
 
 def build_publishers() -> list[VideoPublisher]:
     logger = structlog.get_logger()
-    # Deferred imports to avoid circular dependencies
-    from src.adapters.instagram_publisher import InstagramPublisher
-    from src.adapters.tiktok_publisher import TikTokPublisher
-    from src.adapters.youtube_publisher import YouTubePublisher
 
     publishers: list[VideoPublisher] = [
         InstagramPublisher(),
