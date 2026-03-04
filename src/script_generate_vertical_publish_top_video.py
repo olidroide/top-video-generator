@@ -54,12 +54,18 @@ Disclaimer
 async def main():
     day = date.today()
 
-    # idempotency: if we've already recorded a YouTube release for today, skip
-    if DatabaseClient().is_release_at_date(
-        release_platform=ReleasePlatform.YT,
-        release_date=day,
-    ):
-        logger.info("vertical video already published today, exiting early")
+    # idempotency: if we've already recorded releases on every platform for today, skip
+    db = DatabaseClient()
+    already_published = all(
+        db.is_release_at_date(release_platform=platform, release_date=day)
+        for platform in (
+            ReleasePlatform.YT,
+            ReleasePlatform.INSTAGRAM,
+            ReleasePlatform.TIKTOK,
+        )
+    )
+    if already_published:
+        logger.info("vertical video already published today on all platforms, exiting early")
         return
 
     video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
@@ -122,7 +128,7 @@ async def publish_instagram(file_path: str, yt_title: str):
                 platform=ReleasePlatform.INSTAGRAM.value,
                 client_id=get_app_settings().instagram_client_username,
                 release_id=instagram_publish_video_id,
-                published_at=datetime.datetime.now().timestamp(),
+                published_at=datetime.datetime.now(timezone.utc).timestamp(),
             )
         )
     except Exception as e:
@@ -148,7 +154,7 @@ async def publish_tiktok(
                 platform=ReleasePlatform.TIKTOK.value,
                 client_id=get_app_settings().tiktok_user_openid,
                 release_id=tiktok_publish_video_id,
-                published_at=datetime.datetime.now().timestamp(),
+                published_at=datetime.datetime.now(timezone.utc).timestamp(),
             )
         )
     except Exception as e:
@@ -182,7 +188,7 @@ async def publish_yt(
                 platform=ReleasePlatform.YT.value,
                 client_id=get_app_settings().yt_auth_user_id,
                 release_id=yt_video_id,
-                published_at=datetime.datetime.now().timestamp(),
+                published_at=datetime.datetime.now(timezone.utc).timestamp(),
             )
         )
     except Exception as e:

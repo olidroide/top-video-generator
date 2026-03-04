@@ -88,7 +88,7 @@ async def main():
                 platform=ReleasePlatform.YT.value,
                 client_id=get_app_settings().yt_auth_user_id,
                 release_id=yt_video_id,
-                published_at=datetime.datetime.now().timestamp(),
+                published_at=datetime.datetime.now(timezone.utc).timestamp(),
             )
         )
     except Exception as e:
