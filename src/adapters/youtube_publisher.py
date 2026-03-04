@@ -10,7 +10,7 @@ class YouTubePublisher:
 
     @property
     def is_enabled(self) -> bool:
-        return bool(get_app_settings().yt_client_secret)
+        return bool(get_app_settings().yt_client_secret_file)
 
     async def publish_video(self, video_list: list[CanonicalVideo], file_path: str, title: str, description: str) -> PublishingResult:
         try:

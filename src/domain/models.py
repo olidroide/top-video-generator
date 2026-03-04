@@ -14,6 +14,7 @@ class VideoScoreStatus(StrEnum):
     DOWN = "DOWN"
     EQUAL = "EQUAL"
 
+
 class CanonicalVideo(BaseModel, frozen=True):
     video_id: str
     title: str
@@ -24,6 +25,9 @@ class CanonicalVideo(BaseModel, frozen=True):
     score_previous: float
     score_status: VideoScoreStatus
     thumbnail_url: str
+    description: str = ""
+    duration_seconds: float = 0.0
+    likes: int = 0
 
     @computed_field
     @property

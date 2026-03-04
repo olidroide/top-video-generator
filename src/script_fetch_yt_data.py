@@ -5,7 +5,8 @@ import isodate
 
 from src.db_client import Channel, DatabaseClient, Video, VideoPoint, VideoPointTools
 from src.logger import get_logger
-from src.yt_client import get_yt_client
+from src.domain.models import CanonicalVideo
+from src.adapters.youtube_source import YouTubeSource
 
 logger = get_logger(__name__)
 
@@ -32,42 +33,40 @@ async def main():
     if not await is_passed_enough_time_from_last_fetch(db_client=db_client):
         return
 
-    yt_client = get_yt_client()
-    last_timeseries_videos_fetched: list[VideoPoint] = list(db_client.get_last_timeseries_videos())
 
+    yt_source = YouTubeSource()
+    last_timeseries_videos_fetched: list[VideoPoint] = list(db_client.get_last_timeseries_videos())
     current_timeseries_videos_fetched: list[VideoPoint] = []
 
-    popular_videos_result = await yt_client.get_popular_videos()
-    video_id_list = [video.id for video in popular_videos_result.items]
+    # Paso 1: obtener videos trending (solo ids)
+    trending: list[CanonicalVideo] = await yt_source.fetch_top_videos(region="ES", limit=25)
+    video_id_list = [v.video_id for v in trending]
 
-    # Use the new batch endpoint to avoid N+1 calls
-    batch_details = await yt_client.get_video_details_batch(video_ids=video_id_list)
-    for video_item in batch_details.items:
-        logger.debug("video details", video_details=video_item)
-        duration = isodate.parse_duration(video_item.contentDetails.duration)
+    # Paso 2: obtener detalles completos en batch
+    details: list[CanonicalVideo] = await yt_source.fetch_video_details_batch(video_id_list)
 
-        db_client.add_or_update_video(
-            video=Video(
-                video_id=video_item.id,
-                views=video_item.statistics.viewCount or 0,
-                likes=video_item.statistics.likeCount or 0,
-                title=video_item.snippet.title,
-                description=video_item.snippet.description,
-                duration=duration.total_seconds(),
-                channel=Channel(
-                    channel_id=video_item.snippet.channelId,
-                    name=video_item.snippet.channelTitle,
-                ),
-            )
+    def _canonical_to_db_video(v: CanonicalVideo) -> Video:
+        """Mapea CanonicalVideo a Video para persistencia en TinyDB."""
+        return Video(
+            video_id=v.video_id,
+            views=v.views,
+            likes=v.likes,
+            title=v.title,
+            description=v.description,
+            duration=int(v.duration_seconds) if v.duration_seconds is not None else None,
+            channel=Channel(channel_id=None, name=v.channel_name),
         )
+
+    for video_item in details:
+        logger.debug("video details", video_details=video_item.model_dump())
+        db_client.add_or_update_video(video=_canonical_to_db_video(video_item))
 
         last_video_point = VideoPoint(
             time=start_process_datetime,
-            video_id=video_item.id,
-            views=video_item.statistics.viewCount or 0,
-            likes=video_item.statistics.likeCount or 0,
+            video_id=video_item.video_id,
+            views=video_item.views,
+            likes=video_item.likes,
         )
-
         current_timeseries_videos_fetched.append(last_video_point)
 
     for video_point in VideoPointTools.generate_top_list_compared(
