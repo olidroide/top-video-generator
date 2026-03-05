@@ -44,6 +44,10 @@ src/
 │   │   └── release_repository.py  # TinyDB: Release tracking / idempotency
 │   ├── video/                     # Media pipeline (C1 split in progress)
 │   │   └── __init__.py            # Placeholder — video_processing.py pending migration
+│   ├── youtube/                   # ⚠️ C3 PENDING — yt_client.py migration
+│   │   ├── api_client.py          # YouTube Data API v3 calls
+│   │   ├── auth_manager.py        # OAuth2 flow, token refresh
+│   │   └── uploader.py            # upload_video, playlist management
 │   └── social/                    # Platform API clients
 │       ├── instagram_client.py
 │       ├── spotify_client.py
@@ -155,11 +159,26 @@ from src.logger import get_logger
 
 ## Idempotency Guard
 
-Every entrypoint that publishes MUST check before running:
+Every entrypoint that publishes MUST check before running. **Do not** invent your own pattern — use this exactly:
 
 ```python
 from src.infrastructure.storage.release_repository import ReleaseRepository
-# Check all platforms before executing pipeline
+from src.domain.models import ReleasePlatform
+from datetime import date
+
+async def _already_published_today(repo: ReleaseRepository, day: date) -> bool:
+    """Check if video was already released to all platforms on this date."""
+    return all(
+        repo.is_release_at_date(platform=p.value, day=day)
+        for p in ReleasePlatform
+    )
+
+# In entrypoint (e.g., PublishVideoUseCase.execute):
+async def execute(self, day: date) -> None:
+    if await _already_published_today(self._release_repo, day):
+        logger.info("already_published", day=str(day))
+        return
+    # ... proceed with publish pipeline
 ```
 
 ---
@@ -181,9 +200,21 @@ from src.infrastructure.storage.release_repository import ReleaseRepository
 - ❌ `from src.logger import get_logger` — use `src.shared.logging`
 - ❌ `from src.settings import get_app_settings` — use `src.config.settings`
 - ❌ Mutable default arguments: `def f(day=date.today())` — use `day: date | None = None`
-- ❌ Pydantic v1 style: `.dict()`, `.parse_obj()` — use `.model_dump()`, `.model_validate()`
-- ❌ God files > 300 lines with multiple responsibilities — split by Single Responsibility
+- ❌ Pydantic v1 sts
 
+Load the relevant skill per task. All skills are available in `.github/skills/`:
+
+| Task | Skill | When to load |
+|------|-------|-------------|
+| Write timeseries queries (TinyFlux) | `tinyflux-time-series` | Building VideoPoint aggregations, time ranges |
+| Write async Use Cases / adapters | `python-async-patterns` | PublishVideoUseCase, FetchTrendingUseCase, adapters with asyncio.TaskGroup |
+| Add FastAPI routes / dependencies | `python-fastapi-patterns` | New endpoints in src/web/main.py, Pydantic request models |
+| Create Jinja2 templates | `jinja2-atomic-design` | New .html templates, HTMX components |
+| Define Protocols or TypeVars | `python-typing-patterns` | domain/ports.py (VideoDataSource, VideoPublisher), generics |
+| Add/update dependencies | `uv-package-manager` | Modify pyproject.toml, manage virtual environments |
+| Edit Dockerfile or entrypoint | `docker-best-practices` | Docker build optimization, multi-stage, secrets |
+| Add a new VideoPublisher adapter | `hexagonal-architecture-video-publish` | New platform publishing (TikTok, YouTube, etc) |
+| Handle video processing migration | `video-processing-migration` | C1 split (infrastructure/video), media pipeline refactoring |
 ---
 
 ## Tooling
