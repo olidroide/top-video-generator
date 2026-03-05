@@ -1,4 +1,5 @@
 """Fetch trending YouTube videos and store timeseries data."""
+
 import asyncio
 from datetime import UTC, datetime
 

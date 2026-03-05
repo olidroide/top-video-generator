@@ -1,4 +1,5 @@
 """Structured logging configuration using structlog."""
+
 import logging.config
 import sys
 from logging import handlers

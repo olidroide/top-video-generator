@@ -17,4 +17,3 @@ from src.entrypoints.fetch_data import main, main_async  # noqa: F401
 
 if __name__ == "__main__":
     main()
-

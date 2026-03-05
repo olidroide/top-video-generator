@@ -1,4 +1,5 @@
 """Application settings using Pydantic v2."""
+
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path

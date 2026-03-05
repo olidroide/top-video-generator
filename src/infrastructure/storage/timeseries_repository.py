@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from tinyflux import Point, TagQuery, TimeQuery, TinyFlux
 
@@ -59,9 +59,7 @@ class TimeSeriesRepository:
         Args:
             video_point: Updated VideoPoint with matching video_id and timestamp.
         """
-        query = (TagQuery().video_id == video_point.video_id) & (
-            TimeQuery() == video_point.time.astimezone(timezone.utc)
-        )
+        query = (TagQuery().video_id == video_point.video_id) & (TimeQuery() == video_point.time.astimezone(UTC))
         self._db.update(
             query,
             tags={

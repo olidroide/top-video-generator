@@ -18,9 +18,9 @@ from src.application.workers.post_processor import main_main  # noqa: F401
 
 if __name__ == "__main__":
     import sys
+
     script_name = sys.argv
     arguments = sys.argv[1].strip().split(" ")
     port = int(arguments[0])
     screen_orientation = str(arguments[1])
     main_main(port, screen_orientation)
-

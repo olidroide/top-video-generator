@@ -1,4 +1,5 @@
 """Video post-processor worker process."""
+
 import asyncio
 import gc
 import sys

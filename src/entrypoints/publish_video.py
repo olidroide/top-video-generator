@@ -1,7 +1,8 @@
 """Generate and publish weekly horizontal videos."""
+
 import asyncio
 import datetime
-from datetime import date, timezone
+from datetime import date
 
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
 from src.logger import get_logger
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 
 
 async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
-    text_date = datetime.datetime.now(timezone.utc).strftime("%d/%m/%Y")
+    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
     format_yt_title = format_yt_title.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
@@ -24,7 +25,7 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = N
 
 
 async def generate_yt_description(video_list: list[Video]) -> str:
-    text_date = datetime.datetime.now(timezone.utc).strftime("%d/%m/%Y")
+    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     channels_names = list(set([video.channel.name for video in video_list]))
     disclaimer = f"""
 ➖➖➖➖➖➖
@@ -89,7 +90,7 @@ async def main_async():
                 platform=ReleasePlatform.YT.value,
                 client_id=get_app_settings().yt_auth_user_id,
                 release_id=yt_video_id,
-                published_at=datetime.datetime.now(timezone.utc).timestamp(),
+                published_at=datetime.datetime.now(datetime.UTC).timestamp(),
             )
         )
     except Exception as e:

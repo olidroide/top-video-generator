@@ -1,16 +1,17 @@
 """Worker process factory for parallel video post-processing."""
+
+import math
 import os
 import pathlib
 import subprocess
 import sys
-from typing import Iterator
+from collections.abc import Iterator
 
-import math
-from src.logger import get_logger
 import zmq
 from zmq import Context
 
 from src.db_client import Video
+from src.logger import get_logger
 from src.settings import get_app_settings
 
 logger = get_logger(__name__)

@@ -12,9 +12,9 @@ ONGOING REFACTORING:
 """
 
 import warnings
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 from pydantic import PastDate
 from tinydb import Query, TinyDB
@@ -26,8 +26,8 @@ from src.domain.models import (
     Release,
     SpotifyAuth,
     TikTokAuth,
-    TimeseriesRange,
     TimePoint,
+    TimeseriesRange,
     Video,
     VideoPoint,
     VideoScoreStatus,
@@ -264,9 +264,7 @@ class DatabaseClient:
         """Iterate all time-series points for video(s), optionally filtered by date."""
         timequery = None
         if datetime_filter:
-            from_dt = datetime_filter.astimezone(timezone.utc).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            from_dt = datetime_filter.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
             until_dt = from_dt.replace(hour=23, minute=59, second=59, microsecond=0)
             timequery = (TimeQuery() > from_dt) & (TimeQuery() < until_dt)
 
@@ -295,7 +293,7 @@ class DatabaseClient:
         if not timestamps:
             return None
         timestamps.sort(reverse=True)
-        return timestamps[0].astimezone(timezone.utc)
+        return timestamps[0].astimezone(UTC)
 
     def get_last_timeseries_videos(self) -> Iterator[VideoPoint]:
         """Iterate all videos from the last recorded timestamp."""
@@ -412,9 +410,7 @@ class DatabaseClient:
             day = date.today()
 
         # Fetch previous period
-        previous_list: list[VideoPoint] = list(
-            self.get_defined_range_timeseries_videos(timeseries_range, day)
-        )
+        previous_list: list[VideoPoint] = list(self.get_defined_range_timeseries_videos(timeseries_range, day))
 
         # Fetch current period
         current_list: list[VideoPoint] = list(

@@ -5,7 +5,7 @@ This package will eventually split responsibilities from src/video_processing.py
 
 PLANNED MODULES:
 1. video_renderer.py       - Text overlays, TextClip generation, template rendering
-2. video_compositor.py     - Clip composition, transitions, video assembly  
+2. video_compositor.py     - Clip composition, transitions, video assembly
 3. thumbnail_generator.py  - Thumbnail grid creation (2x2 composite)
 4. asset_manager.py        - File management, rendering to disk, cleanup
 
