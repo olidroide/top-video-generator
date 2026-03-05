@@ -18,6 +18,7 @@ from moviepy.video.VideoClip import ColorClip, ImageClip, TextClip
 from PIL import Image, ImageDraw, ImageFont
 
 from src.db_client import Video, VideoScoreStatus
+from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
@@ -29,18 +30,28 @@ class VideoProcessing:
     def __init__(self) -> None:
         super().__init__()
         settings = get_app_settings()
-        self._end_screen_file = settings.video_template_end_screen_file
-        self._start_screen_file = settings.video_template_start_screen_file
-        self._template_file = settings.video_template_file
-        self._template_vertical_file = settings.video_template_vertical_file
-        self._thumbnail_file = settings.video_template_thumbnail_file
-        self._thumbnail_font_file = settings.video_template_thumbnail_font_file
-        self._video_yt_resources_folder = VideoDownloader().video_yt_resources_folder
-        path = pathlib.Path(
-            f"{settings.video_generated_folder}/{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}/"
+        
+        # Delegate asset management to VideoAssetManager (C1 migration)
+        self._asset_manager = VideoAssetManager(
+            end_screen_file=settings.video_template_end_screen_file,
+            start_screen_file=settings.video_template_start_screen_file,
+            template_file=settings.video_template_file,
+            template_vertical_file=settings.video_template_vertical_file,
+            thumbnail_file=settings.video_template_thumbnail_file,
+            thumbnail_font_file=settings.video_template_thumbnail_font_file,
+            video_yt_resources_folder=VideoDownloader().video_yt_resources_folder,
+            video_generated_base_folder=settings.video_generated_folder,
         )
-        path.mkdir(parents=True, exist_ok=True)
-        self._video_generated_folder = str(path)
+        
+        # Backward compatibility shims (delegate to asset_manager)
+        self._end_screen_file = self._asset_manager.end_screen_file
+        self._start_screen_file = self._asset_manager.start_screen_file
+        self._template_file = self._asset_manager.template_file
+        self._template_vertical_file = self._asset_manager.template_vertical_file
+        self._thumbnail_file = self._asset_manager.thumbnail_file
+        self._thumbnail_font_file = self._asset_manager.thumbnail_font_file
+        self._video_yt_resources_folder = self._asset_manager.video_yt_resources_folder
+        self._video_generated_folder = self._asset_manager.video_generated_folder
 
     def _overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
         map_score_growth = {
@@ -583,7 +594,5 @@ class VideoProcessing:
         return str(path)
 
     async def delete_processed_videos(self):
-        try:
-            shutil.rmtree(self._video_generated_folder)
-        except Exception as e:
-            logger.error("Fail to delete processed videos folder", exception=e)
+        """Remove all generated videos (delegates to VideoAssetManager)."""
+        await self._asset_manager.delete_processed_videos()
