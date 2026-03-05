@@ -40,8 +40,9 @@ dependencies = [
 
 # Entry points para ejecutar con 'uv run'
 [project.scripts]
-fetch-data = "src.script_fetch_yt_data:main"
-publish-vertical = "src.script_generate_vertical_publish_top_video:main"
+fetch-data = "src.entrypoints.fetch_data:main"
+publish-video = "src.entrypoints.publish_video:main"
+publish-vertical = "src.entrypoints.publish_vertical:main"
 api-server = "src.web.main:start"
 
 
@@ -57,7 +58,7 @@ dev = [
 
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py313"
 lint.select = ["E", "F", "I", "N", "UP", "ASYNC", "S"]
 lint.ignore = ["S101"]

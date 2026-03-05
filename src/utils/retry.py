@@ -2,9 +2,10 @@
 
 import asyncio
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from src.logger import get_logger
 
