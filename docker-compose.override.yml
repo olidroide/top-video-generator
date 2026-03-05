@@ -1,0 +1,22 @@
+# Docker Compose override for local development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+services:
+  top-video-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TOP_MUSIC_ENV=development
+      - TOP_MUSIC_LOG_LEVEL=debug
+    volumes:
+      - ./src:/app/src:ro  # Mount source code for development
+      - ./db:/app/db
+      - ./videos:/app/videos
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
