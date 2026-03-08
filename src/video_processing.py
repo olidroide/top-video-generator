@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 from src.db_client import Video, VideoScoreStatus
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.renderer import VideoRenderer
+from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
@@ -46,6 +47,9 @@ class VideoProcessing:
         
         # Delegate rendering to VideoRenderer (C1.2 migration)
         self._renderer = VideoRenderer(asset_manager=self._asset_manager)
+        
+        # Delegate thumbnail generation to ThumbnailGenerator (C1.3 migration)
+        self._thumbnail_generator = ThumbnailGenerator(asset_manager=self._asset_manager)
         
         # Backward compatibility shims (delegate to asset_manager)
         self._end_screen_file = self._asset_manager.end_screen_file
@@ -163,43 +167,9 @@ class VideoProcessing:
             merged_clip, datetime.datetime.now(timezone.utc).strftime("%Y%m%d") + f"{'_vertical' if vertical else ''}"
         )
 
-    async def generate_thumbnail(self, video_list: list[Video]):
-        video_list.sort(key=lambda x: x.score)
-        with Image.open(self._thumbnail_file) as base_thumbnail:
-            base_thumbnail.load()
-
-        middle_width_point = int(base_thumbnail.width / 2)
-        middle_height_point = int(base_thumbnail.height / 2)
-        clips_thumbnails = []
-        for video in video_list:
-            with Image.open(requests.get(video.yt_video_thumbnail_url, stream=True).raw) as clip_thumbnail:
-                clip_thumbnail.load()
-                clips_thumbnails.append(clip_thumbnail.resize(size=(middle_width_point, middle_height_point)))
-
-        canvas = Image.new("RGB", (base_thumbnail.width, base_thumbnail.height))
-        for index, clip_thumbnail in enumerate(clips_thumbnails):
-            if index == 0:
-                position = (0, 0)
-            elif index == 1:
-                position = (middle_width_point, 0)
-            elif index == 2:
-                position = (0, middle_height_point)
-            else:
-                position = (middle_width_point, middle_height_point)
-
-            canvas.paste(clip_thumbnail, position)
-
-        canvas.paste(base_thumbnail, (0, 0), base_thumbnail)
-        title_font = ImageFont.truetype(self._thumbnail_font_file, size=70)
-        draw_surface = ImageDraw.Draw(canvas, "RGBA")
-
-        text_date = datetime.datetime.now(timezone.utc).strftime("%d / %m / %Y")
-        draw_surface.text((996, 960), text_date, font=title_font, fill=(0, 0, 0, 0))
-
-        text_date_file = datetime.datetime.now(timezone.utc).strftime("%Y%m%d")
-        path = f"{self._video_generated_folder}/{text_date_file}_thumbnail.jpg"
-        canvas.save(path, quality=100, optimize=True)
-        return path
+    async def generate_thumbnail(self, video_list: list[Video]) -> str:
+        """Generate 2x2 grid thumbnail (delegates to ThumbnailGenerator)."""
+        return await self._thumbnail_generator.generate_thumbnail(video_list=video_list)
 
     async def _render_clip(self, video: CompositeVideoClip, video_id: str) -> str:
         logger.debug("start render clip", video_id=video_id)
