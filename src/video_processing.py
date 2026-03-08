@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from src.db_client import Video, VideoScoreStatus
 from src.infrastructure.video.asset_manager import VideoAssetManager
+from src.infrastructure.video.renderer import VideoRenderer
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
@@ -31,7 +32,7 @@ class VideoProcessing:
         super().__init__()
         settings = get_app_settings()
         
-        # Delegate asset management to VideoAssetManager (C1 migration)
+        # Delegate asset management to VideoAssetManager (C1.1 migration)
         self._asset_manager = VideoAssetManager(
             end_screen_file=settings.video_template_end_screen_file,
             start_screen_file=settings.video_template_start_screen_file,
@@ -42,6 +43,9 @@ class VideoProcessing:
             video_yt_resources_folder=VideoDownloader().video_yt_resources_folder,
             video_generated_base_folder=settings.video_generated_folder,
         )
+        
+        # Delegate rendering to VideoRenderer (C1.2 migration)
+        self._renderer = VideoRenderer(asset_manager=self._asset_manager)
         
         # Backward compatibility shims (delegate to asset_manager)
         self._end_screen_file = self._asset_manager.end_screen_file
@@ -54,392 +58,20 @@ class VideoProcessing:
         self._video_generated_folder = self._asset_manager.video_generated_folder
 
     def _overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
-        map_score_growth = {
-            VideoScoreStatus.NEW: "~",
-            VideoScoreStatus.UP: "5",
-            VideoScoreStatus.DOWN: "6",
-            VideoScoreStatus.EQUAL: ";",
-        }
-        map_score_growth_color = {
-            VideoScoreStatus.NEW: "yellow",
-            VideoScoreStatus.UP: "blue",
-            VideoScoreStatus.DOWN: "red",
-            VideoScoreStatus.EQUAL: "white",
-        }
-
-        map_view_growth_color = {
-            VideoScoreStatus.NEW: "black",
-            VideoScoreStatus.UP: "blue",
-            VideoScoreStatus.DOWN: "red",
-            VideoScoreStatus.EQUAL: "black",
-        }
-
-        score_growth_status_value = map_score_growth.get(video.score_status, "~")
-        score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
-        view_growth_color = map_view_growth_color.get(video.score_status, "black")
-
-        max_length = 42
-        title = (
-            video.title.replace("(Video)", "")
-            .replace("(Music Video)", "")
-            .replace("Official Video", "")
-            .replace("#Video", "")
-            .replace("Full Video", "")
-            .replace("(video)", "")
-            .replace(" - ", " ")
-            .replace("()", "")
-            .strip()
-        )[:max_length]
-
-        views = millify(video.views, precision=2, drop_nulls=False)
-        views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
-
-        if not pathlib.Path(f"{self._video_yt_resources_folder}/{video.video_id}_qr.png").exists():
-            qr_video = segno.make(video.yt_video_url)
-            qr_video.save(
-                f"{self._video_yt_resources_folder}/{video.video_id}_qr.png", dark="pink", light="#323524", scale=8
-            )
-
-        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
-        font_webdings_path = "/usr/share/fonts/webdings.ttf"
-        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
-
-        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
-        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
-        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
-        score_text_clip = (
-            TextClip(
-                f"{video.score:02d}",
-                font=font_droid_sans,
-                fontsize=130,
-                color="white",
-                stroke_color="white",
-                stroke_width=1,
-            )
-            .set_position((190, 705))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        score_growth_status_text_clip = (
-            TextClip(
-                score_growth_status_value,
-                font=font_webdings,
-                fontsize=77,
-                color=score_growth_status_color,
-                stroke_color="white",
-                stroke_width=4,
-            )
-            .set_position((335, 730))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        title_text_clip = (
-            TextClip(
-                title,
-                font=font_monocraft,
-                color="white",
-                fontsize=42,
-                kerning=-2,
-                size=(1250, 120),
-                align="West",
-                method="caption",
-            )
-            .set_position((180, 940))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        channel_text_clip = (
-            TextClip(
-                f"© {video.channel.name}",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-            )
-            .set_position((258, 115))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_text_clip = (
-            TextClip(
-                f"{views}",
-                font=font_monocraft,
-                fontsize=41,
-                color="black",
-                kerning=0,
-                size=(240, 80),
-                align="center",
-                method="caption",
-            )
-            .set_position((1525, 210))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_growth_text_clip = (
-            TextClip(
-                f"{views_growth}",
-                font=font_monocraft,
-                fontsize=38,
-                color=view_growth_color,
-                kerning=0,
-                size=(240, 80),
-                align="center",
-                method="caption",
-            )
-            .set_position((1525, 480))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        qr_image_clip = (
-            ImageClip(f"{self._video_yt_resources_folder}/{video.video_id}_qr.png", ismask=False)
-            .set_position((1498, 688))
-            .set_duration(video_file_clip.duration)
-        )
-
-        return [
-            score_text_clip,
-            score_growth_status_text_clip,
-            title_text_clip,
-            channel_text_clip,
-            views_text_clip,
-            views_growth_text_clip,
-            qr_image_clip,
-        ]
+        """Generate horizontal text overlays (delegates to VideoRenderer)."""
+        return self._renderer.overlay_texts_template(video_file_clip=video_file_clip, video=video)
 
     def _overlay_texts_vertical_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
-        map_score_growth = {
-            VideoScoreStatus.NEW: "~",
-            VideoScoreStatus.UP: "5",
-            VideoScoreStatus.DOWN: "6",
-            VideoScoreStatus.EQUAL: ";",
-        }
-        map_score_growth_color = {
-            VideoScoreStatus.NEW: "yellow",
-            VideoScoreStatus.UP: "rgb( 0, 0, 205)",  # blue
-            VideoScoreStatus.DOWN: "red",
-            VideoScoreStatus.EQUAL: "white",
-        }
-
-        map_view_growth_color = {
-            VideoScoreStatus.NEW: "black",
-            VideoScoreStatus.UP: "rgb( 0, 0, 205)",  # blue
-            VideoScoreStatus.DOWN: "red",
-            VideoScoreStatus.EQUAL: "black",
-        }
-
-        score_growth_status_value = map_score_growth.get(video.score_status, "~")
-        score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
-        view_growth_color = map_view_growth_color.get(video.score_status, "black")
-
-        max_length = 38
-        title = video.yt_video_title_cleaned[:max_length]
-
-        views = millify(video.views, precision=2, drop_nulls=False)
-        views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
-
-        # Use direct font file paths for better compatibility in Docker
-        # Fall back to font names if files don't exist
-        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
-        font_webdings_path = "/usr/share/fonts/webdings.ttf"
-        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
-
-        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
-        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
-        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
-        score_text_clip = (
-            TextClip(
-                f"{video.score:02d}",
-                font=font_droid_sans,
-                fontsize=240,
-                color="white",
-                stroke_color="white",
-                stroke_width=1,
-            )
-            .set_position((96, 770))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        score_growth_status_text_clip = (
-            TextClip(
-                score_growth_status_value,
-                font=font_webdings,
-                fontsize=77,
-                color=score_growth_status_color,
-                stroke_color="white",
-                stroke_width=4,
-            )
-            .set_position((170, 990))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        score_previous_text_clip = (
-            TextClip(
-                f"{video.score_previous or 'N'}",
-                font=font_droid_sans,
-                fontsize=66,
-                color=score_growth_status_color,
-                # stroke_color="white",
-                # stroke_width=1,
-            )
-            .set_position((245, 995))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        title_text_clip = (
-            TextClip(
-                title,
-                font=font_monocraft,
-                color="white",
-                fontsize=58,
-                kerning=-2,
-                size=(850, 180),
-                align="West",
-                method="caption",
-            )
-            .set_position((83, 1180))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-        channel_text_clip = (
-            TextClip(
-                f"© {video.channel.name}",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-            )
-            .set_position((83, 1347))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_text_clip = (
-            TextClip(
-                f"{views}",
-                font=font_monocraft,
-                fontsize=58,
-                color="white",
-                kerning=0,
-                size=(300, 200),
-                align="center",
-                method="caption",
-            )
-            .set_position((83, 1400))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_title_text_clip = (
-            TextClip(
-                "views",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-                kerning=0,
-                size=(190, 131),
-                align="center",
-                method="caption",
-            )
-            .set_position((83, 1400 + 80))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_growth_text_clip = (
-            TextClip(
-                f"{views_growth}",
-                font=font_monocraft,
-                fontsize=58,
-                color=view_growth_color,
-                kerning=0,
-                size=(300, 200),
-                align="center",
-                method="caption",
-            )
-            .set_position((400, 1400))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_growth_title_text_clip = (
-            TextClip(
-                "NEW views",
-                font=font_monocraft,
-                fontsize=24,
-                color=view_growth_color,
-                kerning=0,
-                size=(190, 131),
-                align="center",
-                method="caption",
-            )
-            .set_position((480, 1400 + 80))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        return [
-            score_text_clip,
-            score_growth_status_text_clip,
-            score_previous_text_clip,
-            title_text_clip,
-            channel_text_clip,
-            views_text_clip,
-            views_title_text_clip,
-            views_growth_text_clip,
-            views_growth_title_text_clip,
-        ]
+        """Generate vertical text overlays (delegates to VideoRenderer)."""
+        return self._renderer.overlay_texts_vertical_template(video_file_clip=video_file_clip, video=video)
 
     async def _overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
-        overlay_clip = VideoFileClip(
-            filename=self._template_file,
-            target_resolution=(video_file_clip.h, video_file_clip.w),
-        ).set_duration(video_file_clip.duration)
-        masked_clip = overlay_clip.fx(mask_color, color=[0, 0, 255], thr=40, s=3).set_duration(video_file_clip.duration)
-
-        # clip2 = clip.fx(resize, height=560, width=760).fx(mask_and, overlay_clip).set_pos(('center'))
-        # clip2 = clip.fx(mask_and, masked_clip).set_pos(("center"))
-        # clip2.set_position("center")
-
-        base_clip = ColorClip(
-            size=(video_file_clip.w, video_file_clip.h),
-            color=(0, 0, 0),
-            duration=video_file_clip.duration,
-        )
-        return [
-            base_clip,
-            video_file_clip,
-            masked_clip,
-        ]
+        """Apply horizontal template (delegates to VideoRenderer)."""
+        return await self._renderer.overlay_with_video_template(video_file_clip=video_file_clip)
 
     async def _overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
-        overlay_clip = VideoFileClip(
-            filename=self._template_vertical_file,
-            target_resolution=(1920, 1080),
-        ).set_duration(video_file_clip.duration)
-        masked_clip = overlay_clip.fx(mask_color, color=[0, 0, 255], thr=50, s=3).set_duration(video_file_clip.duration)
-
-        clip2 = (
-            video_file_clip.fx(crop, x1=15)
-            .fx(resize, width=1080 / 1.3, height=1920 / 1.3)
-            .set_pos("top")
-            .set_position((-500, -150))
-        )
-        # clip2 = clip.fx(mask_and, masked_clip).set_pos(("center"))
-
-        # video_file_clip.set_position("center")
-
-        base_clip = ColorClip(
-            size=(1080, 1920),
-            color=(0, 0, 0),
-            duration=video_file_clip.duration,
-        )
-        return [
-            base_clip,
-            clip2,
-            # video_file_clip,
-            masked_clip,
-        ]
+        """Apply vertical template (delegates to VideoRenderer)."""
+        return await self._renderer.overlay_with_vertical_video_template(video_file_clip=video_file_clip)
 
     async def post_process_video(self, video: Video):
         logger.debug("start post_process_video", video=video.video_id)

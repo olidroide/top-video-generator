@@ -7,14 +7,14 @@ Run with: uv run pytest tests/integration/video/test_video_processing_current.py
 """
 
 import pathlib
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.video.VideoClip import TextClip
 from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.video.VideoClip import TextClip
 from PIL import Image
 
 from src.db_client import Channel, Video, VideoScoreStatus
@@ -38,8 +38,8 @@ def mock_video() -> Video:
         score=5,
         score_previous=7,
         score_status=VideoScoreStatus.UP,
-        published_at=datetime.now(timezone.utc),
-        fetched_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
+        fetched_at=datetime.now(UTC),
         yt_video_thumbnail_url="https://i.ytimg.com/vi/test_video_123/maxresdefault.jpg",
     )
 
@@ -66,7 +66,7 @@ def video_processing_instance(tmp_path: Path) -> VideoProcessing:
 
 class TestVideoAssetManagerCharacterization:
     """Characterization tests for VideoAssetManager methods.
-    
+
     These methods will be extracted to src/infrastructure/video/asset_manager.py.
     """
 
@@ -88,7 +88,7 @@ class TestVideoAssetManagerCharacterization:
                 vp = VideoProcessing()
 
                 # Check folder created with today's date
-                today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+                today_str = datetime.now(UTC).strftime("%Y%m%d")
                 expected_folder = tmp_path / "generated" / today_str
                 assert pathlib.Path(vp._video_generated_folder).exists()
                 assert today_str in vp._video_generated_folder
@@ -134,7 +134,7 @@ class TestVideoAssetManagerCharacterization:
 
 class TestVideoRendererCharacterization:
     """Characterization tests for VideoRenderer methods.
-    
+
     These methods will be extracted to src/infrastructure/video/renderer.py.
     """
 
@@ -143,7 +143,7 @@ class TestVideoRendererCharacterization:
     ) -> None:
         """Document _overlay_texts_template returns list of 7 clips (6 TextClip + 1 ImageClip)."""
         vp = video_processing_instance
-        
+
         # Create mock VideoFileClip
         mock_clip = Mock(spec=VideoFileClip)
         mock_clip.duration = 10.0
@@ -153,21 +153,22 @@ class TestVideoRendererCharacterization:
         # Create QR code file (required by the method)
         qr_path = pathlib.Path(vp._video_yt_resources_folder) / f"{mock_video.video_id}_qr.png"
         qr_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Create a real QR or mock file
         import segno
+
         qr = segno.make(mock_video.yt_video_url)
         qr.save(str(qr_path), dark="pink", light="#323524", scale=8)
 
         # Mock TextClip to avoid ImageMagick dependency
-        with patch("src.video_processing.TextClip") as mock_text_clip:
-            with patch("src.video_processing.ImageClip") as mock_image_clip:
+        with patch("src.infrastructure.video.renderer.TextClip") as mock_text_clip:
+            with patch("src.infrastructure.video.renderer.ImageClip") as mock_image_clip:
                 # Mock returns
                 mock_text_clip.return_value = Mock(spec=TextClip)
                 mock_text_clip.return_value.set_position.return_value = mock_text_clip.return_value
                 mock_text_clip.return_value.set_duration.return_value = mock_text_clip.return_value
                 mock_text_clip.return_value.set_start.return_value = mock_text_clip.return_value
-                
+
                 mock_image_clip.return_value = Mock()
                 mock_image_clip.return_value.set_position.return_value = mock_image_clip.return_value
                 mock_image_clip.return_value.set_duration.return_value = mock_image_clip.return_value
@@ -195,7 +196,7 @@ class TestVideoRendererCharacterization:
         mock_clip.h = 1920
 
         # Mock TextClip to avoid ImageMagick dependency
-        with patch("src.video_processing.TextClip") as mock_text_clip:
+        with patch("src.infrastructure.video.renderer.TextClip") as mock_text_clip:
             mock_text_clip.return_value = Mock(spec=TextClip)
             mock_text_clip.return_value.set_position.return_value = mock_text_clip.return_value
             mock_text_clip.return_value.set_duration.return_value = mock_text_clip.return_value
@@ -220,26 +221,27 @@ class TestVideoRendererCharacterization:
         qr_path = pathlib.Path(vp._video_yt_resources_folder) / f"{mock_video.video_id}_qr.png"
         qr_path.parent.mkdir(parents=True, exist_ok=True)
         import segno
+
         qr = segno.make(mock_video.yt_video_url)
         qr.save(str(qr_path), dark="pink", light="#323524", scale=8)
 
         # Test different score statuses
         for status in [VideoScoreStatus.NEW, VideoScoreStatus.UP, VideoScoreStatus.DOWN, VideoScoreStatus.EQUAL]:
             mock_video.score_status = status
-            with patch("src.video_processing.TextClip") as mock_text_clip:
-                with patch("src.video_processing.ImageClip") as mock_image_clip:
+            with patch("src.infrastructure.video.renderer.TextClip") as mock_text_clip:
+                with patch("src.infrastructure.video.renderer.ImageClip") as mock_image_clip:
                     mock_text_clip.return_value = Mock(spec=TextClip)
                     mock_text_clip.return_value.set_position.return_value = mock_text_clip.return_value
                     mock_text_clip.return_value.set_duration.return_value = mock_text_clip.return_value
                     mock_text_clip.return_value.set_start.return_value = mock_text_clip.return_value
-                    
+
                     mock_image_clip.return_value = Mock()
                     mock_image_clip.return_value.set_position.return_value = mock_image_clip.return_value
                     mock_image_clip.return_value.set_duration.return_value = mock_image_clip.return_value
                     mock_image_clip.return_value.set_start.return_value = mock_image_clip.return_value
 
                     result = vp._overlay_texts_template(video_file_clip=mock_clip, video=mock_video)
-                    
+
             assert len(result) == 7  # 6 TextClips + 1 ImageClip
             assert mock_text_clip.call_count == 6
             mock_text_clip.reset_mock()
@@ -259,6 +261,7 @@ class TestVideoRendererCharacterization:
 
         # Create minimal test video file
         from moviepy.video.VideoClip import ColorClip
+
         test_clip = ColorClip(size=(1920, 1080), color=(255, 0, 0), duration=1.0)
         test_video_path = tmp_path / "test_clip.mp4"
         test_clip.write_videofile(str(test_video_path), fps=24, verbose=False, logger=None)
@@ -284,6 +287,7 @@ class TestVideoRendererCharacterization:
 
         # Create minimal test video file
         from moviepy.video.VideoClip import ColorClip
+
         test_clip = ColorClip(size=(1920, 1080), color=(0, 255, 0), duration=1.0)
         test_video_path = tmp_path / "test_vertical_clip.mp4"
         test_clip.write_videofile(str(test_video_path), fps=24, verbose=False, logger=None)
@@ -298,7 +302,7 @@ class TestVideoRendererCharacterization:
 
 class TestThumbnailGeneratorCharacterization:
     """Characterization tests for ThumbnailGenerator methods.
-    
+
     These methods will be extracted to src/infrastructure/video/thumbnail.py.
     """
 
@@ -333,8 +337,8 @@ class TestThumbnailGeneratorCharacterization:
                 score=i + 1,
                 score_previous=None,
                 score_status=VideoScoreStatus.NEW,
-                published_at=datetime.now(timezone.utc),
-                fetched_at=datetime.now(timezone.utc),
+                published_at=datetime.now(UTC),
+                fetched_at=datetime.now(UTC),
                 yt_video_thumbnail_url="https://i.ytimg.com/vi/test/maxresdefault.jpg",
             )
             video_list.append(vid)
@@ -343,6 +347,7 @@ class TestThumbnailGeneratorCharacterization:
         mock_response = Mock()
         mock_img = Image.new("RGB", (320, 180), color=(255, 0, 0))
         from io import BytesIO
+
         img_bytes = BytesIO()
         mock_img.save(img_bytes, format="JPEG")
         img_bytes.seek(0)
@@ -360,7 +365,7 @@ class TestThumbnailGeneratorCharacterization:
 
 class TestVideoCompositorCharacterization:
     """Characterization tests for VideoCompositor methods.
-    
+
     These methods will be extracted to src/infrastructure/video/compositor.py.
     """
 
@@ -373,6 +378,7 @@ class TestVideoCompositorCharacterization:
 
         # Create minimal CompositeVideoClip
         from moviepy.video.VideoClip import ColorClip
+
         clip1 = ColorClip(size=(1920, 1080), color=(255, 0, 0), duration=2.0)
         composite = CompositeVideoClip([clip1])
 
@@ -396,6 +402,7 @@ class TestVideoCompositorCharacterization:
 
         # Create mock video file for source
         from moviepy.video.VideoClip import ColorClip
+
         test_clip = ColorClip(size=(1920, 1080), color=(0, 255, 0), duration=10.0)
         test_video_path = Path(vp._video_yt_resources_folder) / f"{mock_video.video_id}.mp4"
         test_video_path.parent.mkdir(parents=True, exist_ok=True)
@@ -421,6 +428,7 @@ class TestVideoCompositorCharacterization:
 
         # Create mock video file
         from moviepy.video.VideoClip import ColorClip
+
         test_clip = ColorClip(size=(1920, 1080), color=(0, 0, 255), duration=10.0)
         test_video_path = Path(vp._video_yt_resources_folder) / f"{mock_video.video_id}.mp4"
         test_video_path.parent.mkdir(parents=True, exist_ok=True)
