@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from src.db_client import Video, VideoScoreStatus
 from src.infrastructure.video.asset_manager import VideoAssetManager
+from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
 from src.logger import get_logger
@@ -51,6 +52,9 @@ class VideoProcessing:
         # Delegate thumbnail generation to ThumbnailGenerator (C1.3 migration)
         self._thumbnail_generator = ThumbnailGenerator(asset_manager=self._asset_manager)
         
+        # Delegate video composition to VideoCompositor (C1.4 migration)
+        self._compositor = VideoCompositor(asset_manager=self._asset_manager, renderer=self._renderer)
+        
         # Backward compatibility shims (delegate to asset_manager)
         self._end_screen_file = self._asset_manager.end_screen_file
         self._start_screen_file = self._asset_manager.start_screen_file
@@ -77,95 +81,17 @@ class VideoProcessing:
         """Apply vertical template (delegates to VideoRenderer)."""
         return await self._renderer.overlay_with_vertical_video_template(video_file_clip=video_file_clip)
 
-    async def post_process_video(self, video: Video):
-        logger.debug("start post_process_video", video=video.video_id)
-        x_width = 1920
-        y_height = 1080
-        seconds_per_clip = 8
-        clip = VideoFileClip(
-            filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
-            target_resolution=(y_height, x_width),
-        )
-        if clip.duration < 50:
-            clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
-        else:
-            start = int(clip.duration / 2)
-            clip = clip.subclip(t_start=start, t_end=start + seconds_per_clip)
+    async def post_process_video(self, video: Video) -> None:
+        """Compose horizontal video with overlays (delegates to VideoCompositor)."""
+        return await self._compositor.post_process_video(video=video)
 
-        clips = list(await self._overlay_with_video_template(video_file_clip=clip))
-        clips.extend(self._overlay_texts_template(video_file_clip=clip, video=video))
-
-        composite_video_clip = CompositeVideoClip(clips=clips)
-
-        await self._render_clip(composite_video_clip, video.video_id)
-        logger.debug("finish post_process_video", video=video.video_id)
-
-    async def post_process_vertical_video(self, video: Video):
-        logger.debug(f"start {self.post_process_vertical_video.__name__}", video=video.video_id)
-        _x_width = 1080
-        _y_height = 1920
-        seconds_per_clip = 8
-        clip = VideoFileClip(
-            filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
-            # target_resolution=(y_height, x_width),
-        )
-        clip = clip.set_position("top")
-        if clip.duration < 50:
-            clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
-        else:
-            start = int(clip.duration / 2)
-            clip = clip.subclip(t_start=start, t_end=start + seconds_per_clip)
-
-        clips = list(await self._overlay_with_vertical_video_template(video_file_clip=clip))
-        clips.extend(self._overlay_texts_vertical_template(video_file_clip=clip, video=video))
-
-        composite_video_clip = CompositeVideoClip(clips=clips)
-
-        await self._render_clip(composite_video_clip, f"{video.video_id}_vertical")
-
-        logger.debug("finish post_process_vertical_video", video=video.video_id)
+    async def post_process_vertical_video(self, video: Video) -> None:
+        """Compose vertical video with overlays (delegates to VideoCompositor)."""
+        return await self._compositor.post_process_vertical_video(video=video)
 
     async def join_processed_videos(self, video_id_list: list[str], vertical: bool = False) -> str:
-        cross_fade_duration = 1
-        if not vertical:
-            composite_clips = [
-                VideoFileClip(self._start_screen_file).fx(audio_fadeout, cross_fade_duration),
-            ]
-        else:
-            video_id = video_id_list.pop(0)
-            file_path = f"{self._video_generated_folder}/{video_id}{'_vertical' if vertical else ''}_format.mp4"
-            composite_clips = [
-                VideoFileClip(file_path).fx(audio_fadeout, cross_fade_duration),
-            ]
-
-        for index, video_id in enumerate(video_id_list):
-            clip = VideoFileClip(
-                f"{self._video_generated_folder}/{video_id}{'_vertical' if vertical else ''}_format.mp4"
-            )
-            composite_clips.append(
-                crossfadein(
-                    clip.set_start(composite_clips[index].end - cross_fade_duration).fx(
-                        audio_fadeout, cross_fade_duration
-                    ),
-                    cross_fade_duration,
-                )
-            )
-
-        if not vertical:
-            clip = VideoFileClip(self._end_screen_file)
-            composite_clips.append(
-                crossfadein(
-                    clip.set_start(composite_clips[len(composite_clips) - 1].end - cross_fade_duration).fx(
-                        audio_fadeout, cross_fade_duration
-                    ),
-                    cross_fade_duration,
-                )
-            )
-
-        merged_clip = CompositeVideoClip(clips=composite_clips)
-        return await self._render_clip(
-            merged_clip, datetime.datetime.now(timezone.utc).strftime("%Y%m%d") + f"{'_vertical' if vertical else ''}"
-        )
+        """Join multiple processed videos (delegates to VideoCompositor)."""
+        return await self._compositor.join_processed_videos(video_id_list=video_id_list, vertical=vertical)
 
     async def generate_thumbnail(self, video_list: list[Video]) -> str:
         """Generate 2x2 grid thumbnail (delegates to ThumbnailGenerator)."""
