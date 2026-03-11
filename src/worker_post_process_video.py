@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 """
 DEPRECATED: This module has been moved to src.application.workers.post_processor.
 

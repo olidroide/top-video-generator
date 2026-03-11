@@ -1,3 +1,4 @@
+import asyncio
 import json
 import math
 import pathlib
@@ -211,7 +212,8 @@ class TikTokClient:
             "Content-Type": "application/json; charset=UTF-8",
         }
 
-        file_size_bytes = pathlib.Path(video_path).stat().st_size
+        video_file_path = pathlib.Path(video_path)
+        file_size_bytes = (await asyncio.to_thread(video_file_path.stat)).st_size
         chunk_size_64mb_in_bytes = 67108864
 
         upload_data = []

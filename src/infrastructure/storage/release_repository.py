@@ -46,7 +46,7 @@ class ReleaseRepository:
         # Return the most recent (last inserted)
         return Release.model_validate(results[-1])
 
-    def update_release(self, release: Release) -> Release | None:
+    def update_release(self, release: Release) -> Release:
         """
         Update an existing release record.
 
@@ -57,7 +57,9 @@ class ReleaseRepository:
             Updated Release if found, None otherwise.
         """
         table = self._db.table(self._TABLE)
-        query = (Query().platform == release.platform) & (Query().client_id == release.client_id)
+        platform = release.platform or ""
+        client_id = release.client_id or ""
+        query = (Query().platform == platform) & (Query().client_id == client_id)
         table.update(release.model_dump(), query)
         return release
 
@@ -71,7 +73,9 @@ class ReleaseRepository:
         Returns:
             Persisted Release.
         """
-        if self.get_release(release.platform, release.client_id):
+        platform = release.platform or ""
+        client_id = release.client_id or ""
+        if self.get_release(platform, client_id):
             return self.update_release(release)
         table = self._db.table(self._TABLE)
         table.insert(release.model_dump())

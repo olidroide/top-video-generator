@@ -4,8 +4,10 @@ C1.4 extraction: Composes individual video clips with overlays, joins multiple c
 with transitions, and renders final videos.
 """
 
+import asyncio
 import datetime
 import pathlib
+import tempfile
 
 from moviepy.audio.fx.audio_fadeout import audio_fadeout
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
@@ -67,10 +69,11 @@ class VideoCompositor:
             filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
             target_resolution=(y_height, x_width),
         )
-        if clip.duration < 50:
+        clip_duration = clip.duration or 0.0
+        if clip_duration < 50:
             clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
         else:
-            start = int(clip.duration / 2)
+            start = int(clip_duration / 2)
             clip = clip.subclip(t_start=start, t_end=start + seconds_per_clip)
 
         clips = list(await self._renderer.overlay_with_video_template(video_file_clip=clip))
@@ -178,7 +181,7 @@ class VideoCompositor:
         """
         logger.debug("start render clip", video_id=video_id)
         path = pathlib.Path(f"{self._video_generated_folder}/{video_id}_format.mp4")
-        if path.exists():
+        if await asyncio.to_thread(path.exists):
             return str(path)
         if not (threads := get_app_settings().threads_workers):
             threads = 1
@@ -186,7 +189,7 @@ class VideoCompositor:
         video.write_videofile(
             str(path),
             remove_temp=True,
-            temp_audiofile=f"/tmp/temp_{video_id}_audio.mp4",
+            temp_audiofile=str(pathlib.Path(tempfile.gettempdir()) / f"temp_{video_id}_audio.mp4"),
             verbose=False,
             logger=None,
             fps=24,

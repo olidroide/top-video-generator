@@ -233,3 +233,6 @@ Load the relevant skill from .github/skills when the task matches:
 - docker-best-practices for Dockerfile or entrypoint changes.
 - hexagonal-architecture-video-publish for new VideoPublisher adapters.
 - video-processing-migration for media pipeline migrations.
+- python-observability-patterns for structured logging with structlog, logger setup, and log event formatting.
+- python-resilience-patterns for retry logic, aiohttp session management, and timeout configuration.
+- python-testing-respx for mocking outbound HTTP in tests with respx and create_autospec patterns.

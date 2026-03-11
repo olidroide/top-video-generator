@@ -1,18 +1,20 @@
+import asyncio
 import pathlib
+import tempfile
 
 import segno as segno
-from moviepy import Clip
+from moviepy.Clip import Clip as MoviePyClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.VideoClip import TextClip
 
+from src.config.settings import get_app_settings
 from src.db_client import Video
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
-from src.logger import get_logger
-from src.settings import get_app_settings
+from src.shared.logging import get_logger
 from src.video_downloader import VideoDownloader
 
 logger = get_logger(__name__)
@@ -25,12 +27,12 @@ class VideoProcessing:
 
         # Delegate asset management to VideoAssetManager (C1.1 migration)
         self._asset_manager = VideoAssetManager(
-            end_screen_file=settings.video_template_end_screen_file,
-            start_screen_file=settings.video_template_start_screen_file,
-            template_file=settings.video_template_file,
-            template_vertical_file=settings.video_template_vertical_file,
-            thumbnail_file=settings.video_template_thumbnail_file,
-            thumbnail_font_file=settings.video_template_thumbnail_font_file,
+            end_screen_file=settings.video_template_end_screen_file or "",
+            start_screen_file=settings.video_template_start_screen_file or "",
+            template_file=settings.video_template_file or "",
+            template_vertical_file=settings.video_template_vertical_file or "",
+            thumbnail_file=settings.video_template_thumbnail_file or "",
+            thumbnail_font_file=settings.video_template_thumbnail_font_file or "",
             video_yt_resources_folder=VideoDownloader().video_yt_resources_folder,
             video_generated_base_folder=settings.video_generated_folder,
         )
@@ -62,11 +64,11 @@ class VideoProcessing:
         """Generate vertical text overlays (delegates to VideoRenderer)."""
         return self._renderer.overlay_texts_vertical_template(video_file_clip=video_file_clip, video=video)
 
-    async def _overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
+    async def _overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
         """Apply horizontal template (delegates to VideoRenderer)."""
         return await self._renderer.overlay_with_video_template(video_file_clip=video_file_clip)
 
-    async def _overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
+    async def _overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
         """Apply vertical template (delegates to VideoRenderer)."""
         return await self._renderer.overlay_with_vertical_video_template(video_file_clip=video_file_clip)
 
@@ -89,7 +91,7 @@ class VideoProcessing:
     async def _render_clip(self, video: CompositeVideoClip, video_id: str) -> str:
         logger.debug("start render clip", video_id=video_id)
         path = pathlib.Path(f"{self._video_generated_folder}/{video_id}_format.mp4")
-        if path.exists():
+        if await asyncio.to_thread(path.exists):
             return str(path)
         if not (threads := get_app_settings().threads_workers):
             threads = 1
@@ -97,7 +99,7 @@ class VideoProcessing:
         video.write_videofile(
             str(path),
             remove_temp=True,
-            temp_audiofile=f"/tmp/temp_{video_id}_audio.mp4",
+            temp_audiofile=str(pathlib.Path(tempfile.gettempdir()) / f"temp_{video_id}_audio.mp4"),
             verbose=False,
             logger=None,
             fps=24,

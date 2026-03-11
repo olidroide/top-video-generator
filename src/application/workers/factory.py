@@ -21,9 +21,12 @@ class WorkerFactory:
     @staticmethod
     def _create_worker_connection(context: Context, port: int, screen_orientation: str):
         try:
-            DIR_PATH = pathlib.Path(__file__).parent
-            WORKER_SCRIPT_FILE_PATH = str(DIR_PATH / "post_processor.py")
-            subprocess.Popen(["python", WORKER_SCRIPT_FILE_PATH, f" {port} {screen_orientation}"], shell=False)
+            dir_path = pathlib.Path(__file__).parent
+            worker_script_file_path = str(dir_path / "post_processor.py")
+            subprocess.Popen(  # noqa: S603
+                [sys.executable, worker_script_file_path, f" {port} {screen_orientation}"],
+                shell=False,
+            )
         except OSError as e:
             logger.error("Execution failed:", e, file=sys.stderr)
 

@@ -4,7 +4,9 @@ C1.3 extraction: Generates a composite thumbnail by downloading 4 video thumbnai
 resizing them to fit a 2x2 grid, and overlaying date text.
 """
 
+import asyncio
 import datetime
+from io import BytesIO
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -34,6 +36,12 @@ class ThumbnailGenerator:
         self._thumbnail_font_file = asset_manager.thumbnail_font_file
         self._video_generated_folder = asset_manager.video_generated_folder
 
+    @staticmethod
+    def _fetch_thumbnail_bytes(url: str) -> bytes:
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        return response.content
+
     async def generate_thumbnail(self, video_list: list[Video]) -> str:
         """Generate 2x2 grid thumbnail from 4 video thumbnails.
 
@@ -54,7 +62,8 @@ class ThumbnailGenerator:
         middle_height_point = int(base_thumbnail.height / 2)
         clips_thumbnails = []
         for video in video_list:
-            with Image.open(requests.get(video.yt_video_thumbnail_url, stream=True).raw) as clip_thumbnail:
+            thumbnail_bytes = await asyncio.to_thread(self._fetch_thumbnail_bytes, video.yt_video_thumbnail_url)
+            with Image.open(BytesIO(thumbnail_bytes)) as clip_thumbnail:
                 clip_thumbnail.load()
                 clips_thumbnails.append(clip_thumbnail.resize(size=(middle_width_point, middle_height_point)))
 

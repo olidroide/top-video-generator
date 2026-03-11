@@ -1,4 +1,5 @@
-import random
+# ruff: noqa: E501
+
 from typing import TypeVar
 
 from googleapiclient.errors import HttpError
@@ -719,7 +720,7 @@ class YTClientFake(YTClient):
                         "projection": "rectangular",
                     },
                     "statistics": {
-                        "viewCount": random.randint(0, 53029987),
+                        "viewCount": str((sum(ord(ch) for ch in video_id) % 53029987) + 1),
                         "likeCount": "856498",
                         "favoriteCount": "0",
                         "commentCount": "191319",

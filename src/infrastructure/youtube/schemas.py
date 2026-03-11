@@ -1,3 +1,5 @@
+# ruff: noqa: N815
+
 """
 Modelos Pydantic para respuestas de la API de YouTube.
 Extraídos de client.py (YTPageInfo..YTRoot).

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import segno
 from millify import millify
-from moviepy import Clip
+from moviepy.Clip import Clip as MoviePyClip
 from moviepy.video.fx.crop import crop
 from moviepy.video.fx.mask_color import mask_color
 from moviepy.video.fx.resize import resize
@@ -92,10 +92,12 @@ class VideoRenderer:
         score_growth_status_value = map_score_growth.get(video.score_status, "~")
         score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
         view_growth_color = map_view_growth_color.get(video.score_status, "black")
+        channel_name = video.channel.name if video.channel else "Unknown channel"
 
         max_length = 42
+        video_title = video.title or ""
         title = (
-            video.title.replace("(Video)", "")
+            video_title.replace("(Video)", "")
             .replace("(Music Video)", "")
             .replace("Official Video", "")
             .replace("#Video", "")
@@ -167,7 +169,7 @@ class VideoRenderer:
         )
         channel_text_clip = (
             TextClip(
-                f"© {video.channel.name}",
+                f"© {channel_name}",
                 font=font_monocraft,
                 fontsize=24,
                 color="white",
@@ -259,6 +261,7 @@ class VideoRenderer:
         score_growth_status_value = map_score_growth.get(video.score_status, "~")
         score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
         view_growth_color = map_view_growth_color.get(video.score_status, "black")
+        channel_name = video.channel.name if video.channel else "Unknown channel"
 
         max_length = 38
         title = video.yt_video_title_cleaned[:max_length]
@@ -329,7 +332,7 @@ class VideoRenderer:
         )
         channel_text_clip = (
             TextClip(
-                f"© {video.channel.name}",
+                f"© {channel_name}",
                 font=font_monocraft,
                 fontsize=24,
                 color="white",
@@ -415,7 +418,7 @@ class VideoRenderer:
             views_growth_title_text_clip,
         ]
 
-    async def overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
+    async def overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
         """Apply horizontal template overlay with blue screen masking.
 
         Creates a 3-layer composition: black base, original video, masked template.
@@ -444,7 +447,7 @@ class VideoRenderer:
             masked_clip,
         ]
 
-    async def overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
+    async def overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
         """Apply vertical template overlay with crop/resize transformations.
 
         Creates a 3-layer composition for vertical format (1080x1920).

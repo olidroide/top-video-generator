@@ -34,7 +34,7 @@ class RetryConfig:
 
         if self.jitter:
             # Add random jitter to prevent thundering herd
-            jitter_amount = random.uniform(*self.jitter_range)
+            jitter_amount = random.uniform(*self.jitter_range)  # noqa: S311
             delay += jitter_amount
 
         return delay
@@ -98,7 +98,7 @@ def retry_with_backoff(
     return decorator
 
 
-async def retry_async(
+async def retry_async(  # noqa: UP047
     func: Callable[..., Awaitable[T]],
     *args: Any,
     config: RetryConfig | None = None,

@@ -13,8 +13,6 @@ This module handles all file system operations for video generation:
 import datetime
 import pathlib
 import shutil
-from datetime import timezone
-from pathlib import Path
 
 from src.shared.logging import get_logger
 
@@ -23,12 +21,12 @@ logger = get_logger(__name__)
 
 class VideoAssetManager:
     """Manages file paths, folders, and cleanup for video production.
-    
+
     Responsibilities:
     - Store template file paths (start/end screens, overlays, fonts)
     - Create dated output folders (YYYYMMDD)
     - Provide cleanup for generated files
-    
+
     Does NOT:
     - Render video clips (see VideoRenderer)
     - Compose final videos (see VideoCompositor)
@@ -48,7 +46,7 @@ class VideoAssetManager:
         video_generated_base_folder: str,
     ) -> None:
         """Initialize asset manager with all required paths.
-        
+
         Args:
             end_screen_file: Path to end screen video template
             start_screen_file: Path to start screen video template
@@ -68,9 +66,7 @@ class VideoAssetManager:
         self._video_yt_resources_folder = video_yt_resources_folder
 
         # Create dated output folder (e.g., generated/20260305/)
-        path = pathlib.Path(
-            f"{video_generated_base_folder}/{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}/"
-        )
+        path = pathlib.Path(f"{video_generated_base_folder}/{datetime.datetime.now(datetime.UTC).strftime('%Y%m%d')}/")
         path.mkdir(parents=True, exist_ok=True)
         self._video_generated_folder = str(path)
 
@@ -116,10 +112,10 @@ class VideoAssetManager:
 
     async def delete_processed_videos(self) -> None:
         """Remove all generated videos from today's dated folder.
-        
+
         This cleanup method removes the entire dated output folder
         (e.g., generated/20260305/) including all files within it.
-        
+
         Raises:
             No exceptions raised - logs errors if deletion fails.
         """

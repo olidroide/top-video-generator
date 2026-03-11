@@ -1,3 +1,5 @@
+# ruff: noqa: E402
+
 """
 DEPRECATED: This script has been moved to src.entrypoints.fetch_data.
 

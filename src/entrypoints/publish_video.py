@@ -27,12 +27,27 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | N
 async def generate_yt_description(video_list: list[Video]) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
+    original_publishers = ",".join(channels_names)
+    fair_use_text = (
+        "As per the 3rd section of fair use guidelines borrowing small bits of material from "
+        "an original work is more likely to be considered fair use. Copyright disclaimer under "
+        "section 107 of the copyright act 1976, allowance is made for fair use"
+    )
+    legal_notice = (
+        "This publication and the information included in it are not intended to serve "
+        "a substitute for consultation with an attonery."
+    )
+    copyright_notice = (
+        "Please note no copyright infringement is intended, and I do not own nor claim "
+        "to own any of the original publishers recordings used in this video. "
+        f"Original publishers : {original_publishers}."
+    )
     disclaimer = f"""
 ➖➖➖➖➖➖
 Disclaimer 
-  · This publication and the information included in it are not intended to serve a substitute for consultation with an attonery.\n
-  · Please note no copyright infringement is intended, and I do not own nor claim to own any of the original publishers recordings used in this video. Original publishers : {",".join(channels_names)}.\n 
-  · As per the 3rd section of fair use guidelines borrowing small bits of material from an original work is more likely to be considered fair use. Copyright disclaimer under section 107 of the copyright act 1976, allowance is made for fair use\n
+  · {legal_notice}\n
+  · {copyright_notice}\n 
+  · {fair_use_text}\n
 ➖➖➖➖➖➖
     """
 

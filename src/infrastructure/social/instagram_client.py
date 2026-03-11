@@ -11,8 +11,8 @@ logger = get_logger(__name__)
 
 
 def _get_instagram_client():
-    USERNAME = get_app_settings().instagram_client_username
-    PASSWORD = get_app_settings().instagram_client_password
+    username = get_app_settings().instagram_client_username
+    password = get_app_settings().instagram_client_password
     settings_session_file = get_app_settings().instagram_client_session_file or "instagram_session.json"
     settings_file_path = Path(settings_session_file)
 
@@ -24,12 +24,12 @@ def _get_instagram_client():
     try:
         session = instagram_client_instance.load_settings(settings_file_path)
     except Exception as e:
-        logger.info("Couldn't get session information: %s" % e)
+        logger.info("Couldn't get session information", error=str(e))
 
     if session:
         try:
             instagram_client_instance.set_settings(session)
-            instagram_client_instance.login(USERNAME, PASSWORD)
+            instagram_client_instance.login(username, password)
 
             try:
                 instagram_client_instance.get_timeline_feed()
@@ -38,20 +38,20 @@ def _get_instagram_client():
                 old_session = instagram_client_instance.get_settings()
                 instagram_client_instance.set_settings({})
                 instagram_client_instance.set_uuids(old_session["uuids"])
-                instagram_client_instance.login(USERNAME, PASSWORD)
+                instagram_client_instance.login(username, password)
                 instagram_client_instance.dump_settings(settings_file_path)
             login_via_session = True
         except Exception as e:
-            logger.info("Couldn't login user using session information: %s" % e)
+            logger.info("Couldn't login user using session information", error=str(e))
 
     if not login_via_session:
         try:
-            logger.info("Attempting to login via username and password. username: %s" % USERNAME)
-            if instagram_client_instance.login(USERNAME, PASSWORD):
+            logger.info("Attempting to login via username and password", username=username)
+            if instagram_client_instance.login(username, password):
                 login_via_pw = True
                 instagram_client_instance.dump_settings(settings_file_path)
         except Exception as e:
-            logger.info("Couldn't login user using username and password: %s" % e)
+            logger.info("Couldn't login user using username and password", error=str(e))
 
     if not login_via_pw and not login_via_session:
         raise Exception("Couldn't login user with either password or session")
