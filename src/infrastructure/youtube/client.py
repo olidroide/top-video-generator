@@ -1,44 +1,18 @@
-import asyncio
 import random
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TypeVar
 
-import aiohttp
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
-from googleapiclient.discovery_cache.base import Cache
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
 from pydantic import BaseModel
 
 from src.db_client import DatabaseClient
+from src.infrastructure.youtube.api_client import YouTubeApiClient
+from src.infrastructure.youtube.auth_manager import MemoryCache, YouTubeAuthManager
+from src.infrastructure.youtube.uploader import YouTubeUploader
 from src.logger import get_logger
 from src.settings import get_app_settings
 
 logger = get_logger(__name__)
-
-
-@asynccontextmanager
-async def get_default_client():
-    conn = None
-    async with aiohttp.ClientSession(
-        connector=conn,
-        headers={"Accept": "application/json"},
-        timeout=aiohttp.ClientTimeout(total=30),
-    ) as client:
-        yield client
-
-
-class MemoryCache(Cache):
-    _CACHE = {}
-
-    def get(self, url):
-        return MemoryCache._CACHE.get(url)
-
-    def set(self, url, content):
-        MemoryCache._CACHE[url] = content
 
 
 class YTClient:
@@ -47,140 +21,67 @@ class YTClient:
 
     def __init__(self) -> None:
         super().__init__()
-        self._yt_client_secret_file_name: str = get_app_settings().yt_client_secret_file
-        self._yt_redirect_uri: str = get_app_settings().yt_redirect_uri
-        self._yt_search_region_code: str = get_app_settings().yt_search_region_code
-        self._yt_search_language_code: str = get_app_settings().yt_search_language_code
-        self._yt_search_category_code: str = get_app_settings().yt_search_category_code
-        self._yt_auth_user_id: str = get_app_settings().yt_auth_user_id
-        self._yt_tags: list[str] = get_app_settings().yt_tags.split(",")
+        settings = get_app_settings()
+        self._yt_client_secret_file_name: str = settings.yt_client_secret_file or ""
+        self._yt_redirect_uri: str = settings.yt_redirect_uri or ""
+        self._yt_search_region_code: str = settings.yt_search_region_code or ""
+        self._yt_search_language_code: str = settings.yt_search_language_code or ""
+        self._yt_search_category_code: str = settings.yt_search_category_code or ""
+        self._yt_auth_user_id: str = settings.yt_auth_user_id or ""
+        tags_raw = settings.yt_tags or ""
+        self._yt_tags: list[str] = [str(tag) for tag in tags_raw.split(",") if tag]
         self._memory_cache = MemoryCache()
         self._authenticated_service = None
 
+        self._auth_manager = YouTubeAuthManager(
+            client_secret_file=self._yt_client_secret_file_name,
+            redirect_uri=self._yt_redirect_uri,
+            service_name=self.YT_API_SERVICE_NAME,
+            service_version=self.YT_API_VERSION,
+            cache=self._memory_cache,
+        )
+        self._api_client = YouTubeApiClient(
+            get_authenticated_service=self.get_authenticated_service,
+            search_language_code=self._yt_search_language_code,
+            search_region_code=self._yt_search_region_code,
+            search_category_code=self._yt_search_category_code,
+        )
+        self._uploader = YouTubeUploader(
+            get_authenticated_service=self.get_authenticated_service,
+            search_category_code=self._yt_search_category_code,
+            search_language_code=self._yt_search_language_code,
+            default_tags=self._yt_tags,
+        )
+
     def get_authenticated_service(self):
         yt_auth = DatabaseClient().get_yt_auth(self._yt_auth_user_id)
-        credentials = Credentials(**yt_auth.dict())
+        if yt_auth is None:
+            raise ValueError("Missing YouTube auth credentials")
         if not self._authenticated_service:
-            self._authenticated_service = build(
-                serviceName=self.YT_API_SERVICE_NAME,
-                version=self.YT_API_VERSION,
-                credentials=credentials,
-                cache=self._memory_cache,
-                # cache_discovery=False,
+            self._authenticated_service = self._auth_manager.build_authenticated_service(
+                credentials_payload=yt_auth.model_dump(),
             )
         return self._authenticated_service
 
-    def _get_flow(self) -> Flow:
-        flow = Flow.from_client_secrets_file(
-            self._yt_client_secret_file_name,
-            scopes=[
-                "https://www.googleapis.com/auth/youtube.upload",
-                "https://www.googleapis.com/auth/youtube",
-                "https://www.googleapis.com/auth/youtube.force-ssl",
-                "https://www.googleapis.com/auth/youtube.readonly",
-            ],
-        )
-        flow.redirect_uri = self._yt_redirect_uri
-        return flow
-
     async def step_1_get_authentication_url(self):
-        flow = self._get_flow()
-        authorization_url, state = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-        )
-        return authorization_url
+        return self._auth_manager.get_authentication_url()
 
     def step_2_exchange_code_authentication(self, url_requested: str) -> dict:
-        flow = self._get_flow()
-        flow.fetch_token(authorization_response=url_requested)
-        credentials: Credentials = flow.credentials
-
-        return {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes,
-        }
+        return self._auth_manager.exchange_code_authentication(url_requested=url_requested)
 
     async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            # delegate blocking execute to a thread
-            response = await asyncio.to_thread(
-                lambda: youtube.videos()
-                .list(
-                    part="contentDetails",
-                    chart="mostPopular",
-                    hl=self._yt_search_language_code,
-                    maxResults=max_results,
-                    regionCode=self._yt_search_region_code,
-                    videoCategoryId=self._yt_search_category_code,
-                )
-                .execute()
-            )
-
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.fetch_popular_videos(max_results=max_results)
 
     async def _get_uploads_playlist(self) -> str | None:
-        playlist_id = None
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.channels().list(part="contentDetails", mine=True).execute()
-            )
-            playlist_id = (
-                response.get("items", []).pop().get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
-            )
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-
-        return playlist_id
+        return await self._api_client.get_uploads_playlist()
 
     async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.playlistItems()
-                .list(
-                    part="contentDetails",
-                    playlistId=playlist_id,
-                    maxResults=max_results,
-                )
-                .execute()
-            )
-
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.fetch_videos_of_playlist(playlist_id=playlist_id, max_results=max_results)
 
     # the fake client will override the batch helper as well
 
     async def _fetch_video_details(self, video_id: str) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.videos()
-                .list(
-                    part="snippet,contentDetails,statistics",
-                    id=video_id,
-                )
-                .execute()
-            )
-
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.fetch_video_details(video_id=video_id)
 
     async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict:
         """Internal helper that requests details for multiple videos at once.
@@ -190,56 +91,16 @@ class YTClient:
         blocking, therefore we delegate the ``execute`` call to
         :pyfunc:`asyncio.to_thread` so the event loop is not blocked.
         """
-        try:
-            youtube = self.get_authenticated_service()
-            ids_param = ",".join(video_ids)
-            # run the blocking execute in a thread
-            response = await asyncio.to_thread(
-                lambda: youtube.videos()
-                .list(
-                    part="snippet,contentDetails,statistics",
-                    id=ids_param,
-                )
-                .execute()
-            )
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-        return response
+        return await self._api_client.fetch_video_details_batch(video_ids=video_ids)
 
     async def _fetch_playlist_items(self, playlist_id: str) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.playlistItems()
-                .list(
-                    part="snippet",
-                    playlistId=playlist_id,
-                    maxResults=50,
-                )
-                .execute()
-            )
-
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.fetch_playlist_items(playlist_id=playlist_id)
 
     async def _delete_playlist_item(
         self,
         playlist_item_id: str,
     ) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.playlistItems().delete(id=playlist_item_id).execute()
-            )
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.delete_playlist_item(playlist_item_id=playlist_item_id)
 
     async def _add_playlist_item(
         self,
@@ -247,31 +108,11 @@ class YTClient:
         video_id: str,
         position: int,
     ) -> dict:
-        try:
-            youtube = self.get_authenticated_service()
-            response = await asyncio.to_thread(
-                lambda: youtube.playlistItems()
-                .insert(
-                    part="snippet",
-                    body={
-                        "snippet": {
-                            "playlistId": playlist_id,
-                            "resourceId": {
-                                "kind": "youtube#video",
-                                "videoId": video_id,
-                            },
-                            "position": position,
-                        }
-                    },
-                )
-                .execute()
-            )
-
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            response = {}
-
-        return response
+        return await self._api_client.add_playlist_item(
+            playlist_id=playlist_id,
+            video_id=video_id,
+            position=position,
+        )
 
     async def get_popular_videos(
         self,
@@ -282,6 +123,8 @@ class YTClient:
 
     async def get_videos_published(self):
         playlist_id = await self._get_uploads_playlist()
+        if not playlist_id:
+            return YTRoot.model_validate({"kind": "youtube#playlistItemListResponse", "etag": "", "items": []})
         data = YTRoot.model_validate(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
         return data
 
@@ -367,74 +210,14 @@ class YTClient:
         playlist_id: str | None = None,
         tags: list[str] | None = None,
     ) -> str | None:
-        yt_tags = [tag.replace("@@YEAR@@", str(datetime.now(timezone.utc).year)) for tag in self._yt_tags]
-        yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
-        max_tags = 30
-
-        def _do_upload():
-            youtube = self.get_authenticated_service()
-            media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-
-            title_max_length = 95
-            title_formatted = title[:title_max_length]
-
-            description_max_length = 4900
-            description_formatted = description[:description_max_length]
-
-            video = (
-                youtube.videos()
-                .insert(
-                    autoLevels=True,
-                    notifySubscribers=True,
-                    stabilize=False,
-                    part="snippet,status",
-                    # TODO future support multiple managed yt accounts?
-                    # onBehalfOfContentOwner="",
-                    # onBehalfOfContentOwnerChannel="",
-                    body={
-                        "snippet": {
-                            "title": title_formatted,
-                            "description": description_formatted,
-                            "categoryId": self._yt_search_category_code,
-                            "defaultAudioLanguage": self._yt_search_language_code,
-                            "tags": yt_tags[:max_tags],
-                        },
-                        "status": {
-                            # "privacyStatus": "private",
-                            "privacyStatus": "public",
-                        },
-                    },
-                    media_body=media,
-                )
-                .execute()
-            )
-
-            video_id_local = video.get("id")
-            if thumbnail_path and video_id_local:
-                youtube.thumbnails().set(videoId=video_id_local, media_body=MediaFileUpload(thumbnail_path)).execute()
-
-            if playlist_id and video_id_local:
-                youtube.playlistItems().insert(
-                    part="snippet",
-                    body={
-                        "snippet": {
-                            "playlistId": playlist_id,
-                            "resourceId": {
-                                "kind": "youtube#video",
-                                "videoId": video_id_local,
-                            },
-                        }
-                    },
-                ).execute()
-
-            return video_id_local
-
-        try:
-            video_id = await asyncio.to_thread(_do_upload)
-        except HttpError as e:
-            logger.error("An error occurred", error=e)
-            return None
-        return video_id
+        return await self._uploader.upload_video(
+            video_path=video_path,
+            title=title,
+            description=description,
+            thumbnail_path=thumbnail_path,
+            playlist_id=playlist_id,
+            tags=tags,
+        )
 
 
 class YTClientFake(YTClient):
@@ -1059,9 +842,9 @@ class YTClientFake(YTClient):
         video_path,
         title,
         description,
-        thumbnail_path: str = None,
-        playlist_id: str = None,
-        tags: list[str] = None,
+        thumbnail_path: str | None = None,
+        playlist_id: str | None = None,
+        tags: list[str] | None = None,
     ):
         return True
 
@@ -1069,7 +852,7 @@ class YTClientFake(YTClient):
 YTClientT = TypeVar("YTClientT", bound=YTClient)
 
 
-def get_yt_client() -> YTClientT:
+def get_yt_client() -> YTClient:
     settings = get_app_settings()
     return YTClient() if settings.is_production_env else YTClientFake()
 
