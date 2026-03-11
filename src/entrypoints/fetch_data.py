@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from src.adapters.youtube_source import YouTubeSource
 from src.db_client import Channel, DatabaseClient, Video, VideoPoint, VideoPointTools
 from src.domain.models import CanonicalVideo
-from src.logger import get_logger
+from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 

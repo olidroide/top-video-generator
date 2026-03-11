@@ -97,7 +97,7 @@ class TestVideoProcessingCharacterization:
 
 **Run test suite before migration**:
 ```bash
-uv run pytest tests/integration/video/test_video_processing_current.py@pytest.mark.slow -v
+uv run pytest tests/integration/video/test_video_processing_current.py -m slow -v
 ```
 
 ---
@@ -135,16 +135,17 @@ class VideoAssetManager:
 ```python
 # src/video_processing.py
 import warnings
-from src.infrastructure.video.asset_manager import VideoAssetManager
+from src.infrastructure.video.asset_manager import VideoAssetManager as _VideoAssetManager
 
-# DEPRECATED — use infrastructure/video/asset_manager.py directly
-class VideoAssetManager(VideoAssetManager):
+
+# DEPRECATED — use src.infrastructure.video.asset_manager directly
+class VideoAssetManager(_VideoAssetManager):
     def __init__(self, *args, **kwargs):
         warnings.warn(
             "VideoAssetManager moved to src.infrastructure.video.asset_manager — "
             "update imports",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         super().__init__(*args, **kwargs)
 ```
@@ -235,6 +236,24 @@ From `video_processing.py` (11 methods across 900 lines):
 | **VideoRenderer** | `render_text_clip()`, `apply_transitions()` | VideoAssetManager, moviepy |
 | **ThumbnailGenerator** | `generate_thumbnail_grid()` | VideoAssetManager, PIL |
 | **VideoCompositor** | `assemble_final_clip()`, `crossfade_videos()`, `encode_mp4()`, final orchestration | All above, moviepy, ffmpeg |
+
+---
+
+## moviepy File Handle Safety
+
+moviepy 1.x does not always close ffmpeg handles automatically. Use context managers wherever the migrated code opens clips:
+
+```python
+# Correct — handle closed on exit
+with VideoFileClip(file_path) as clip:
+    result = clip.subclip(0, 10)
+
+# Avoid — handle may leak if an exception is raised
+clip = VideoFileClip(file_path)
+result = clip.subclip(0, 10)
+```
+
+In `cleanup_temp_assets()` call `clip.close()` explicitly if a context manager cannot be used.
 
 ---
 

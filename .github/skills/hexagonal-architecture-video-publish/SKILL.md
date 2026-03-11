@@ -10,6 +10,11 @@ compatibility: "Project runtime declared in pyproject.toml. asyncio.TaskGroup. P
 
 ```python
 # src/adapters/x_twitter_publisher.py
+from collections.abc import Sequence
+
+from src.domain.exceptions import PublishError
+
+
 class XTwitterPublisher:
     @property
     def platform_name(self) -> Platform:
@@ -20,17 +25,22 @@ class XTwitterPublisher:
         return bool(get_app_settings().x_twitter_bearer_token)
 
     async def publish_video(
-        self, video_list: list[CanonicalVideo], file_path: str,
-        title: str, description: str,
+        self,
+        video_list: Sequence[CanonicalVideo],
+        file_path: str,
+        title: str,
+        description: str,
     ) -> PublishingResult:
         try:
             post_id = await _upload_to_x(file_path, title)
-            return PublishingResult(platform=self.platform_name, success=True,
-                                    published_id=post_id, published_at=datetime.now(timezone.utc))
-        except Exception as exc:
-            logger.error("publish failed", error=str(exc))
-            return PublishingResult(platform=self.platform_name, success=False,
-                                    published_at=datetime.now(timezone.utc), error=str(exc))
+            return PublishingResult(
+                platform=self.platform_name,
+                success=True,
+                published_id=post_id,
+                published_at=datetime.now(timezone.utc),
+            )
+        except (HTTPStatusError, TimeoutError) as exc:
+            raise PublishError(platform=str(self.platform_name), cause=exc) from exc
 ```
 
 ## Pattern 2: Registry
@@ -53,32 +63,71 @@ def build_publishers() -> list[VideoPublisher]:
 ## Pattern 3: Parallel Publish (TaskGroup)
 
 ```python
+from collections.abc import Sequence
+
+from src.domain.exceptions import PublishError
+
+
+async def _publish_one(
+    publisher: VideoPublisher,
+    video_list: Sequence[CanonicalVideo],
+    file_path: str,
+    title: str,
+    description: str,
+) -> PublishingResult:
+    try:
+        return await publisher.publish_video(
+            video_list=video_list,
+            file_path=file_path,
+            title=title,
+            description=description,
+        )
+    except PublishError as exc:
+        logger.warning("publish_failed", platform=publisher.platform_name, error=str(exc))
+        return PublishingResult(
+            platform=publisher.platform_name,
+            success=False,
+            error=str(exc),
+        )
+
+
 async with asyncio.TaskGroup() as tg:
-    for publisher in active_publishers:
-        tg.create_task(publisher.publish_video(
-            video_list=video_list, file_path=file_path,
-            title=title, description=description,
-        ))
+    tasks = [
+        tg.create_task(_publish_one(publisher, video_list, file_path, title, description))
+        for publisher in active_publishers
+    ]
+
+results = [task.result() for task in tasks]
 ```
 
 ## Pattern 4: MockPublisher for tests
 
 ```python
+from collections.abc import Sequence
+
+
 class MockPublisher:
     def __init__(self, platform: Platform, succeed: bool = True) -> None:
         self._platform = platform
         self._succeed = succeed
-        self.calls: list[dict] = []
+        self.calls: list[dict[str, str]] = []
 
     @property
     def platform_name(self) -> Platform: return self._platform
     @property
     def is_enabled(self) -> bool: return True
 
-    async def publish_video(self, video_list, file_path, title, description) -> PublishingResult:
+    async def publish_video(
+        self,
+        video_list: Sequence[CanonicalVideo],
+        file_path: str,
+        title: str,
+        description: str,
+    ) -> PublishingResult:
         self.calls.append({"file_path": file_path, "title": title})
         return PublishingResult(
-            platform=self._platform, success=self._succeed,
+            platform=self._platform,
+            success=self._succeed,
             published_id="mock-id-123" if self._succeed else None,
             published_at=datetime.now(timezone.utc),
             error=None if self._succeed else "mock error",
@@ -91,11 +140,15 @@ class MockPublisher:
 - Adapters never import from other adapters.
 - Scripts never reference `InstagramClient`, `TikTokClient`, `YTClient` directly.
 - Protocol compliance belongs in tests, not in module-level assertions.
-- `PublishingResult.success=False` is valid — adapters must never raise up to orchestrators.
+- `PublishingResult.success=False` is valid for expected platform failures.
+- Map expected platform failures to `PublishingResult`; let programmer errors surface unless the use case explicitly wraps them.
 
 ## Quality Gates
 
-- [ ] `ty check src/domain/` → zero errors.
+- [ ] `uv run ruff format src/ tests/`
+- [ ] `uv run ruff check src/ tests/`
+- [ ] `uv run ty check src/`
+- [ ] `uv run pytest`
 - [ ] Protocol compliance covered in `tests/unit/adapters/test_protocol_compliance.py` with `create_autospec`.
 - [ ] `build_publishers()` test: mock settings → verify enabled/disabled adapters.
 - [ ] Parallel test: `MockPublisher(succeed=False)` on one platform → others complete.
@@ -119,7 +172,7 @@ def test_example_publisher_implements_protocol() -> None:
 
 > "Create `src/adapters/{platform}_publisher.py` implementing the `VideoPublisher` protocol
 > from `src/domain/ports.py`. Use `asyncio.to_thread` if the client is synchronous.
-> Return `PublishingResult` on both success and failure — never raise.
+> Map expected platform failures to `PublishingResult` and avoid propagating those from concurrent publish orchestration.
 > Add protocol compliance coverage in `tests/unit/adapters/test_protocol_compliance.py`
 > using `create_autospec`, not a module-level assertion.
 > Register it in `src/infrastructure/publisher_registry.py`."

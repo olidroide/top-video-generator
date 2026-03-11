@@ -1,7 +1,6 @@
 from typing import Any
 
 from src.domain.models import CanonicalVideo
-from src.domain.ports import VideoDataSource
 from src.infrastructure.youtube import YTClient
 
 
@@ -103,6 +102,3 @@ class YouTubeSource:
             score_previous=0.0,
             thumbnail_url=d.get("thumbnail_url", None),
         )
-
-
-assert isinstance(YouTubeSource(), VideoDataSource)

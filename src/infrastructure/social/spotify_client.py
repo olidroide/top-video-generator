@@ -7,9 +7,9 @@ from urllib.parse import urlencode
 
 import aiohttp
 
+from src.config.settings import get_app_settings
 from src.db_client import DatabaseClient, SpotifyAuth
-from src.logger import get_logger
-from src.settings import get_app_settings
+from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 

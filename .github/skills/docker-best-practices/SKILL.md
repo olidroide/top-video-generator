@@ -62,36 +62,70 @@ When responding under this skill:
 FROM python:3.12-slim
 ```
 
-### Multi-Stage Builds
+### Multi-Stage Builds with uv (Standard Pattern)
 
-Separate builder stage (heavy dependencies) from runtime stage (minimal set only):
+Always use `uv` via the official Astral binary image. Never use `pip` or `requirements.txt` in this project.
+
+The pattern: install deps into an isolated `.venv` in `builder`, then copy only the `.venv` folder to `runtime`. The `--mount=type=cache` keeps the uv cache outside the final image layers.
 
 ```dockerfile
+# BUILDER STAGE
 FROM python:3.12-slim AS builder
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# uv env vars: pre-compile bytecode, use copy mode (required for mount caches)
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+WORKDIR /app
+
+# 1. Install dependencies first — this layer is cached until pyproject.toml or uv.lock changes
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
+
+# 2. Copy source and install the project itself
+COPY src/ ./src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# RUNTIME STAGE
 FROM python:3.12-slim AS runtime
 WORKDIR /app
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY app/ .
+
+# Copy venv (with pre-compiled bytecode) and source from builder
+COPY --from=builder /app/.venv /app/.venv
+COPY src/ ./src/
+
+# Place venv binaries first in PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
+RUN useradd -m appuser && chown -R appuser /app
 USER appuser
-CMD ["python", "app.py"]
+
+CMD ["uvicorn", "src.web.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
+
+**Why `.venv` copy instead of global site-packages**: copying the whole `/app/.venv` folder between stages is explicit, avoids polluting the system Python, and requires no knowledge of the Python minor version path.
 
 ### Layer Caching Optimization
 
-Order layers by change frequency: rarely-changed to frequently-changed.
+Order layers by change frequency: rarely-changed to frequently-changed. With `uv`, split the sync into two steps to protect the dependency cache from source code churn:
 
 ```dockerfile
-# Good: dependencies first (rarely change)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Step 1: sync deps only (cached until pyproject.toml or uv.lock change)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-# Then application code (frequently changes)
-COPY . .
+# Step 2: copy source, then install the project (invalidated on code change only)
+COPY src/ ./src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 ```
+
+The `--mount=type=cache` is ephemeral — it does **not** land in the final image layer, so there is no need to manually purge uv's cache.
 
 ### Reduce Layer Count
 
@@ -125,8 +159,8 @@ build/
 Avoid `COPY . .` when possible; copy only what's needed:
 
 ```dockerfile
-COPY requirements.txt .
-COPY src/ ./app/
+# pyproject.toml and uv.lock are bound via --mount in the RUN step, not COPY
+COPY src/ ./src/
 ```
 
 ### Use WORKDIR Convention
@@ -209,12 +243,10 @@ docker run --rm -it --network app-network nicolaka/netshoot
 ### Image Size
 
 - Multi-stage builds (builder vs. runtime)
-- Clean package caches in the same layer:
-  ```dockerfile
-  RUN pip install --no-cache-dir -r requirements.txt
-  ```
-- Drop development tools from production image
-- Use `distroless` or `-alpine` base images
+- Use `--mount=type=cache,target=/root/.cache/uv` — cache is ephemeral and never written into an image layer, so there is nothing to clean up manually
+- `UV_COMPILE_BYTECODE=1` pre-compiles `.pyc` files at build time, reducing cold-start overhead
+- Drop dev dependencies with `--no-dev` in the `uv sync` runtime call
+- Use `distroless` or `-slim` base images
 
 ### Vulnerability Scanning
 
@@ -432,6 +464,11 @@ networks:
 | Anti-Pattern | Why It's Bad | Alternative |
 |---|---|---|
 | `FROM python:latest` | Non-reproducible, breaks unexpectedly | Pin version: `FROM python:3.12-slim` |
+| `RUN pip install ...` | Slower, ignores `uv.lock`, violates project rules | `uv sync --frozen --no-dev` with mount cache |
+| `COPY requirements.txt` + pip | Bypasses lockfile, non-deterministic | Bind-mount `pyproject.toml` + `uv.lock` via `--mount=type=bind` |
+| Copy source before `uv sync` | Busts dependency cache on every code change | `uv sync --no-install-project` first, then `COPY src/`, then `uv sync` |
+| Copying global site-packages between stages | Fragile path (`/usr/local/lib/pythonX.Y/`) breaks on minor version bump | Copy isolated `.venv` folder: `COPY --from=builder /app/.venv /app/.venv` |
+| Missing `UV_LINK_MODE=copy` | Hard links fail inside Docker mount namespaces | Always set `ENV UV_LINK_MODE=copy` when using `--mount=type=cache` |
 | `RUN apt-get install ...` without cleanup | Bloats image with caches | Combine commands: `RUN apt-get update && apt-get install ... && rm -rf /var/lib/apt/lists/*` |
 | `COPY . .` | Includes unwanted files (tests, .git, etc.) | Use `.dockerignore` and selective `COPY` |
 | `CMD uvicorn ...` | Shell form doesn't pass signals | Use exec form: `CMD ["uvicorn", ...]` |
@@ -460,9 +497,14 @@ For deeper guidance on specific topics, refer to:
 ## Quick Checklist
 
 - [ ] Base image pinned, minimal (`-slim`, `-alpine`, `distroless`)
-- [ ] Multi-stage build if applicable
-- [ ] Layers ordered: dependencies first, code last
-- [ ] `.dockerignore` excludes `.git`, tests, `.env`
+- [ ] uv binary copied from `ghcr.io/astral-sh/uv:latest` — no `pip` used
+- [ ] `ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy` set in builder stage
+- [ ] Multi-stage build: deps synced with `--no-install-project` before source is copied
+- [ ] `--mount=type=cache,target=/root/.cache/uv` on all `uv sync` RUN steps
+- [ ] Runtime stage copies `/app/.venv` from builder, not global site-packages
+- [ ] `ENV PATH="/app/.venv/bin:$PATH"` set in runtime stage
+- [ ] Layers ordered: deps first (`--no-install-project`), code last
+- [ ] `.dockerignore` excludes `.git`, tests, `.env`, `__pycache__`
 - [ ] Non-root user, explicit permissions
 - [ ] CMD in exec form (array syntax)
 - [ ] Secrets injected at runtime, never hardcoded

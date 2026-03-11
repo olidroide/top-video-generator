@@ -1,6 +1,6 @@
 from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Platform, PublishingResult
-from src.tiktok_client import TikTokClient
+from src.infrastructure.social.tiktok_client import TikTokClient
 
 
 class TikTokPublisher:

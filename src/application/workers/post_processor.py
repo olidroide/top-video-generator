@@ -7,7 +7,7 @@ import sys
 import zmq
 
 from src.db_client import Video
-from src.logger import get_logger
+from src.shared.logging import get_logger
 from src.video_processing import VideoProcessing
 
 logger = get_logger(__name__)

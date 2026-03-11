@@ -4,8 +4,8 @@ from pathlib import Path
 from instagrapi import Client as InstagrapiClientLib  # type: ignore
 from instagrapi.exceptions import LoginRequired  # type: ignore
 
-from src.logger import get_logger
-from src.settings import get_app_settings
+from src.config.settings import get_app_settings
+from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 

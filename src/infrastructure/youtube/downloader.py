@@ -4,9 +4,9 @@ import pathlib
 
 from yt_dlp import YoutubeDL
 
+from src.config.settings import get_app_settings
 from src.db_client import Video
-from src.logger import get_logger
-from src.settings import get_app_settings
+from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 

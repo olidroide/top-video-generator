@@ -76,8 +76,39 @@ Do not leak raw API dictionaries, SDK objects, response models, or transport-spe
 Preferred concurrent publishing pattern:
 
 ```python
+from collections.abc import Sequence
+
+from src.domain.exceptions import PublishError
+
+
+async def _publish_one(
+    publisher: VideoPublisher,
+    video_list: Sequence[CanonicalVideo],
+    file_path: str,
+    title: str,
+    description: str,
+) -> PublishingResult:
+    try:
+        return await publisher.publish_video(
+            video_list=video_list,
+            file_path=file_path,
+            title=title,
+            description=description,
+        )
+    except PublishError as exc:
+        logger.warning("publish_failed", platform=publisher.platform_name, error=str(exc))
+        return PublishingResult(
+            platform=publisher.platform_name,
+            success=False,
+            error=str(exc),
+        )
+
+
 async with asyncio.TaskGroup() as task_group:
-    tasks = [task_group.create_task(_publish_one(publisher)) for publisher in self._publishers]
+    tasks = [
+        task_group.create_task(_publish_one(publisher, video_list, file_path, title, description))
+        for publisher in self._publishers
+    ]
 
 results = [task.result() for task in tasks]
 ```
@@ -173,6 +204,12 @@ Do not generate code that does any of the following:
 - Blocking I/O inside async code.
 - New business logic inside entrypoints, web routes, or low-level infrastructure clients.
 
+## Documentation Scope
+
+- Keep this file focused on repository-wide architecture, layering, anti-patterns, migration rules, and quality gates.
+- Keep path-specific rules in .github/instructions/*.instructions.md when specialization is needed.
+- Keep operational defaults and command shortcuts in .github/copilot-settings.md.
+
 ## Definition of Done
 
 A change is not complete unless all of these are true:
@@ -182,7 +219,6 @@ A change is not complete unless all of these are true:
 - Tests were added or updated when behavior changed.
 - Formatting, lint, type checking, and relevant tests were run or the reason they were not run is stated explicitly.
 - No secrets or generated auth artifacts were introduced.
-- Tooling commands, default CLI invocations, and environment workflow belong in .github/copilot-settings.md, not here.
 
 ## Skill Routing
 
