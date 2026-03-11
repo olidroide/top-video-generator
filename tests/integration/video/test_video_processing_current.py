@@ -357,7 +357,9 @@ class TestThumbnailGeneratorCharacterization:
             with patch("src.infrastructure.video.thumbnail_generator.Image.open") as mock_image_open:
                 with patch("src.infrastructure.video.thumbnail_generator.Image.new") as mock_image_new:
                     with patch("src.infrastructure.video.thumbnail_generator.ImageDraw.Draw") as mock_draw:
-                        with patch("src.infrastructure.video.thumbnail_generator.ImageFont.truetype"):  # Mock font loading
+                        with patch(
+                            "src.infrastructure.video.thumbnail_generator.ImageFont.truetype"
+                        ):  # Mock font loading
                             # Create reusable mock image
                             def create_mock_image(*args, **kwargs):
                                 img_mock = Mock()
@@ -371,14 +373,14 @@ class TestThumbnailGeneratorCharacterization:
                                 img_mock.__enter__ = Mock(return_value=img_mock)
                                 img_mock.__exit__ = Mock(return_value=False)
                                 return img_mock
-                            
+
                             # Mock Image.open for template and thumbnails
                             mock_image_open.side_effect = create_mock_image
                             # Mock Image.new for canvas
                             mock_image_new.side_effect = create_mock_image
                             # Mock ImageDraw.Draw
                             mock_draw.return_value = Mock(text=Mock())
-                            
+
                             result_path = await vp.generate_thumbnail(video_list)
 
         # Check result

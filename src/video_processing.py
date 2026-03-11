@@ -1,23 +1,12 @@
-import datetime
 import pathlib
-import shutil
-from datetime import timezone
 
-import requests
 import segno as segno
-from millify import millify
 from moviepy import Clip
-from moviepy.audio.fx.audio_fadeout import audio_fadeout
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.video.compositing.transitions import crossfadein
-from moviepy.video.fx.crop import crop
-from moviepy.video.fx.mask_color import mask_color
-from moviepy.video.fx.resize import resize
 from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.video.VideoClip import ColorClip, ImageClip, TextClip
-from PIL import Image, ImageDraw, ImageFont
+from moviepy.video.VideoClip import TextClip
 
-from src.db_client import Video, VideoScoreStatus
+from src.db_client import Video
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
@@ -33,7 +22,7 @@ class VideoProcessing:
     def __init__(self) -> None:
         super().__init__()
         settings = get_app_settings()
-        
+
         # Delegate asset management to VideoAssetManager (C1.1 migration)
         self._asset_manager = VideoAssetManager(
             end_screen_file=settings.video_template_end_screen_file,
@@ -45,16 +34,16 @@ class VideoProcessing:
             video_yt_resources_folder=VideoDownloader().video_yt_resources_folder,
             video_generated_base_folder=settings.video_generated_folder,
         )
-        
+
         # Delegate rendering to VideoRenderer (C1.2 migration)
         self._renderer = VideoRenderer(asset_manager=self._asset_manager)
-        
+
         # Delegate thumbnail generation to ThumbnailGenerator (C1.3 migration)
         self._thumbnail_generator = ThumbnailGenerator(asset_manager=self._asset_manager)
-        
+
         # Delegate video composition to VideoCompositor (C1.4 migration)
         self._compositor = VideoCompositor(asset_manager=self._asset_manager, renderer=self._renderer)
-        
+
         # Backward compatibility shims (delegate to asset_manager)
         self._end_screen_file = self._asset_manager.end_screen_file
         self._start_screen_file = self._asset_manager.start_screen_file

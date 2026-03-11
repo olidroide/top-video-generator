@@ -2,7 +2,7 @@ from typing import Any
 
 from src.domain.models import CanonicalVideo
 from src.domain.ports import VideoDataSource
-from src.infrastructure.youtube.client import YTClient
+from src.infrastructure.youtube import YTClient
 
 
 class YouTubeSource:
@@ -58,9 +58,7 @@ class YouTubeSource:
             try:
                 import isodate
 
-                duration_seconds = (
-                    float(isodate.parse_duration(duration_str).total_seconds()) if duration_str else 0.0
-                )
+                duration_seconds = float(isodate.parse_duration(duration_str).total_seconds()) if duration_str else 0.0
             except Exception:
                 duration_seconds = 0.0
             description = getattr(snippet, "description", "") or ""

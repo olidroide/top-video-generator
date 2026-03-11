@@ -5,7 +5,6 @@ resizing them to fit a 2x2 grid, and overlaying date text.
 """
 
 import datetime
-from datetime import timezone
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -55,15 +54,9 @@ class ThumbnailGenerator:
         middle_height_point = int(base_thumbnail.height / 2)
         clips_thumbnails = []
         for video in video_list:
-            with Image.open(
-                requests.get(video.yt_video_thumbnail_url, stream=True).raw
-            ) as clip_thumbnail:
+            with Image.open(requests.get(video.yt_video_thumbnail_url, stream=True).raw) as clip_thumbnail:
                 clip_thumbnail.load()
-                clips_thumbnails.append(
-                    clip_thumbnail.resize(
-                        size=(middle_width_point, middle_height_point)
-                    )
-                )
+                clips_thumbnails.append(clip_thumbnail.resize(size=(middle_width_point, middle_height_point)))
 
         canvas = Image.new("RGB", (base_thumbnail.width, base_thumbnail.height))
         for index, clip_thumbnail in enumerate(clips_thumbnails):
@@ -82,10 +75,10 @@ class ThumbnailGenerator:
         title_font = ImageFont.truetype(self._thumbnail_font_file, size=70)
         draw_surface = ImageDraw.Draw(canvas, "RGBA")
 
-        text_date = datetime.datetime.now(timezone.utc).strftime("%d / %m / %Y")
+        text_date = datetime.datetime.now(datetime.UTC).strftime("%d / %m / %Y")
         draw_surface.text((996, 960), text_date, font=title_font, fill=(0, 0, 0, 0))
 
-        text_date_file = datetime.datetime.now(timezone.utc).strftime("%Y%m%d")
+        text_date_file = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d")
         path = f"{self._video_generated_folder}/{text_date_file}_thumbnail.jpg"
         canvas.save(path, quality=100, optimize=True)
         return path

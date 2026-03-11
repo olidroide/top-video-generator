@@ -5,12 +5,12 @@ import datetime
 from datetime import date
 
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
+from src.infrastructure.youtube import get_yt_client
 from src.logger import get_logger
 from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
-from src.infrastructure.youtube.client import get_yt_client
 
 logger = get_logger(__name__)
 

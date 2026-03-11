@@ -1,6 +1,6 @@
+from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Platform, PublishingResult
-from src.settings import get_app_settings
-from src.infrastructure.youtube.client import get_yt_client
+from src.infrastructure.youtube import get_yt_client
 
 
 class YouTubePublisher:

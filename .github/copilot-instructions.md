@@ -1,232 +1,199 @@
 # GitHub Copilot Instructions
 
-## Project Summary
+## Project Scope
 
-Automated pipeline: fetch daily/weekly top YouTube music → score/rank → generate video (horizontal + vertical) → publish to YouTube/Instagram/TikTok → update Spotify playlist.
+This repository automates the trending music video pipeline: fetch trending YouTube music data, score candidates, generate horizontal and vertical videos, publish them, and update Spotify state.
 
-- Backend: FastAPI + Jinja2 SSR (HTMX, no React/Vue)
-- Storage: TinyFlux (timeseries) + TinyDB (metadata/auth tokens)
-- Media: yt-dlp + moviepy + ffmpeg + ImageMagick + Pillow
+## Operating Mode
 
----
+Treat this repository as a migration toward a stricter hexagonal architecture.
 
-## Architecture: Hexagonal (Ports & Adapters) — Phase 4 State
+- New code must follow the target architecture and canonical imports.
+- Legacy modules and shims may still exist while migration completes.
+- Do not extend legacy patterns just because they already exist.
+- When existing code conflicts with these rules, preserve behavior and migrate incrementally unless the user explicitly asks for a larger refactor.
 
-### Canonical Directory Layout
+## Architecture Guardrails
 
-```
-src/
-├── domain/                        # Pure Python — ONLY stdlib + pydantic allowed
-│   ├── models.py                  # CanonicalVideo, Video, Release, VideoPoint, auth models
-│   ├── ports.py                   # VideoDataSource, VideoPublisher (typing.Protocol)
-│   ├── exceptions.py              # DomainError, FetchError, PublishError, ScoringError
-│   └── services/
-│       └── scoring_service.py     # score_and_rank(), calculate_views_growth() — pure functions
-│
-├── application/                   # Use Cases — orchestrate domain + ports
-│   ├── fetch_trending_use_case.py # FetchTrendingUseCase
-│   ├── publish_video_use_case.py  # PublishVideoUseCase (asyncio.TaskGroup)
-│   ├── score_videos_use_case.py   # ScoreVideosUseCase
-│   └── workers/                   # Background task orchestrators
-│
-├── adapters/                      # One file per integration, implements Protocols
-│   ├── youtube_source.py          # implements VideoDataSource
-│   ├── youtube_publisher.py       # implements VideoPublisher
-│   ├── tiktok_publisher.py        # implements VideoPublisher
-│   └── instagram_publisher.py     # implements VideoPublisher
-│
-├── infrastructure/                # Concrete implementations, external systems
-│   ├── publisher_registry.py      # build_publishers() factory
-│   ├── storage/
-│   │   ├── video_repository.py    # TinyDB: VideoRecord CRUD
-│   │   ├── timeseries_repository.py # TinyFlux: VideoPoint time-series
-│   │   ├── auth_repository.py     # TinyDB: SpotifyAuth, TikTokAuth, YtAuth
-│   │   └── release_repository.py  # TinyDB: Release tracking / idempotency
-│   ├── video/                     # Media pipeline (C1 split in progress)
-│   │   └── __init__.py            # Placeholder — video_processing.py pending migration
-│   ├── youtube/                   # ⚠️ C3 PENDING — yt_client.py migration
-│   │   ├── api_client.py          # YouTube Data API v3 calls
-│   │   ├── auth_manager.py        # OAuth2 flow, token refresh
-│   │   └── uploader.py            # upload_video, playlist management
-│   └── social/                    # Platform API clients
-│       ├── instagram_client.py
-│       ├── spotify_client.py
-│       └── tiktok_client.py
-│
-├── config/
-│   └── settings.py                # Pydantic v2 AppSettings — use get_app_settings()
-│
-├── shared/
-│   └── logging.py                 # get_logger() — use structlog, never bare print
-│
-├── entrypoints/                   # CLI wrappers only — NO business logic here
-│   ├── fetch_data.py
-│   ├── publish_video.py
-│   └── publish_vertical.py
-│
-└── web/                           # FastAPI app
-    ├── main.py
-    ├── templates/
-    └── static/
+Target layout:
 
-# LEGACY — shims only, DO NOT add new code here:
-# src/db_client.py       → shim → infrastructure/storage/
-# src/logger.py          → shim → shared/logging.py
-# src/settings.py        → shim → config/settings.py
-# src/video_processing.py → PENDING migration to infrastructure/video/
-# src/yt_client.py        → PENDING migration to infrastructure/youtube/
-```
+- domain: business rules and canonical models
+- application: use cases and orchestration against ports
+- adapters: one adapter per integration implementing protocols
+- infrastructure: repositories, clients, media pipeline, platform-specific systems
+- config and shared: settings and cross-cutting utilities
+- entrypoints and web: thin delivery layers only
 
----
+Legacy shims may still exist, including src/db_client.py, src/logger.py, src/settings.py, src/video_processing.py, and src/yt_client.py. Do not add new code to those files unless the task is explicitly a migration or compatibility fix.
 
-## Layer Dependency Rules (non-negotiable)
+## Layer Rules
 
-- `domain/` imports: **only stdlib + pydantic**. Zero `src.*` imports.
-- `domain/services/` imports: only from `domain/models.py` and `domain/exceptions.py`.
-- `adapters/` imports: `domain/` + one specific infrastructure client. Never cross-adapter imports.
-- `application/` imports: `domain/` + `adapters/` via Protocols. Never direct infrastructure imports.
-- `infrastructure/` imports: `domain/models.py` + external libraries. No `application/` imports.
-- `entrypoints/` imports: `application/` and `config/` only. They wire, never compute.
-- `web/` imports: `application/` use cases only. Never direct domain or infrastructure imports.
+These rules are normative for new code and for any code being actively refactored.
 
----
+- domain may import only Python stdlib and pydantic.
+- domain/services may import only domain models and domain exceptions.
+- application may import domain and protocols from src.domain.ports.
+- adapters may import domain and one specific infrastructure client.
+- infrastructure may import domain models and external libraries, but never application.
+- entrypoints should only wire application and config. Do not add new business logic there.
+- web should delegate to application use cases. Do not add scoring, ranking, publishing, or repository orchestration there.
+- Do not add cross-layer imports that bypass these boundaries.
 
-## Protocols — How to Add a New Platform
+## Boundary Types
 
-1. Create `src/adapters/{platform}_publisher.py` implementing `VideoPublisher` Protocol.
-2. **DO NOT** add `assert isinstance(...)` at module level — use tests instead.
-3. Add a test in `tests/unit/adapters/test_protocol_compliance.py`:
-   ```python
-   def test_{platform}_publisher_implements_protocol() -> None:
-       from src.adapters.{platform}_publisher import MyPublisher
-       mock = create_autospec(MyPublisher, instance=True)
-       assert isinstance(mock, VideoPublisher)
-   ```
-4. Register in `src/infrastructure/publisher_registry.py` → `build_publishers()`.
-5. Zero changes required in scripts, domain, or application layer.
+Only canonical models should cross layer boundaries.
 
----
+Allowed cross-layer types:
 
-## Canonical Models — Cross-Layer Boundary Types
+- CanonicalVideo
+- PublishingResult
+- FetchTrendingRequest
+- FetchTrendingResult
+- PublishVideoRequest
+- PublishVideoResult
 
-Only these types may cross layer boundaries:
-- `CanonicalVideo` (frozen Pydantic model) — video data flowing through the pipeline
-- `PublishingResult` (frozen Pydantic model) — result of a publish operation
-- `FetchTrendingRequest/Result`, `PublishVideoRequest/Result` — Use Case DTOs
+Adapters must translate external payloads into canonical models before returning.
+Do not leak raw API dictionaries, SDK objects, response models, or transport-specific data outside adapters or infrastructure.
 
-Adapters MUST translate platform API responses into canonical types before returning.
-Scripts/entrypoints MUST NEVER handle raw dicts or platform-specific objects.
+## New Code Rules
 
----
+- Use src.config.settings.get_app_settings for settings access.
+- Use src.shared.logging.get_logger for application logging.
+- Never use bare print for runtime logging.
+- Do not import deprecated shim modules in new code.
+- Do not add module-level protocol assertions such as assert isinstance(MyPublisher(), VideoPublisher).
+- Do not use mutable default arguments.
+- Do not generate Pydantic v1 code.
+- Keep validation at boundaries rather than deep inside business logic.
 
-## Concurrent Publishing
+## Async and Publishing Rules
 
-Use `asyncio.TaskGroup` for parallel publishing. Failure on one platform must never block others:
+- Use async and await for HTTP, storage, filesystem, and publish operations when the underlying API supports it.
+- Use asyncio.TaskGroup for concurrent publishing and similar fan-out workflows.
+- Handle per-platform failures explicitly so one publish failure does not abort the full reporting flow, unless the use case explicitly requires fail-fast semantics.
+- Do not introduce blocking I/O inside async flows without isolating it.
+
+Preferred concurrent publishing pattern:
 
 ```python
-async with asyncio.TaskGroup() as tg:
-    tasks = [tg.create_task(_publish_one(p)) for p in self._publishers]
-results = [t.result() for t in tasks]
+async with asyncio.TaskGroup() as task_group:
+    tasks = [task_group.create_task(_publish_one(publisher)) for publisher in self._publishers]
+
+results = [task.result() for task in tasks]
 ```
 
----
-
-## Settings Access
+Publishing entrypoints must remain idempotent. Use the repository-based release check before any publish flow runs.
 
 ```python
-# CORRECT
-from src.config.settings import get_app_settings
-settings = get_app_settings()
-
-# DEPRECATED (shim still works but don't use in new code)
-from src.settings import get_app_settings
-```
-
----
-
-## Logging
-
-```python
-# CORRECT
-from src.shared.logging import get_logger
-logger = get_logger(__name__)
-
-# DEPRECATED (shim still works but don't use in new code)
-from src.logger import get_logger
-```
-
----
-
-## Idempotency Guard
-
-Every entrypoint that publishes MUST check before running. **Do not** invent your own pattern — use this exactly:
-
-```python
-from src.infrastructure.storage.release_repository import ReleaseRepository
-from src.domain.models import ReleasePlatform
 from datetime import date
 
-async def _already_published_today(repo: ReleaseRepository, day: date) -> bool:
-    """Check if video was already released to all platforms on this date."""
-    return all(
-        repo.is_release_at_date(platform=p.value, day=day)
-        for p in ReleasePlatform
-    )
+from src.domain.models import ReleasePlatform
+from src.infrastructure.storage.release_repository import ReleaseRepository
 
-# In entrypoint (e.g., PublishVideoUseCase.execute):
-async def execute(self, day: date) -> None:
-    if await _already_published_today(self._release_repo, day):
-        logger.info("already_published", day=str(day))
-        return
-    # ... proceed with publish pipeline
+
+async def _already_published_today(repo: ReleaseRepository, day: date) -> bool:
+    return all(
+        repo.is_release_at_date(platform=platform.value, day=day)
+        for platform in ReleasePlatform
+    )
 ```
 
----
+## Platform Integration Rules
 
-## Testing Conventions
+When adding a new publishing platform:
 
-- Unit tests: `tests/unit/{layer}/test_{module}.py` — mock all external deps
-- Integration tests: `tests/integration/{layer}/` — use `tmp_path` fixture for TinyDB/TinyFlux
-- E2E: `tests/e2e/` — full pipeline with mocked HTTP (respx)
-- **Never** use `pytest.mark.skip` to suppress failing tests — fix or delete them
-- Test files that exercise media pipeline (moviepy/ffmpeg) go in `tests/integration/video/` with `@pytest.mark.slow`
+1. Create src/adapters/{platform}_publisher.py.
+2. Implement the VideoPublisher protocol from src/domain/ports.py.
+3. Add protocol compliance coverage in tests/unit/adapters/test_protocol_compliance.py using create_autospec.
+4. Register the adapter in src/infrastructure/publisher_registry.py.
+5. Do not change domain or use-case contracts unless the business capability actually changes.
 
----
+Preferred protocol compliance pattern:
 
-## What NOT to do (active anti-patterns being removed)
+```python
+from unittest.mock import create_autospec
 
-- ❌ `assert isinstance(MyClass(), SomeProtocol)` at module level — use `create_autospec` in tests
-- ❌ `from src.db_client import DatabaseClient` — use specific repository classes
-- ❌ `from src.logger import get_logger` — use `src.shared.logging`
-- ❌ `from src.settings import get_app_settings` — use `src.config.settings`
-- ❌ Mutable default arguments: `def f(day=date.today())` — use `day: date | None = None`
-- ❌ Pydantic v1 sts
+from src.domain.ports import VideoPublisher
 
-Load the relevant skill per task. All skills are available in `.github/skills/`:
 
-| Task | Skill | When to load |
-|------|-------|-------------|
-| Write timeseries queries (TinyFlux) | `tinyflux-time-series` | Building VideoPoint aggregations, time ranges |
-| Write async Use Cases / adapters | `python-async-patterns` | PublishVideoUseCase, FetchTrendingUseCase, adapters with asyncio.TaskGroup |
-| Add FastAPI routes / dependencies | `python-fastapi-patterns` | New endpoints in src/web/main.py, Pydantic request models |
-| Create Jinja2 templates | `jinja2-atomic-design` | New .html templates, HTMX components |
-| Define Protocols or TypeVars | `python-typing-patterns` | domain/ports.py (VideoDataSource, VideoPublisher), generics |
-| Add/update dependencies | `uv-package-manager` | Modify pyproject.toml, manage virtual environments |
-| Edit Dockerfile or entrypoint | `docker-best-practices` | Docker build optimization, multi-stage, secrets |
-| Add a new VideoPublisher adapter | `hexagonal-architecture-video-publish` | New platform publishing (TikTok, YouTube, etc) |
-| Handle video processing migration | `video-processing-migration` | C1 split (infrastructure/video), media pipeline refactoring |
----
+def test_example_publisher_implements_protocol() -> None:
+    from src.adapters.example_publisher import ExamplePublisher
 
-## Tooling
+    mock = create_autospec(ExamplePublisher, instance=True)
+    assert isinstance(mock, VideoPublisher)
+```
 
-- Package manager: `uv` (never pip)
-- Format: `ruff format`
-- Lint: `ruff check`
-- Type check: `ty`
-- Tests: `pytest` (asyncio_mode = "auto")
+## Python Rules
 
----
+- Follow the project runtime in pyproject.toml. Prefer modern Python syntax and standard library features available there.
+- Fully type public functions, methods, and class attributes.
+- Prefer X | None over Optional[X].
+- Avoid Any unless there is a clear and justified boundary reason.
+- Use Pydantic v2 APIs such as model_dump and model_validate.
+- Prefer frozen models for canonical boundary types when mutation is not required.
 
-## Skill Reference
+## Testing Rules
 
-For detailed patterns and templates, load skill: `hexagonal-architecture-video-publish`
+- Unit tests live in tests/unit/{layer}/test_{module}.py.
+- Integration tests live in tests/integration/{layer}/.
+- End-to-end tests live in tests/e2e/.
+- Mock external dependencies in unit tests.
+- Use tmp_path for TinyDB and TinyFlux integration tests.
+- Use respx for mocked HTTP when end-to-end flows need it.
+- Media pipeline integration tests belong in tests/integration/video/.
+- Mark expensive media tests with @pytest.mark.slow.
+- Do not use pytest.mark.skip to hide failing tests; fix or remove them.
+
+## Delivery and Media Rules
+
+- Preserve ffmpeg, ImageMagick, font, and file-path assumptions unless the task is explicitly a migration.
+- Keep rendering and transcoding logic inside infrastructure/video.
+- Do not mix business ranking logic with media rendering code.
+- Keep FastAPI route handlers thin.
+- Validate inbound data at the boundary.
+- Delegate business actions to application use cases.
+- Do not introduce React or Vue unless the user explicitly asks for that change.
+
+## Secrets and Configuration
+
+- Never commit credentials, tokens, cookies, session files, or OAuth artifacts.
+- Keep secrets out of source code, fixtures, examples, and logs.
+- Use environment variables and git-ignored .env files for local configuration.
+
+## Anti-Patterns
+
+Do not generate code that does any of the following:
+
+- Module-level assert isinstance protocol checks.
+- New imports from src.db_client, src.logger, or src.settings.
+- Raw dict payloads crossing architectural boundaries.
+- Bare print for application logging.
+- Mutable default arguments.
+- Pydantic v1 APIs.
+- Blocking I/O inside async code.
+- New business logic inside entrypoints, web routes, or low-level infrastructure clients.
+
+## Definition of Done
+
+A change is not complete unless all of these are true:
+
+- Architecture boundaries are still respected.
+- New code uses canonical imports.
+- Tests were added or updated when behavior changed.
+- Formatting, lint, type checking, and relevant tests were run or the reason they were not run is stated explicitly.
+- No secrets or generated auth artifacts were introduced.
+- Tooling commands, default CLI invocations, and environment workflow belong in .github/copilot-settings.md, not here.
+
+## Skill Routing
+
+Load the relevant skill from .github/skills when the task matches:
+
+- tinyflux-time-series for TinyFlux schema, queries, and aggregations.
+- python-async-patterns for async use cases, adapters, and TaskGroup workflows.
+- python-fastapi-patterns for FastAPI routes, dependencies, and request validation.
+- jinja2-atomic-design for templates and HTMX fragments.
+- python-typing-patterns for protocols, type vars, and advanced typing.
+- uv-package-manager for dependency and environment changes.
+- docker-best-practices for Dockerfile or entrypoint changes.
+- hexagonal-architecture-video-publish for new VideoPublisher adapters.
+- video-processing-migration for media pipeline migrations.

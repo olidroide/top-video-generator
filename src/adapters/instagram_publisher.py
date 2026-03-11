@@ -1,6 +1,6 @@
+from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Platform, PublishingResult
 from src.instagram_client import InstagramClient
-from src.settings import get_app_settings
 
 
 class InstagramPublisher:

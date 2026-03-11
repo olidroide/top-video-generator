@@ -1,23 +1,19 @@
-import structlog
+from typing import cast
 
 from src.adapters.instagram_publisher import InstagramPublisher
 from src.adapters.tiktok_publisher import TikTokPublisher
 from src.adapters.youtube_publisher import YouTubePublisher
 from src.domain.ports import VideoPublisher
+from src.shared.logging import get_logger
 
-# NOTE (tech debt): Imports are at module-level, but a true circular dependency remains:
-# adapters import from src.yt_client (repo root).
-# Solution: move yt_client.py → infrastructure/youtube/api_client.py in Phase 3
-# Then all adapters can be imported cleanly without deferred imports or circular refs.
+logger = get_logger(__name__)
 
 
 def build_publishers() -> list[VideoPublisher]:
-    logger = structlog.get_logger()
-
     publishers: list[VideoPublisher] = [
-        InstagramPublisher(),
-        TikTokPublisher(),
-        YouTubePublisher(),
+        cast(VideoPublisher, InstagramPublisher()),
+        cast(VideoPublisher, TikTokPublisher()),
+        cast(VideoPublisher, YouTubePublisher()),
     ]
     enabled = [p for p in publishers if p.is_enabled]
     skipped = [p for p in publishers if not p.is_enabled]

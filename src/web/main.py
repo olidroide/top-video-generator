@@ -13,6 +13,7 @@ from starlette.responses import RedirectResponse
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
 from src.db_client import DatabaseClient, ReleasePlatform, SpotifyAuth, TikTokAuth, TimeseriesRange, YtAuth
+from src.infrastructure.youtube import get_yt_client
 from src.logger import get_logger
 from src.script_fetch_yt_data import main as script_fetch_yt_data
 from src.script_generate_publish_top_video import main as script_weekly
@@ -20,7 +21,6 @@ from src.script_generate_vertical_publish_top_video import main as script_daily
 from src.settings import get_app_settings
 from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
-from src.infrastructure.youtube.client import get_yt_client
 
 logger = get_logger(__name__)
 
@@ -321,15 +321,10 @@ class MetricsResponse(BaseModel):
 def _check_ffmpeg() -> dict:
     """Check if ffmpeg is available."""
     try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
         return {
             "status": "ok" if result.returncode == 0 else "error",
-            "message": "ffmpeg available" if result.returncode == 0 else "ffmpeg error"
+            "message": "ffmpeg available" if result.returncode == 0 else "ffmpeg error",
         }
     except Exception as e:
         return {"status": "error", "message": f"ffmpeg not found: {e}"}
@@ -344,12 +339,12 @@ def _check_templates() -> dict:
         settings.video_template_thumbnail_file,
         settings.video_template_thumbnail_font_file,
     ]
-    
+
     missing = [f for f in required_files if not Path(f).exists()]
-    
+
     return {
         "status": "ok" if not missing else "error",
-        "message": "All templates present" if not missing else f"Missing templates: {missing}"
+        "message": "All templates present" if not missing else f"Missing templates: {missing}",
     }
 
 
@@ -372,14 +367,11 @@ async def health_check():
         "templates": _check_templates(),
         "database": _check_database(),
     }
-    
+
     # Overall status is error if any check fails
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
-    
-    return HealthCheck(
-        status=overall_status,
-        checks=checks
-    )
+
+    return HealthCheck(status=overall_status, checks=checks)
 
 
 @app.get("/metrics")

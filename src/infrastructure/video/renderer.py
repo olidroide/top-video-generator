@@ -35,13 +35,13 @@ logger = get_logger(__name__)
 
 class VideoRenderer:
     """Renders text overlays and applies templates to video clips.
-    
+
     Responsibilities:
     - Generate text overlays (score, title, views, channel)
     - Apply horizontal/vertical templates with masking
     - Create QR codes for video URLs
     - Font path resolution with fallbacks
-    
+
     Does NOT:
     - Manage file paths (see VideoAssetManager)
     - Compose final videos (see VideoCompositor)
@@ -50,7 +50,7 @@ class VideoRenderer:
 
     def __init__(self, asset_manager: "VideoAssetManager") -> None:
         """Initialize renderer with asset manager for path access.
-        
+
         Args:
             asset_manager: VideoAssetManager instance providing template and resource paths
         """
@@ -58,14 +58,14 @@ class VideoRenderer:
 
     def overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
         """Generate horizontal format text overlays (6 TextClips + 1 ImageClip).
-        
+
         Creates text overlays for score, title, channel, views, and QR code
         positioned for horizontal video format (1920x1080).
-        
+
         Args:
             video_file_clip: Source video clip for duration reference
             video: Video metadata (score, title, channel, etc.)
-        
+
         Returns:
             List of 7 clips: 6 TextClip instances + 1 ImageClip (QR code)
         """
@@ -113,9 +113,7 @@ class VideoRenderer:
         qr_path = pathlib.Path(f"{self._asset_manager.video_yt_resources_folder}/{video.video_id}_qr.png")
         if not qr_path.exists():
             qr_video = segno.make(video.yt_video_url)
-            qr_video.save(
-                str(qr_path), dark="pink", light="#323524", scale=8
-            )
+            qr_video.save(str(qr_path), dark="pink", light="#323524", scale=8)
 
         # Font path resolution with fallbacks
         font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
@@ -125,7 +123,7 @@ class VideoRenderer:
         font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
-        
+
         score_text_clip = (
             TextClip(
                 f"{video.score:02d}",
@@ -212,9 +210,7 @@ class VideoRenderer:
         )
 
         qr_image_clip = (
-            ImageClip(str(qr_path), ismask=False)
-            .set_position((1498, 688))
-            .set_duration(video_file_clip.duration)
+            ImageClip(str(qr_path), ismask=False).set_position((1498, 688)).set_duration(video_file_clip.duration)
         )
 
         return [
@@ -229,14 +225,14 @@ class VideoRenderer:
 
     def overlay_texts_vertical_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
         """Generate vertical format text overlays (9 TextClips).
-        
+
         Creates text overlays positioned for vertical video format (1080x1920).
         Includes additional clips for views/growth titles and previous score.
-        
+
         Args:
             video_file_clip: Source video clip for duration reference
             video: Video metadata (score, title, channel, etc.)
-        
+
         Returns:
             List of 9 TextClip instances
         """
@@ -278,7 +274,7 @@ class VideoRenderer:
         font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
-        
+
         score_text_clip = (
             TextClip(
                 f"{video.score:02d}",
@@ -421,13 +417,13 @@ class VideoRenderer:
 
     async def overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
         """Apply horizontal template overlay with blue screen masking.
-        
+
         Creates a 3-layer composition: black base, original video, masked template.
         Template blue screen [0,0,255] is removed with color masking.
-        
+
         Args:
             video_file_clip: Source video clip to overlay template on
-        
+
         Returns:
             List of 3 clips: [base_clip, video_file_clip, masked_template_clip]
         """
@@ -450,13 +446,13 @@ class VideoRenderer:
 
     async def overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[Clip]:
         """Apply vertical template overlay with crop/resize transformations.
-        
+
         Creates a 3-layer composition for vertical format (1080x1920).
         Video is cropped (x1=15), resized to 1080/1.3 x 1920/1.3, and repositioned.
-        
+
         Args:
             video_file_clip: Source video clip to overlay template on
-        
+
         Returns:
             List of 3 clips: [base_clip, transformed_video, masked_template_clip]
         """

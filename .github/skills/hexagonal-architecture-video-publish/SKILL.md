@@ -1,7 +1,7 @@
 ---
 name: hexagonal-architecture-video-publish
 description: "Hexagonal Architecture (Ports & Adapters) for the video publishing pipeline. Triggers on: VideoPublisher, VideoDataSource, CanonicalVideo, PublishingResult, publisher_registry, ports, adapters, domain, hexagonal, build_publishers, TaskGroup publish."
-compatibility: "Python 3.11+ required (asyncio.TaskGroup). Pydantic v2. typing.Protocol with runtime_checkable."
+compatibility: "Project runtime declared in pyproject.toml. asyncio.TaskGroup. Pydantic v2. typing.Protocol with runtime_checkable."
 ---
 
 # Hexagonal Architecture — Video Publish Pipeline
@@ -31,8 +31,6 @@ class XTwitterPublisher:
             logger.error("publish failed", error=str(exc))
             return PublishingResult(platform=self.platform_name, success=False,
                                     published_at=datetime.now(timezone.utc), error=str(exc))
-
-assert isinstance(XTwitterPublisher(), VideoPublisher)
 ```
 
 ## Pattern 2: Registry
@@ -92,20 +90,36 @@ class MockPublisher:
 - `domain/` has zero imports from `src/` — only stdlib + pydantic.
 - Adapters never import from other adapters.
 - Scripts never reference `InstagramClient`, `TikTokClient`, `YTClient` directly.
-- Every adapter file ends with `assert isinstance(MyAdapter(), VideoPublisher)`.
+- Protocol compliance belongs in tests, not in module-level assertions.
 - `PublishingResult.success=False` is valid — adapters must never raise up to orchestrators.
 
 ## Quality Gates
 
 - [ ] `ty check src/domain/` → zero errors.
-- [ ] `assert isinstance(adapter, VideoPublisher)` in every adapter file.
+- [ ] Protocol compliance covered in `tests/unit/adapters/test_protocol_compliance.py` with `create_autospec`.
 - [ ] `build_publishers()` test: mock settings → verify enabled/disabled adapters.
 - [ ] Parallel test: `MockPublisher(succeed=False)` on one platform → others complete.
+
+## Protocol Compliance Test Pattern
+
+```python
+from unittest.mock import create_autospec
+
+from src.domain.ports import VideoPublisher
+
+
+def test_example_publisher_implements_protocol() -> None:
+    from src.adapters.example_publisher import ExamplePublisher
+
+    mock = create_autospec(ExamplePublisher, instance=True)
+    assert isinstance(mock, VideoPublisher)
+```
 
 ## Copilot Prompt Template
 
 > "Create `src/adapters/{platform}_publisher.py` implementing the `VideoPublisher` protocol
 > from `src/domain/ports.py`. Use `asyncio.to_thread` if the client is synchronous.
 > Return `PublishingResult` on both success and failure — never raise.
-> Add `assert isinstance({Platform}Publisher(), VideoPublisher)` at module level.
+> Add protocol compliance coverage in `tests/unit/adapters/test_protocol_compliance.py`
+> using `create_autospec`, not a module-level assertion.
 > Register it in `src/infrastructure/publisher_registry.py`."

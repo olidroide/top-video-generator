@@ -6,7 +6,6 @@ with transitions, and renders final videos.
 
 import datetime
 import pathlib
-from datetime import timezone
 
 from moviepy.audio.fx.audio_fadeout import audio_fadeout
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
@@ -152,9 +151,9 @@ class VideoCompositor:
             clip = VideoFileClip(self._end_screen_file)
             composite_clips.append(
                 crossfadein(
-                    clip.set_start(
-                        composite_clips[len(composite_clips) - 1].end - cross_fade_duration
-                    ).fx(audio_fadeout, cross_fade_duration),
+                    clip.set_start(composite_clips[len(composite_clips) - 1].end - cross_fade_duration).fx(
+                        audio_fadeout, cross_fade_duration
+                    ),
                     cross_fade_duration,
                 )
             )
@@ -162,8 +161,7 @@ class VideoCompositor:
         merged_clip = CompositeVideoClip(clips=composite_clips)
         return await self._render_clip(
             merged_clip,
-            datetime.datetime.now(timezone.utc).strftime("%Y%m%d")
-            + f"{'_vertical' if vertical else ''}",
+            datetime.datetime.now(datetime.UTC).strftime("%Y%m%d") + f"{'_vertical' if vertical else ''}",
         )
 
     async def _render_clip(self, video: CompositeVideoClip, video_id: str) -> str:
