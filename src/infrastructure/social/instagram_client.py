@@ -1,8 +1,8 @@
 import asyncio
 from pathlib import Path
 
-from instagrapi import Client as InstagrapiClientLib  # type: ignore
-from instagrapi.exceptions import LoginRequired  # type: ignore
+from instagrapi import Client as InstagrapiClientLib
+from instagrapi.exceptions import LoginRequired
 
 from src.config.settings import get_app_settings
 from src.shared.logging import get_logger
@@ -13,7 +13,8 @@ logger = get_logger(__name__)
 def _get_instagram_client():
     USERNAME = get_app_settings().instagram_client_username
     PASSWORD = get_app_settings().instagram_client_password
-    settings_file_path = Path(get_app_settings().instagram_client_session_file)
+    settings_session_file = get_app_settings().instagram_client_session_file or "instagram_session.json"
+    settings_file_path = Path(settings_session_file)
 
     instagram_client_instance = InstagrapiClientLib()
     login_via_session = False

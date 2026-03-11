@@ -70,19 +70,23 @@ class TikTokClient:
 
     def __init__(self) -> None:
         super().__init__()
-        self._tiktok_client_key: str = get_app_settings().tiktok_client_key
-        self._tiktok_client_secret: str = get_app_settings().tiktok_client_secret
-        self._tiktok_redirect_uri: str = get_app_settings().tiktok_redirect_uri
-        self._tiktok_app_id: str = get_app_settings().tiktok_app_id
-        self._tiktok_user_openid: str = get_app_settings().tiktok_user_openid
+        self._tiktok_client_key: str = get_app_settings().tiktok_client_key or ""
+        self._tiktok_client_secret: str = get_app_settings().tiktok_client_secret or ""
+        self._tiktok_redirect_uri: str = get_app_settings().tiktok_redirect_uri or ""
+        self._tiktok_app_id: str = get_app_settings().tiktok_app_id or ""
+        self._tiktok_user_openid: str = get_app_settings().tiktok_user_openid or ""
 
-    async def _get_user_refresh_token(self, user_openid: str):
+    async def _get_user_refresh_token(self, user_openid: str) -> str:
         tiktok_auth = DatabaseClient().get_tiktok_auth(user_openid)
-        return tiktok_auth.refresh_token
+        if tiktok_auth is None:
+            return ""
+        return tiktok_auth.refresh_token or ""
 
-    async def _get_user_token_bearer_credentials(self, user_openid: str):
+    async def _get_user_token_bearer_credentials(self, user_openid: str) -> str:
         tiktok_auth = DatabaseClient().get_tiktok_auth(user_openid)
-        return tiktok_auth.token
+        if tiktok_auth is None:
+            return ""
+        return tiktok_auth.token or ""
 
     async def step_1_get_authentication_url(self) -> str:
         _seed = 36
@@ -167,7 +171,7 @@ class TikTokClient:
                 scopes=response_dict.get("scope", "").split(","),
             )
         )
-        return tiktok_auth.token
+        return tiktok_auth.token or ""
 
     async def fetch_creator_info_query(self) -> TiktokResponsePublishQueryCreatorInfo | None:
         query_creator_url = f"{self._base_url}/v2/post/publish/creator_info/query/"
@@ -177,7 +181,9 @@ class TikTokClient:
         }
         async with get_default_client() as client:
             response = await client.post(url=query_creator_url, headers=headers)
-            response_publish_query_creator_info = TiktokResponsePublishQueryCreatorInfo.parse_obj(await response.json())
+            response_publish_query_creator_info = TiktokResponsePublishQueryCreatorInfo.model_validate(
+                await response.json()
+            )
 
         logger.debug("Query Creator Info", response_publish_query_creator_info=response_publish_query_creator_info)
         return response_publish_query_creator_info
@@ -197,7 +203,7 @@ class TikTokClient:
     async def upload_video(
         self,
         video_path: str,
-        title: str = None,
+        title: str | None = None,
     ) -> str | None:
         access_token = await self.refresh_token()
         auth_header = {
@@ -242,11 +248,14 @@ class TikTokClient:
         async with get_default_client() as client:
             response = await client.post(url=publish_video_init_url, headers=auth_header, data=data)
             response_body = await response.json()
-            response_publish_video_init_url = TiktokResponsePublishVideoInitUrl.parse_obj(response_body)
+            response_publish_video_init_url = TiktokResponsePublishVideoInitUrl.model_validate(response_body)
 
         logger.debug("publish_video_init", response_publish_video_init_url=response_publish_video_init_url)
 
         async with get_default_client() as client:
+            if not response_publish_video_init_url.data or not response_publish_video_init_url.data.upload_url:
+                logger.error("publish_video_init missing upload_url", response=response_publish_video_init_url)
+                return None
             for video_data in upload_data:
                 content_length = str(len(video_data["data"]))
                 content_range = (
@@ -265,6 +274,10 @@ class TikTokClient:
                 logger.debug("response_chunk:", status=response.status)
 
         publish_video_init_url = f"{self._base_url}/v2/post/publish/status/fetch/"
+
+        if not response_publish_video_init_url.data or not response_publish_video_init_url.data.publish_id:
+            logger.error("publish_video_init missing publish_id", response=response_publish_video_init_url)
+            return None
 
         publish_id = response_publish_video_init_url.data.publish_id
         data = json.dumps(

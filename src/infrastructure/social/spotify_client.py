@@ -29,15 +29,17 @@ class SpotifyClient:
 
     def __init__(self) -> None:
         super().__init__()
-        self._client_id: str = get_app_settings().spotify_client_id
-        self._client_secret: str = get_app_settings().spotify_client_secret
-        self._redirect_uri: str = get_app_settings().spotify_redirect_uri
+        self._client_id: str = get_app_settings().spotify_client_id or ""
+        self._client_secret: str = get_app_settings().spotify_client_secret or ""
+        self._redirect_uri: str = get_app_settings().spotify_redirect_uri or ""
         # self._tiktok_app_id: str = get_app_settings().tiktok_app_id
-        self._user_id: str = get_app_settings().spotify_user_id
+        self._user_id: str = get_app_settings().spotify_user_id or ""
 
     async def _get_user_refresh_token(self) -> str:
         tiktok_auth = DatabaseClient().get_spotify_auth(self._user_id)
-        return tiktok_auth.refresh_token
+        if tiktok_auth is None:
+            return ""
+        return tiktok_auth.refresh_token or ""
 
     async def _get_user_access_token(self) -> str:
         return await self.refresh_token()
@@ -119,11 +121,11 @@ class SpotifyClient:
                 scopes=response_dict.get("scope", "").split(" "),
             )
         )
-        return spotify_auth.token
+        return spotify_auth.token or ""
 
     async def fetch_user_info(
         self,
-        user_access_token: str = None,
+        user_access_token: str | None = None,
     ) -> dict:
         headers = {
             "Content-Type": "application/json",
@@ -140,7 +142,7 @@ class SpotifyClient:
 
     async def search_for_track(
         self,
-        title_song: str = None,
+        title_song: str | None = None,
     ) -> dict:
         headers = {
             "Content-Type": "application/json",
@@ -163,7 +165,7 @@ class SpotifyClient:
 
     async def get_playlist_items_track_id(
         self,
-        playlist_id: str = None,
+        playlist_id: str | None = None,
     ) -> list[str]:
         headers = {
             "Content-Type": "application/json",
@@ -186,14 +188,15 @@ class SpotifyClient:
 
     async def remove_playlist_items(
         self,
-        playlist_id: str = None,
-        item_track_id_list: list[str] = None,
+        playlist_id: str | None = None,
+        item_track_id_list: list[str] | None = None,
     ) -> list[str]:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {await self._get_user_access_token()}",
         }
-        data = {"tracks": [{"uri": f"spotify:track:{item_track_id}"} for item_track_id in item_track_id_list]}
+        track_id_list = item_track_id_list or []
+        data = {"tracks": [{"uri": f"spotify:track:{item_track_id}"} for item_track_id in track_id_list]}
 
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
         async with get_default_client() as client:
@@ -206,8 +209,8 @@ class SpotifyClient:
 
     async def add_items_to_playlist(
         self,
-        playlist_id: str = None,
-        track_id_list: list[str] = None,
+        playlist_id: str | None = None,
+        track_id_list: list[str] | None = None,
     ) -> dict:
         headers = {
             "Content-Type": "application/json",
@@ -216,7 +219,7 @@ class SpotifyClient:
 
         data = {
             "position": 0,
-            "uris": [f"spotify:track:{track_id}" for track_id in track_id_list],  # TODO limit to 100
+            "uris": [f"spotify:track:{track_id}" for track_id in (track_id_list or [])],  # TODO limit to 100
         }
 
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks"
@@ -233,11 +236,11 @@ class SpotifyClient:
 
     async def update_link_original_playlist(
         self,
-        playlist_id: str = None,
-        song_title_list: list[str] = None,
+        playlist_id: str | None = None,
+        song_title_list: list[str] | None = None,
     ) -> bool:
         spotify_tracks_id = []
-        for yt_video_title in song_title_list:
+        for yt_video_title in song_title_list or []:
             spotify_track = await self.search_for_track(yt_video_title)
             if spotify_track:
                 spotify_tracks_id.append(spotify_track.get("id"))

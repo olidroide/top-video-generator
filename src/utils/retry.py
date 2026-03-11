@@ -2,16 +2,17 @@
 
 import asyncio
 import random
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 @dataclass
@@ -47,7 +48,7 @@ class RetryExhaustedError(Exception):
 
 def retry_with_backoff(
     config: RetryConfig | None = None, exceptions: tuple[type[Exception], ...] = (Exception,)
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
     """Decorator for retrying async functions with exponential backoff.
 
     Args:
@@ -66,9 +67,11 @@ def retry_with_backoff(
     if config is None:
         config = RetryConfig()
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
+        func_name = getattr(func, "__name__", func.__class__.__name__)
+
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             last_exception: Exception | None = None
 
             for attempt in range(config.max_attempts):
@@ -79,15 +82,15 @@ def retry_with_backoff(
                     if attempt < config.max_attempts - 1:
                         delay = config.calculate_delay(attempt)
                         logger.warning(
-                            f"⚠️ Attempt {attempt + 1}/{config.max_attempts} failed for {func.__name__}: {e}. "
+                            f"⚠️ Attempt {attempt + 1}/{config.max_attempts} failed for {func_name}: {e}. "
                             f"Retrying in {delay:.2f}s..."
                         )
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(f"❌ All {config.max_attempts} attempts exhausted for {func.__name__}: {e}")
+                        logger.error(f"❌ All {config.max_attempts} attempts exhausted for {func_name}: {e}")
 
             raise RetryExhaustedError(
-                f"Function {func.__name__} failed after {config.max_attempts} attempts"
+                f"Function {func_name} failed after {config.max_attempts} attempts"
             ) from last_exception
 
         return wrapper
@@ -96,7 +99,7 @@ def retry_with_backoff(
 
 
 async def retry_async(
-    func: Callable[..., T],
+    func: Callable[..., Awaitable[T]],
     *args: Any,
     config: RetryConfig | None = None,
     exceptions: tuple[type[Exception], ...] = (Exception,),

@@ -34,7 +34,7 @@ class WorkerFactory:
     @staticmethod
     def _divide_in_chunks(video_list: list[Video], chunk_size: int) -> Iterator[list[str]]:
         for i in range(0, len(video_list), chunk_size):
-            yield [video.json() for video in video_list[i : i + chunk_size]]
+            yield [video.model_dump_json() for video in video_list[i : i + chunk_size]]
 
     def _wait_workers(
         self,
@@ -63,7 +63,8 @@ class WorkerFactory:
         list_worker = []
 
         if not (cpu_count := get_app_settings().cpu_workers):
-            cpu_count = math.ceil(os.cpu_count()) - 2
+            detected_cpu_count = os.cpu_count() or 1
+            cpu_count = math.ceil(detected_cpu_count) - 2
 
         cpu_count = cpu_count if cpu_count > 0 else 1
 
