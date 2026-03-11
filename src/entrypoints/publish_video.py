@@ -4,10 +4,10 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.config.settings import get_app_settings
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
 from src.infrastructure.youtube import get_yt_client
-from src.logger import get_logger
-from src.settings import get_app_settings
+from src.shared.logging import get_logger
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
@@ -15,7 +15,7 @@ from src.worker_factory import WorkerFactory
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = None) -> str:
+async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -26,7 +26,7 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = N
 
 async def generate_yt_description(video_list: list[Video]) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
-    channels_names = list(set([video.channel.name for video in video_list]))
+    channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
     disclaimer = f"""
 ➖➖➖➖➖➖
 Disclaimer 
@@ -39,7 +39,8 @@ Disclaimer
     video_list_names = ""
     for video in video_list:
         video_list_names += f"{video.score}.- {video.yt_video_title_cleaned} {video.yt_video_url} \n"
-        video_list_names += f"© {video.channel.name}\n\n"
+        if video.channel and video.channel.name:
+            video_list_names += f"© {video.channel.name}\n\n"
 
     yt_description = get_app_settings().yt_description_template
     yt_description = yt_description.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
@@ -87,7 +88,7 @@ async def main_async():
     try:
         DatabaseClient().add_or_update_release(
             release=Release(
-                platform=ReleasePlatform.YT.value,
+                platform=ReleasePlatform.YT,
                 client_id=get_app_settings().yt_auth_user_id,
                 release_id=yt_video_id,
                 published_at=datetime.datetime.now(datetime.UTC).timestamp(),

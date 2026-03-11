@@ -1,115 +1,120 @@
 ---
 name: python-async-patterns
-description: "Python asyncio patterns for concurrent programming. Triggers on: asyncio, async, await, coroutine, gather, semaphore, TaskGroup, event loop, aiohttp, concurrent."
-compatibility: "Python 3.10+ recommended. Some patterns require 3.11+ (TaskGroup, timeout)."
+description: "Python asyncio patterns. Triggers on: asyncio, TaskGroup, gather, await, concurrent, blocking I/O, to_thread, parallel execution."
+compatibility: "Python 3.12+. TaskGroup and modern timeouts required."
 ---
 
 # Python Async Patterns
 
-Asyncio patterns for concurrent Python programming.
+## Core Directives
 
-## Core Concepts
+- **Use `asyncio.TaskGroup`** instead of `asyncio.gather` for structural concurrency.
+- **Never block the event loop** with synchronous I/O or CPU-heavy work. Use `asyncio.to_thread`.
+- Always handle exceptions explicitly per-task if you don't want a single failure to cancel the entire `TaskGroup`.
+
+## Pattern 1: Concurrent Execution with TaskGroup
+
+Unlike `gather`, `TaskGroup` does not return results from the `async with` block. Store task references before the context exits and call `.result()` after.
+
+```python
+import asyncio
+from typing import Any
+
+async def process_all(items: list[str]) -> list[Any]:
+    tasks: list[asyncio.Task[Any]] = []
+
+    async with asyncio.TaskGroup() as tg:
+        for item in items:
+            tasks.append(tg.create_task(process_one(item)))
+
+    # Safe to read .result() — TaskGroup has exited successfully
+    return [task.result() for task in tasks]
+```
+
+## Pattern 2: Fault-Tolerant TaskGroup
+
+By default, if one task raises an unhandled exception, `TaskGroup` cancels all remaining tasks. To isolate per-task failures, catch exceptions *inside* the worker coroutine.
+
+```python
+async def _safe_process(item: str) -> Result | Exception:
+    try:
+        return await process_one(item)
+    except Exception as exc:
+        return exc  # Return error as value instead of propagating
+
+async def process_independently(items: list[str]) -> list[Result | Exception]:
+    tasks: list[asyncio.Task[Result | Exception]] = []
+    async with asyncio.TaskGroup() as tg:
+        for item in items:
+            tasks.append(tg.create_task(_safe_process(item)))
+
+    return [t.result() for t in tasks]
+```
+
+This is the same isolation strategy used in `_publish_one` for the video publishing pipeline — see `hexagonal-architecture-video-publish` skill.
+
+## Pattern 3: Running Blocking Code (to_thread)
+
+Offload synchronous blocking calls (legacy clients, Pillow, disk I/O) to a thread with `asyncio.to_thread`. This is the modern replacement for `loop.run_in_executor`.
 
 ```python
 import asyncio
 
-# Coroutine (must be awaited)
-async def fetch(url: str) -> str:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return await response.text()
+def blocking_transcode(path: str) -> str:
+    # CPU/disk-heavy — must not run on the event loop directly
+    ...
 
-# Entry point
-async def main():
-    result = await fetch("https://example.com")
-    return result
-
-asyncio.run(main())
+async def transcode_async(path: str) -> str:
+    return await asyncio.to_thread(blocking_transcode, path)
 ```
 
-## Pattern 1: Concurrent with gather
+Pass arguments positionally — `asyncio.to_thread` accepts `(func, *args, **kwargs)`.
+
+## Pattern 4: Modern Timeouts
 
 ```python
-async def fetch_all(urls: list[str]) -> list[str]:
-    """Fetch multiple URLs concurrently."""
-    async with aiohttp.ClientSession() as session:
-        tasks = [fetch_one(session, url) for url in urls]
-        return await asyncio.gather(*tasks, return_exceptions=True)
+import asyncio
+
+async def fetch_with_timeout() -> str | None:
+    try:
+        async with asyncio.timeout(5.0):
+            return await slow_network_call()
+    except TimeoutError:
+        return None
 ```
 
-## Pattern 2: Bounded Concurrency
+Use the built-in `TimeoutError` (not `asyncio.TimeoutError`) — they are the same in Python 3.11+. Do not use `asyncio.wait_for` for new code.
+
+## Pattern 5: Bounded Concurrency
+
+Use a `Semaphore` inside a `TaskGroup` when hitting rate-limited APIs.
 
 ```python
-async def fetch_with_limit(urls: list[str], limit: int = 10):
-    """Limit concurrent requests."""
+async def bounded_fetch(urls: list[str], limit: int = 5) -> list[str]:
     semaphore = asyncio.Semaphore(limit)
 
-    async def bounded_fetch(url):
+    async def _fetch(url: str) -> str:
         async with semaphore:
             return await fetch_one(url)
 
-    return await asyncio.gather(*[bounded_fetch(url) for url in urls])
-```
-
-## Pattern 3: TaskGroup (Python 3.11+)
-
-```python
-async def process_items(items):
-    """Structured concurrency with automatic cleanup."""
+    tasks: list[asyncio.Task[str]] = []
     async with asyncio.TaskGroup() as tg:
-        for item in items:
-            tg.create_task(process_one(item))
-    # All tasks complete here, or exception raised
+        for url in urls:
+            tasks.append(tg.create_task(_fetch(url)))
+
+    return [t.result() for t in tasks]
 ```
 
-## Pattern 4: Timeout
+## Anti-Patterns to Correct
 
-```python
-async def with_timeout():
-    try:
-        async with asyncio.timeout(5.0):  # Python 3.11+
-            result = await slow_operation()
-    except asyncio.TimeoutError:
-        result = None
-    return result
-```
-
-## Critical Warnings
-
-```python
-# WRONG - blocks event loop
-async def bad():
-    time.sleep(5)         # Never use time.sleep!
-    requests.get(url)     # Blocking I/O!
-
-# CORRECT
-async def good():
-    await asyncio.sleep(5)
-    async with aiohttp.ClientSession() as s:
-        await s.get(url)
-```
-
-```python
-# WRONG - orphaned task
-async def bad():
-    asyncio.create_task(work())  # May be garbage collected!
-
-# CORRECT - keep reference
-async def good():
-    task = asyncio.create_task(work())
-    await task
-```
-
-## Quick Reference
-
-| Pattern | Use Case |
-|---------|----------|
-| `gather(*tasks)` | Multiple independent operations |
-| `Semaphore(n)` | Rate limiting, resource constraints |
-| `TaskGroup()` | Structured concurrency (3.11+) |
-| `Queue()` | Producer-consumer |
-| `timeout(s)` | Timeout wrapper (3.11+) |
-| `Lock()` | Shared mutable state |
+| ❌ Anti-pattern | ✅ Correct |
+|---|---|
+| `await asyncio.gather(*tasks)` | `async with asyncio.TaskGroup() as tg:` |
+| `time.sleep(n)` inside async | `await asyncio.sleep(n)` |
+| `requests.get(url)` inside async | `async with aiohttp.ClientSession()` |
+| `loop.run_in_executor(None, fn)` | `await asyncio.to_thread(fn)` |
+| `asyncio.create_task(work())` (orphaned) | Keep reference or use `TaskGroup` |
+| No per-task error handling in TaskGroup | Wrap worker in `try/except` returning value |
 
 ## Async Context Manager
 
@@ -125,33 +130,8 @@ async def managed_connection():
         await conn.close()
 ```
 
-## Additional Resources
-
-For detailed patterns, load:
-- `./references/concurrency-patterns.md` - Queue, Lock, producer-consumer
-- `./references/aiohttp-patterns.md` - HTTP client/server patterns
-- `./references/mixing-sync-async.md` - run_in_executor, thread pools
-- `./references/debugging-async.md` - Debug mode, profiling, finding issues
-- `./references/production-patterns.md` - Graceful shutdown, health checks, signal handling
-- `./references/error-handling.md` - Retry with backoff, circuit breakers, partial failures
-- `./references/performance.md` - uvloop, connection pooling, buffer sizing
-
-## Scripts
-
-- `./scripts/find-blocking-calls.sh` - Scan code for blocking calls in async functions
-
-## Assets
-
-- `./assets/async-project-template.py` - Production-ready async app skeleton
-
----
-
 ## See Also
 
-**Prerequisites:**
-- `python-typing-patterns` - Type hints for async functions
-
-**Related Skills:**
-- `python-fastapi-patterns` - Async web APIs
-- `python-observability-patterns` - Async logging and tracing
-- `python-database-patterns` - Async database access
+- `hexagonal-architecture-video-publish` — `_publish_one` fault-tolerant TaskGroup pattern
+- `python-fastapi-patterns` — async route handlers
+- `video-processing-migration` — offloading blocking media ops with `to_thread`

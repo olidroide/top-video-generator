@@ -4,11 +4,11 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.config.settings import get_app_settings
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
 from src.infrastructure.publisher_registry import build_publishers
-from src.logger import get_logger
-from src.settings import get_app_settings
-from src.spotify_client import SpotifyClient
+from src.infrastructure.social.spotify_client import SpotifyClient
+from src.shared.logging import get_logger
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
@@ -16,7 +16,7 @@ from src.worker_factory import WorkerFactory
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] = []) -> str:
+async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -110,9 +110,9 @@ async def main_async():
     logger.debug("generated description:", yt_description=yt_description)
 
     # Hexagonal: convertir Video → CanonicalVideo para adapters
-    from src.domain.models import CanonicalVideo, VideoScoreStatus
+    from src.domain.models import CanonicalVideo
 
-    def video_to_canonical(v):
+    def video_to_canonical(v: Video) -> CanonicalVideo:
         return CanonicalVideo(
             video_id=v.video_id,
             title=v.title or "",
@@ -121,7 +121,6 @@ async def main_async():
             views_growth=v.views_growth or 0,
             score=float(v.score) if v.score is not None else 0.0,
             score_previous=float(v.score_previous) if v.score_previous is not None else 0.0,
-            score_status=VideoScoreStatus(v.score_status) if v.score_status else VideoScoreStatus.NEW,
             thumbnail_url=v.yt_video_thumbnail_url if hasattr(v, "yt_video_thumbnail_url") else "",
         )
 

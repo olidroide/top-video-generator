@@ -1,6 +1,9 @@
 # FastAPI Dependency Injection Patterns
 
-Advanced patterns for managing dependencies in FastAPI.
+> **Project note:** In this repository, use `from src.config.settings import get_app_settings`
+> for settings access — never declare inline `BaseSettings` classes or use `@lru_cache` on a
+> local `Settings` definition. Use cases and repositories must be wired via `Depends`, not read
+> from `app.state` inside route handlers.
 
 ## Basic Dependencies
 
@@ -120,6 +123,9 @@ async def get_user(
 ```
 
 ## Cached Dependencies
+
+> **Project note:** Do not copy the pattern below into this repository. Use
+> `get_app_settings()` from `src.config.settings` instead of declaring a local `Settings` class.
 
 ```python
 from functools import lru_cache

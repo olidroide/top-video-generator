@@ -18,8 +18,9 @@ from typing import Any
 
 import aiohttp
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# Project canonical logger — never use logging.getLogger or print directly.
+# In this repo: from src.shared.logging import get_logger; logger = get_logger(__name__)
+# For this standalone template, stdlib logging is used as a reference only.
 logger = logging.getLogger(__name__)
 
 
@@ -75,18 +76,22 @@ class AsyncApp:
                 response.raise_for_status()
                 return await response.json()
         except aiohttp.ClientError as e:
-            logger.error(f"Request failed: {e}")
+            logger.error("request_failed", extra={"error": str(e)})
             return None
 
     async def fetch_many(self, urls: list[str], concurrency: int = 10) -> list[dict[str, Any] | None]:
-        """Fetch multiple URLs with bounded concurrency."""
+        """Fetch multiple URLs with bounded concurrency using TaskGroup."""
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def bounded_fetch(url: str):
+        async def bounded_fetch(url: str) -> dict[str, Any] | None:
             async with semaphore:
                 return await self.fetch(url)
 
-        return await asyncio.gather(*[bounded_fetch(url) for url in urls])
+        tasks: list[asyncio.Task[dict[str, Any] | None]] = []
+        async with asyncio.TaskGroup() as tg:
+            for url in urls:
+                tasks.append(tg.create_task(bounded_fetch(url)))
+        return [t.result() for t in tasks]
 
 
 @asynccontextmanager
@@ -122,7 +127,7 @@ async def main():
 
         results = await app.fetch_many(urls)
         for url, result in zip(urls, results):
-            logger.info(f"{url}: {result}")
+            logger.info("fetch_result", extra={"url": url, "ok": result is not None})
 
         # Keep running until shutdown signal
         # await stop_event.wait()

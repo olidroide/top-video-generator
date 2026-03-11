@@ -2,9 +2,24 @@
 
 Patterns for bridging synchronous and asynchronous Python code.
 
+> **Project note:** For I/O-bound blocking calls, prefer `await asyncio.to_thread(func, *args)`
+> (Python 3.9+) over `loop.run_in_executor`. It is simpler and avoids the need to obtain the
+> running loop manually. `run_in_executor` remains the correct choice when you need a custom
+> `ThreadPoolExecutor` or `ProcessPoolExecutor` (e.g. CPU-bound work with `ProcessPoolExecutor`).
+
 ## Running Sync Code from Async
 
-### run_in_executor
+### asyncio.to_thread (preferred for I/O-bound)
+
+```python
+import asyncio
+
+async def run_blocking_io(path: str) -> str:
+    """Offload blocking I/O — does not freeze the event loop."""
+    return await asyncio.to_thread(open(path).read)
+```
+
+### run_in_executor (required for custom executor or CPU-bound)
 
 ```python
 import asyncio

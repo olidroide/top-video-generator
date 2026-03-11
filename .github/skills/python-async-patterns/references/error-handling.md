@@ -63,7 +63,7 @@ async def fetch_with_retry(url: str) -> str:
     return await retry_with_backoff(
         lambda: fetch(url),
         max_retries=3,
-        retryable_exceptions=(aiohttp.ClientError, asyncio.TimeoutError)
+        retryable_exceptions=(aiohttp.ClientError, TimeoutError)  # built-in, Python 3.11+
     )
 ```
 
