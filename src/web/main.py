@@ -20,7 +20,7 @@ from src.script_generate_vertical_publish_top_video import main as script_daily
 from src.settings import get_app_settings
 from src.spotify_client import SpotifyClient
 from src.tiktok_client import TikTokClient
-from src.yt_client import get_yt_client
+from src.infrastructure.youtube.client import get_yt_client
 
 logger = get_logger(__name__)
 

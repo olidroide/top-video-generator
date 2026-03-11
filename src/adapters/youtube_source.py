@@ -2,7 +2,7 @@ from typing import Any
 
 from src.domain.models import CanonicalVideo
 from src.domain.ports import VideoDataSource
-from src.yt_client import YTClient
+from src.infrastructure.youtube.client import YTClient
 
 
 class YouTubeSource:

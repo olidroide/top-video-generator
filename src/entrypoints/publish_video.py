@@ -10,7 +10,7 @@ from src.settings import get_app_settings
 from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
 from src.worker_factory import WorkerFactory
-from src.yt_client import get_yt_client
+from src.infrastructure.youtube.client import get_yt_client
 
 logger = get_logger(__name__)
 
