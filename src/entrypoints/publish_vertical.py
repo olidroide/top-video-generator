@@ -4,14 +4,14 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
 from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
+from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
-from src.video_downloader import VideoDownloader
 from src.video_processing import VideoProcessing
-from src.worker_factory import WorkerFactory
 
 logger = get_logger(__name__)
 

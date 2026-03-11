@@ -1,3 +1,5 @@
+# pyright: reportMissingTypeStubs=false
+
 """VideoCompositor — Video compositing and rendering (horizontal + vertical formats).
 
 C1.4 extraction: Composes individual video clips with overlays, joins multiple clips
@@ -8,6 +10,7 @@ import asyncio
 import datetime
 import pathlib
 import tempfile
+from typing import Any
 
 from moviepy.audio.fx.audio_fadeout import audio_fadeout
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
@@ -69,7 +72,8 @@ class VideoCompositor:
             filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
             target_resolution=(y_height, x_width),
         )
-        clip_duration = clip.duration or 0.0
+        raw_duration: Any = getattr(clip, "duration", 0.0)
+        clip_duration = float(raw_duration or 0.0)
         if clip_duration < 50:
             clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
         else:
@@ -98,10 +102,11 @@ class VideoCompositor:
             filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
         )
         clip = clip.set_position("top")
-        if clip.duration < 50:
+        clip_duration = float(clip.duration or 0.0)
+        if clip_duration < 50:
             clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
         else:
-            start = int(clip.duration / 2)
+            start = int(clip_duration / 2)
             clip = clip.subclip(t_start=start, t_end=start + seconds_per_clip)
 
         clips = list(await self._renderer.overlay_with_vertical_video_template(video_file_clip=clip))
@@ -127,14 +132,16 @@ class VideoCompositor:
         """
         cross_fade_duration = 1
         if not vertical:
+            start_clip: Any = VideoFileClip(self._start_screen_file)
             composite_clips = [
-                VideoFileClip(self._start_screen_file).fx(audio_fadeout, cross_fade_duration),
+                start_clip.fx(audio_fadeout, cross_fade_duration),
             ]
         else:
             video_id = video_id_list.pop(0)
             file_path = f"{self._video_generated_folder}/{video_id}{'_vertical' if vertical else ''}_format.mp4"
+            first_vertical_clip: Any = VideoFileClip(file_path)
             composite_clips = [
-                VideoFileClip(file_path).fx(audio_fadeout, cross_fade_duration),
+                first_vertical_clip.fx(audio_fadeout, cross_fade_duration),
             ]
 
         for index, video_id in enumerate(video_id_list):

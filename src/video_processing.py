@@ -1,3 +1,5 @@
+# pyright: reportMissingTypeStubs=false
+
 import asyncio
 import pathlib
 import tempfile
@@ -14,8 +16,8 @@ from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
+from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
-from src.video_downloader import VideoDownloader
 
 logger = get_logger(__name__)
 

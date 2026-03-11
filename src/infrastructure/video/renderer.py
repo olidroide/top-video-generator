@@ -1,3 +1,5 @@
+# pyright: reportMissingTypeStubs=false
+
 """Video Renderer - text overlays, templates, and clip composition.
 
 Part of C1 split (video_processing.py -> infrastructure/video/).
@@ -89,9 +91,10 @@ class VideoRenderer:
             VideoScoreStatus.EQUAL: "black",
         }
 
-        score_growth_status_value = map_score_growth.get(video.score_status, "~")
-        score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
-        view_growth_color = map_view_growth_color.get(video.score_status, "black")
+        score_status = video.score_status or VideoScoreStatus.NEW
+        score_growth_status_value = map_score_growth[score_status]
+        score_growth_status_color = map_score_growth_color[score_status]
+        view_growth_color = map_view_growth_color[score_status]
         channel_name = video.channel.name if video.channel else "Unknown channel"
 
         max_length = 42
@@ -258,9 +261,10 @@ class VideoRenderer:
             VideoScoreStatus.EQUAL: "black",
         }
 
-        score_growth_status_value = map_score_growth.get(video.score_status, "~")
-        score_growth_status_color = map_score_growth_color.get(video.score_status, "white")
-        view_growth_color = map_view_growth_color.get(video.score_status, "black")
+        score_status = video.score_status or VideoScoreStatus.NEW
+        score_growth_status_value = map_score_growth[score_status]
+        score_growth_status_color = map_score_growth_color[score_status]
+        view_growth_color = map_view_growth_color[score_status]
         channel_name = video.channel.name if video.channel else "Unknown channel"
 
         max_length = 38
