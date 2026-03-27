@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-import structlog
-
 from src.domain.models import CanonicalVideo, PublishingResult
 from src.domain.ports import VideoPublisher
+from src.shared.logging import get_logger
 
-logger = structlog.get_logger()
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

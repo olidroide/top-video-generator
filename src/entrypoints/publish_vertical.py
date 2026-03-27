@@ -4,11 +4,15 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
+from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange
+from src.domain.utils import extract_video_hashtags
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
+from src.infrastructure.storage.release_repository import ReleaseRepository
+from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
 from src.video_processing import VideoProcessing
@@ -16,7 +20,7 @@ from src.video_processing import VideoProcessing
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | None = None) -> str:
+async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -25,7 +29,7 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | N
     return format_yt_title
 
 
-async def generate_yt_description(video_list: list[Video]) -> str:
+async def generate_yt_description(video_list) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d / %m / %Y")
     # Solo nombres válidos
     channels_names = list(
@@ -79,21 +83,32 @@ Disclaimer
 
 async def main_async():
     day = date.today()
-    db = DatabaseClient()
+    settings = get_app_settings()
+    db_data_file = settings.db_data_file
+    db_timeseries_file = settings.db_timeseries_file
+
+    if not settings.is_production_env:
+        db_data_file += ".test"
+        db_timeseries_file += ".test"
+
+    # Initialize repositories
+    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    release_repo = ReleaseRepository(db_data_file)
+
     # Idempotency guard
     already_published = all(
-        db.is_release_at_date(release_platform=platform, release_date=day)
-        for platform in (
-            ReleasePlatform.YT,
-            ReleasePlatform.INSTAGRAM,
-            ReleasePlatform.TIKTOK,
-        )
+        release_repo.is_release_at_date(platform=platform.value, day=day)
+        for platform in ReleasePlatform
     )
     if already_published:
         logger.info("vertical video already published today on all platforms, exiting early")
         return
 
-    video_list = db.get_top_25_videos(timeseries_range=TimeseriesRange.DAILY, day=day)
+    # Fetch top videos for today
+    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
+    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.DAILY, day=day)
+    result = await fetch_videos_use_case.execute(request)
+    video_list = list(result.videos)
 
     try:
         yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list if video.title]
@@ -116,16 +131,14 @@ async def main_async():
         vertical=True,
     )
 
-    hashtag_list = video_list_mapper_hashtags(video_list)
+    hashtag_list = extract_video_hashtags(video_list)
     yt_title = await generate_yt_title(video_list, hashtag_list=hashtag_list)
     logger.debug("generated title: ", yt_title=yt_title)
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
 
     # Hexagonal: convertir Video → CanonicalVideo para adapters
-    from src.domain.models import CanonicalVideo
-
-    def video_to_canonical(v: Video) -> CanonicalVideo:
+    def video_to_canonical(v) -> CanonicalVideo:
         return CanonicalVideo(
             video_id=v.video_id,
             title=v.title or "",
@@ -157,7 +170,7 @@ async def main_async():
         for publisher, task in tasks:
             result = await task
             results.append(result)
-            db.add_or_update_release(
+            release_repo.add_or_update_release(
                 Release(
                     platform=publisher.platform_name.name,
                     client_id=get_app_settings().instagram_client_username

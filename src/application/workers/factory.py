@@ -11,7 +11,7 @@ import zmq
 from zmq import Context
 
 from src.config.settings import get_app_settings
-from src.db_client import Video
+from src.domain.models import Video
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)

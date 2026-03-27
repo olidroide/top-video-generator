@@ -26,7 +26,7 @@ from moviepy.video.fx.resize import resize
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.VideoClip import ColorClip, ImageClip, TextClip
 
-from src.db_client import Video, VideoScoreStatus
+from src.domain.models import Video, VideoScoreStatus
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:

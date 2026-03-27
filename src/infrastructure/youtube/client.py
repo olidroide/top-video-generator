@@ -1,11 +1,11 @@
 # ruff: noqa: E501
-
+from pathlib import Path
 from typing import TypeVar
 
 from googleapiclient.errors import HttpError
 
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient
+from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.youtube.api_client import YouTubeApiClient
 from src.infrastructure.youtube.auth_manager import MemoryCache, YouTubeAuthManager
 from src.infrastructure.youtube.schemas import (
@@ -57,7 +57,8 @@ class YTClient:
         )
 
     def get_authenticated_service(self):
-        yt_auth = DatabaseClient().get_yt_auth(self._yt_auth_user_id)
+        auth_repo = AuthenticationRepository(Path(get_app_settings().db_data_file))
+        yt_auth = auth_repo.get_yt_auth(self._yt_auth_user_id)
         if yt_auth is None:
             raise ValueError("Missing YouTube auth credentials")
         if not self._authenticated_service:

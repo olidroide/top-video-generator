@@ -3,12 +3,14 @@ import random
 import string
 from base64 import urlsafe_b64encode
 from contextlib import asynccontextmanager
+from pathlib import Path
 from urllib.parse import urlencode
 
 import aiohttp
 
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient, SpotifyAuth
+from src.domain.models import SpotifyAuth
+from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,10 +38,11 @@ class SpotifyClient:
         self._user_id: str = get_app_settings().spotify_user_id or ""
 
     async def _get_user_refresh_token(self) -> str:
-        tiktok_auth = DatabaseClient().get_spotify_auth(self._user_id)
-        if tiktok_auth is None:
+        repo = AuthenticationRepository(Path(get_app_settings().db_data_file))
+        spotify_auth = repo.get_spotify_auth(self._user_id)
+        if spotify_auth is None:
             return ""
-        return tiktok_auth.refresh_token or ""
+        return spotify_auth.refresh_token or ""
 
     async def _get_user_access_token(self) -> str:
         return await self.refresh_token()
@@ -113,7 +116,8 @@ class SpotifyClient:
             response_dict = await response.json()
 
         logger.debug("response_dict:", response_dict=response_dict)
-        spotify_auth = DatabaseClient().add_or_update_spotify_auth(
+        repo = AuthenticationRepository(Path(get_app_settings().db_data_file))
+        spotify_auth = repo.add_or_update_spotify_auth(
             spotify_auth=SpotifyAuth(
                 token=response_dict.get("access_token"),
                 # refresh_token=response_dict.get("refresh_token"),

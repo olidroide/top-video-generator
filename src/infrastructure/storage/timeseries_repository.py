@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from tinyflux import Point, TagQuery, TimeQuery, TinyFlux
 
-from src.domain.models import VideoPoint
+from src.domain.models import VideoPoint, VideoScoreStatus
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -97,6 +97,38 @@ class TimeSeriesRepository:
             return None
         # Points are ordered by time; get the latest
         return all_points[-1].time if all_points else None
+
+    def get_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[Point]:
+        """
+        Retrieve all points within a time range.
+
+        Args:
+            start_time: Start of time range (exclusive).
+            end_time: End of time range (exclusive).
+
+        Returns:
+            List of Point objects matching the time range.
+        """
+        query = (TimeQuery() > start_time) & (TimeQuery() < end_time)
+        return self._db.search(query)
+
+    def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]:
+        """Retrieve points within a time range, mapped to VideoPoint models."""
+        return [self._map_point(p) for p in self.get_points_by_date_range(start_time, end_time)]
+
+    @staticmethod
+    def _map_point(point: Point) -> VideoPoint:
+        """Convert a raw TinyFlux Point to a VideoPoint model."""
+        raw_status = point.tags.get("score_status")
+        return VideoPoint(
+            time=point.time.astimezone(UTC),
+            video_id=point.tags.get("video_id") or "",
+            views=int(point.fields.get("views", 0)),
+            likes=int(point.fields.get("likes", 0)),
+            views_growth=int(point.fields.get("views_growth", 0)) or None,
+            score=int(point.fields.get("score", 0)) or None,
+            score_status=VideoScoreStatus(raw_status) if raw_status else None,
+        )
 
     def close(self) -> None:
         """Close database connection."""

@@ -4,9 +4,13 @@ import asyncio
 import datetime
 from datetime import date
 
+from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient, Release, ReleasePlatform, TimeseriesRange, Video, video_list_mapper_hashtags
+from src.domain.models import Release, ReleasePlatform, TimeseriesRange
+from src.domain.utils import extract_video_hashtags
+from src.infrastructure.storage.release_repository import ReleaseRepository
+from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.youtube import get_yt_client
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
@@ -15,7 +19,7 @@ from src.video_processing import VideoProcessing
 logger = get_logger(__name__)
 
 
-async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | None = None) -> str:
+async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -24,7 +28,7 @@ async def generate_yt_title(video_list: list[Video], hashtag_list: list[str] | N
     return format_yt_title
 
 
-async def generate_yt_description(video_list: list[Video]) -> str:
+async def generate_yt_description(video_list) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
     original_publishers = ",".join(channels_names)
@@ -66,8 +70,25 @@ Disclaimer
 
 
 async def main_async():
-    video_list = DatabaseClient().get_top_25_videos(timeseries_range=TimeseriesRange.WEEKLY, day=date.today())
+    settings = get_app_settings()
+    db_data_file = settings.db_data_file
+    db_timeseries_file = settings.db_timeseries_file
+
+    if not settings.is_production_env:
+        db_data_file += ".test"
+        db_timeseries_file += ".test"
+
+    # Initialize repositories and use case
+    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    release_repo = ReleaseRepository(db_data_file)
+    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
+
+    # Fetch top videos for the week
+    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=date.today())
+    result = await fetch_videos_use_case.execute(request)
+    video_list = list(result.videos)
     video_list.sort(key=lambda x: x.score, reverse=True)
+
     logger.debug("start")
     await VideoDownloader().download_video(video_list)
 
@@ -84,7 +105,7 @@ async def main_async():
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
     thumbnail_path = await video_processor.generate_thumbnail(video_list[-4:])
-    hashtag_list = video_list_mapper_hashtags(video_list)
+    hashtag_list = extract_video_hashtags(video_list)
     try:
         playlist_id = get_app_settings().yt_playlist_id_daily
 
@@ -101,9 +122,9 @@ async def main_async():
         yt_video_id = None
 
     try:
-        DatabaseClient().add_or_update_release(
-            release=Release(
-                platform=ReleasePlatform.YT,
+        release_repo.add_or_update_release(
+            Release(
+                platform=ReleasePlatform.YOUTUBE.value,
                 client_id=get_app_settings().yt_auth_user_id,
                 release_id=yt_video_id,
                 published_at=datetime.datetime.now(datetime.UTC).timestamp(),

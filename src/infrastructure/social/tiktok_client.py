@@ -11,7 +11,8 @@ import aiohttp
 from pydantic import BaseModel
 
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient, TikTokAuth
+from src.domain.models import TikTokAuth
+from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -78,13 +79,15 @@ class TikTokClient:
         self._tiktok_user_openid: str = get_app_settings().tiktok_user_openid or ""
 
     async def _get_user_refresh_token(self, user_openid: str) -> str:
-        tiktok_auth = DatabaseClient().get_tiktok_auth(user_openid)
+        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        tiktok_auth = repo.get_tiktok_auth(user_openid)
         if tiktok_auth is None:
             return ""
         return tiktok_auth.refresh_token or ""
 
     async def _get_user_token_bearer_credentials(self, user_openid: str) -> str:
-        tiktok_auth = DatabaseClient().get_tiktok_auth(user_openid)
+        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        tiktok_auth = repo.get_tiktok_auth(user_openid)
         if tiktok_auth is None:
             return ""
         return tiktok_auth.token or ""
@@ -164,7 +167,8 @@ class TikTokClient:
             response_dict = await response.json()
 
         logger.debug("response_dict:", response_dict=response_dict)
-        tiktok_auth = DatabaseClient().add_or_update_tiktok_auth(
+        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        tiktok_auth = repo.add_or_update_tiktok_auth(
             tiktok_auth=TikTokAuth(
                 token=response_dict.get("access_token"),
                 refresh_token=response_dict.get("refresh_token"),
