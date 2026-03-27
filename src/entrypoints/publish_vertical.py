@@ -5,6 +5,7 @@ import datetime
 from datetime import date
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
+from src.application.publish_video_use_case import PublishVideoRequest, PublishVideoUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange
@@ -13,11 +14,29 @@ from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
+from src.infrastructure.video.asset_manager import VideoAssetManager
+from src.infrastructure.video.compositor import VideoCompositor
+from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
-from src.video_processing import VideoProcessing
 
 logger = get_logger(__name__)
+
+
+def _build_video_compositor(video_downloader: VideoDownloader) -> VideoCompositor:
+    settings = get_app_settings()
+    asset_manager = VideoAssetManager(
+        end_screen_file=settings.video_template_end_screen_file or "",
+        start_screen_file=settings.video_template_start_screen_file or "",
+        template_file=settings.video_template_file or "",
+        template_vertical_file=settings.video_template_vertical_file or "",
+        thumbnail_file=settings.video_template_thumbnail_file or "",
+        thumbnail_font_file=settings.video_template_thumbnail_font_file or "",
+        video_yt_resources_folder=video_downloader.video_yt_resources_folder,
+        video_generated_base_folder=settings.video_generated_folder,
+    )
+    renderer = VideoRenderer(asset_manager)
+    return VideoCompositor(asset_manager, renderer)
 
 
 async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
@@ -97,8 +116,7 @@ async def main_async():
 
     # Idempotency guard
     already_published = all(
-        release_repo.is_release_at_date(platform=platform.value, day=day)
-        for platform in ReleasePlatform
+        release_repo.is_release_at_date(platform=platform.value, day=day) for platform in ReleasePlatform
     )
     if already_published:
         logger.info("vertical video already published today on all platforms, exiting early")
@@ -122,11 +140,12 @@ async def main_async():
     video_list = video_list[:5]
     # sort: score None al final
     video_list.sort(key=lambda x: (x.score is None, x.score if x.score is not None else 0), reverse=True)
-    await VideoDownloader().download_video(video_list)
+    downloader = VideoDownloader()
+    await downloader.download_video(video_list)
     WorkerFactory().start_vertical_workers(video_list)
 
-    video_processor = VideoProcessing()
-    file_path = await video_processor.join_processed_videos(
+    compositor = _build_video_compositor(downloader)
+    file_path = await compositor.join_processed_videos(
         video_id_list=[video.video_id for video in video_list],
         vertical=True,
     )
@@ -154,21 +173,27 @@ async def main_async():
 
     publishers = build_publishers()
     results = []
+
+    async def _publish_one(publisher):
+        description = yt_description if publisher.platform_name.name == "YOUTUBE" else yt_title
+        use_case = PublishVideoUseCase([publisher])
+        return await use_case.execute(
+            PublishVideoRequest(
+                video_list=tuple(canonical_video_list),
+                file_path=file_path,
+                title=yt_title,
+                description=description,
+            )
+        )
+
     async with asyncio.TaskGroup() as tg:
         tasks = []
         for publisher in publishers:
-            desc = yt_description if publisher.platform_name.name == "YOUTUBE" else yt_title
-            task = tg.create_task(
-                publisher.publish_video(
-                    video_list=canonical_video_list,
-                    file_path=file_path,
-                    title=yt_title,
-                    description=desc,
-                )
-            )
+            task = tg.create_task(_publish_one(publisher))
             tasks.append((publisher, task))
         for publisher, task in tasks:
-            result = await task
+            use_case_result = await task
+            result = use_case_result.results[0]
             results.append(result)
             release_repo.add_or_update_release(
                 Release(
@@ -186,8 +211,6 @@ async def main_async():
                     else datetime.datetime.now(datetime.UTC).timestamp(),
                 )
             )
-
-    # await video_processor.delete_processed_videos()
 
     # Nota: la actualización de playlist de YouTube original debe hacerse aparte si es necesario
 

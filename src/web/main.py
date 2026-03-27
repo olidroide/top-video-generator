@@ -1,6 +1,6 @@
 import shutil
 import subprocess
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -15,14 +15,24 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse, Response
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
+from src.application.authorize_use_case import (
+    AuthorizeSpotifyRequest,
+    AuthorizeTikTokRequest,
+    AuthorizeUseCase,
+    AuthorizeYtRequest,
+)
+from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.config.settings import get_app_settings
-from src.db_client import DatabaseClient, ReleasePlatform, SpotifyAuth, TikTokAuth, TimeseriesRange, YtAuth
+from src.domain.models import ReleasePlatform, TimeseriesRange
+from src.entrypoints.fetch_data import main_async as script_fetch_yt_data
+from src.entrypoints.publish_vertical import main_async as script_daily
+from src.entrypoints.publish_video import main_async as script_weekly
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.social.tiktok_client import TikTokClient
+from src.infrastructure.storage.auth_repository import AuthenticationRepository
+from src.infrastructure.storage.release_repository import ReleaseRepository
+from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.youtube import get_yt_client
-from src.script_fetch_yt_data import main as script_fetch_yt_data
-from src.script_generate_publish_top_video import main as script_weekly
-from src.script_generate_vertical_publish_top_video import main as script_daily
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -46,15 +56,25 @@ async def request_had_any_credentials(request: Request) -> bool:
     )
 
 
+def get_auth_repo() -> AuthenticationRepository:
+    return AuthenticationRepository(Path(get_app_settings().db_data_file))
+
+def get_release_repo() -> ReleaseRepository:
+    return ReleaseRepository(get_app_settings().db_data_file)
+
+def get_timeseries_repo() -> TimeSeriesRepository:
+    return TimeSeriesRepository(get_app_settings().db_timeseries_file)
+
 async def already_finish_setup() -> bool:
-    db_client = DatabaseClient()
-    if not db_client.get_yt_auth(settings.yt_auth_user_id or ""):
+    auth_repo = get_auth_repo()
+    settings = get_app_settings()
+    if not auth_repo.get_yt_auth(settings.yt_auth_user_id or ""):
         return False
 
-    if not db_client.get_tiktok_auth(settings.tiktok_user_openid or ""):
+    if not auth_repo.get_tiktok_auth(settings.tiktok_user_openid or ""):
         return False
 
-    if not db_client.get_spotify_auth(settings.spotify_user_id or ""):
+    if not auth_repo.get_spotify_auth(settings.spotify_user_id or ""):
         return False
 
     return True
@@ -113,24 +133,8 @@ async def yt_auth(
         logger.warning("Not CODE received in callback YT Auth", request=request.url)
         return RedirectResponse("/")
 
-    yt_client: Any = get_yt_client()
-    oauth_credentials: dict[str, Any] = cast(
-        dict[str, Any],
-        yt_client.step_2_exchange_code_authentication(
-            url_requested=str(request.url),
-        ),
-    )
-
-    yt_auth_response = DatabaseClient().add_or_update_yt_auth(
-        YtAuth(
-            token=oauth_credentials.get("token"),
-            refresh_token=oauth_credentials.get("refresh_token"),
-            token_uri=oauth_credentials.get("token_uri"),
-            client_id=oauth_credentials.get("client_id"),
-            client_secret=oauth_credentials.get("client_secret"),
-            scopes=oauth_credentials.get("scopes"),
-        )
-    )
+    use_case = AuthorizeUseCase(get_auth_repo())
+    yt_auth_response = await use_case.execute_yt(AuthorizeYtRequest(code=code, url_requested=str(request.url)))
     request.session["yt_credentials"] = yt_auth_response.client_id
 
     return RedirectResponse("/")
@@ -153,21 +157,8 @@ async def tiktok_auth(
         logger.warning("Not CODE received in callback TikTok Auth", request=request.url)
         return RedirectResponse("/")
 
-    oauth_credentials: dict[str, Any] = cast(
-        dict[str, Any],
-        await TikTokClient().step_2_exchange_code_authentication(
-            user_code=code,
-        ),
-    )
-
-    tiktok_auth_response = DatabaseClient().add_or_update_tiktok_auth(
-        TikTokAuth(
-            token=oauth_credentials.get("access_token"),
-            refresh_token=oauth_credentials.get("refresh_token"),
-            client_id=oauth_credentials.get("open_id"),
-            scopes=str(oauth_credentials.get("scope") or "").split(","),
-        )
-    )
+    use_case = AuthorizeUseCase(get_auth_repo())
+    tiktok_auth_response = await use_case.execute_tiktok(AuthorizeTikTokRequest(code=code))
     request.session["tiktok_credentials"] = tiktok_auth_response.client_id
 
     return RedirectResponse("/")
@@ -190,22 +181,8 @@ async def spotify_auth(
         logger.warning("Not CODE received in callback Spotify Auth", request=request.url)
         return RedirectResponse("/")
 
-    spotify_client: Any = SpotifyClient()
-    oauth_credentials: dict[str, Any] = cast(
-        dict[str, Any],
-        await spotify_client.step_2_exchange_code_authentication(
-            user_code=code,
-        ),
-    )
-
-    spotify_auth_response = DatabaseClient().add_or_update_spotify_auth(
-        SpotifyAuth(
-            token=oauth_credentials.get("access_token"),
-            refresh_token=oauth_credentials.get("refresh_token"),
-            client_id=oauth_credentials.get("client_id"),
-            scopes=str(oauth_credentials.get("scope") or "").split(" "),
-        )
-    )
+    use_case = AuthorizeUseCase(get_auth_repo())
+    spotify_auth_response = await use_case.execute_spotify(AuthorizeSpotifyRequest(code=code))
     request.session["spotify_credentials"] = spotify_auth_response.client_id
 
     return RedirectResponse("/")
@@ -230,12 +207,21 @@ async def index(
     daily_date = date.today() if not daily else daily.value
     weekly_date = weekly.value if weekly else None
     try:
-        db_client = DatabaseClient()
-        video_list = db_client.get_top_25_videos(
-            timeseries_range=timeseries_range, day=weekly_date if weekly_date else daily_date
+        use_case = FetchTopVideosUseCase(get_timeseries_repo())
+        result = await use_case.execute(FetchTopVideosRequest(
+            timeseries_range=timeseries_range, 
+            day=weekly_date if weekly_date else daily_date,
+            limit=25
+        ))
+        video_list = list(result.videos)
+        
+        release_repo = get_release_repo()
+        yt_video_published = release_repo.is_release_at_date(
+            platform=ReleasePlatform.YOUTUBE.value, 
+            release_date=daily_date
         )
-        yt_video_published = db_client.is_release_at_date(release_platform=ReleasePlatform.YT, release_date=daily_date)
-    except Exception:
+    except Exception as exc:
+        logger.error(f"Error loading videos: {exc}")
         video_list = []
         yt_video_published = False
 
@@ -271,9 +257,11 @@ async def setup_page(
         "request": request,
     }
 
+    auth_repo = get_auth_repo()
+    
     if yt_credentials := request.session.get("yt_credentials"):
         yt_client_id = yt_credentials
-        yt_credentials_db = DatabaseClient().get_yt_auth(yt_client_id)
+        yt_credentials_db = auth_repo.get_yt_auth(yt_client_id)
         if yt_credentials_db:
             data_context["yt_credentials"] = yt_credentials_db.model_dump()
     else:
@@ -281,7 +269,7 @@ async def setup_page(
 
     if tiktok_credential := request.session.get("tiktok_credentials"):
         tiktok_client_id = tiktok_credential
-        tiktok_credentials_db = DatabaseClient().get_tiktok_auth(tiktok_client_id)
+        tiktok_credentials_db = auth_repo.get_tiktok_auth(tiktok_client_id)
         if tiktok_credentials_db:
             data_context["tiktok_credentials"] = tiktok_credentials_db.model_dump()
     else:
@@ -289,7 +277,7 @@ async def setup_page(
 
     if spotify_credential := request.session.get("spotify_credentials"):
         spotify_client_id = spotify_credential
-        spotify_credentials_db = DatabaseClient().get_spotify_auth(spotify_client_id)
+        spotify_credentials_db = auth_repo.get_spotify_auth(spotify_client_id)
         if spotify_credentials_db:
             data_context["spotify_credentials"] = spotify_credentials_db.model_dump()
     else:
@@ -370,9 +358,9 @@ def _check_templates() -> dict[str, str]:
 def _check_database() -> dict[str, str]:
     """Check database connectivity."""
     try:
-        db = DatabaseClient()
+        timeseries_repo = get_timeseries_repo()
         # Try to get some data to verify connection
-        _ = db.get_top_25_videos(TimeseriesRange.DAILY, date.today())
+        _ = timeseries_repo.get_points_by_date_range(datetime.now(UTC) - timedelta(days=1), datetime.now(UTC))
         return {"status": "ok", "message": "Database accessible"}
     except Exception as e:
         return {"status": "error", "message": f"Database error: {e}"}

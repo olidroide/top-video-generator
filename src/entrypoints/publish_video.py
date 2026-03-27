@@ -11,12 +11,31 @@ from src.domain.models import Release, ReleasePlatform, TimeseriesRange
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
+from src.infrastructure.video.asset_manager import VideoAssetManager
+from src.infrastructure.video.compositor import VideoCompositor
+from src.infrastructure.video.renderer import VideoRenderer
+from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
 from src.infrastructure.youtube import get_yt_client
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger
-from src.video_processing import VideoProcessing
 
 logger = get_logger(__name__)
+
+
+def _build_video_pipeline(video_downloader: VideoDownloader) -> tuple[VideoCompositor, ThumbnailGenerator]:
+    settings = get_app_settings()
+    asset_manager = VideoAssetManager(
+        end_screen_file=settings.video_template_end_screen_file or "",
+        start_screen_file=settings.video_template_start_screen_file or "",
+        template_file=settings.video_template_file or "",
+        template_vertical_file=settings.video_template_vertical_file or "",
+        thumbnail_file=settings.video_template_thumbnail_file or "",
+        thumbnail_font_file=settings.video_template_thumbnail_font_file or "",
+        video_yt_resources_folder=video_downloader.video_yt_resources_folder,
+        video_generated_base_folder=settings.video_generated_folder,
+    )
+    renderer = VideoRenderer(asset_manager)
+    return VideoCompositor(asset_manager, renderer), ThumbnailGenerator(asset_manager)
 
 
 async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
@@ -90,21 +109,21 @@ async def main_async():
     video_list.sort(key=lambda x: x.score, reverse=True)
 
     logger.debug("start")
-    await VideoDownloader().download_video(video_list)
+    downloader = VideoDownloader()
+    await downloader.download_video(video_list)
 
     # with 0mq
     WorkerFactory().start_workers(video_list)
-    # await VideoProcessing().post_process_video(video_list[0])
 
-    video_processor = VideoProcessing()
-    file_path = await video_processor.join_processed_videos([video.video_id for video in video_list])
+    compositor, thumbnail_generator = _build_video_pipeline(downloader)
+    file_path = await compositor.join_processed_videos([video.video_id for video in video_list])
 
     # file_path = "../videos/20230630_format.mp4"
     yt_title = await generate_yt_title(video_list)
     logger.debug("generated title: ", yt_title=yt_title)
     yt_description = await generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
-    thumbnail_path = await video_processor.generate_thumbnail(video_list[-4:])
+    thumbnail_path = await thumbnail_generator.generate_thumbnail(video_list[-4:])
     hashtag_list = extract_video_hashtags(video_list)
     try:
         playlist_id = get_app_settings().yt_playlist_id_daily
@@ -133,7 +152,7 @@ async def main_async():
     except Exception as e:
         logger.error("Failed to save Youtube Release", error=e)
 
-    # await video_processor.delete_processed_videos()
+    # await _build_video_pipeline(downloader)[0]._asset_manager.delete_processed_videos()
 
 
 def main():
