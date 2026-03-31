@@ -13,6 +13,7 @@ from src.domain.models import Release, ReleaseKind, ReleasePlatform, TimeseriesR
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
+from src.infrastructure.storage.video_repository import VideoRepository
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
@@ -104,6 +105,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
 
     # Initialize repositories and use case
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    video_repo = VideoRepository(Path(db_data_file))
     release_repo = ReleaseRepository(db_data_file)
     if release_repo.is_release_at_date(
         platform=ReleasePlatform.YOUTUBE.value,
@@ -112,7 +114,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
     ):
         logger.info("publish_video.already_completed", day=str(day))
         return
-    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
+    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
 
     # Fetch top videos for the week
     request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=day)

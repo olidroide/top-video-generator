@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from src.domain.models import TimeseriesRange, Video, VideoPoint
+from src.domain.models import Channel, TimeseriesRange, Video, VideoPoint
 from src.domain.services.scoring_service import datetime_range_start, score_and_rank_video_points
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
     from pydantic import PastDate
 
-    from src.domain.ports import TimeSeriesPort
+    from src.domain.ports import TimeSeriesPort, VideoMetadataPort
 
 logger = get_logger(__name__)
 
@@ -53,9 +53,11 @@ class FetchTopVideosUseCase:
     def __init__(
         self,
         timeseries_repo: TimeSeriesPort,
+        video_metadata_repo: VideoMetadataPort,
     ) -> None:
         """Initialize with repository."""
         self._timeseries_repo = timeseries_repo
+        self._video_metadata_repo = video_metadata_repo
 
     async def execute(self, request: FetchTopVideosRequest) -> FetchTopVideosResult:
         """Execute ranking workflow."""
@@ -75,10 +77,33 @@ class FetchTopVideosUseCase:
         # Rank and compare
         ranked = score_and_rank_video_points(current_list, previous_list)
 
-        # Convert to Video models and limit
-        videos = tuple(Video.model_validate(vp.model_dump()) for vp in ranked[: request.limit])
+        # Hydrate ranked points with canonical metadata from the video repository.
+        hydrated_ranked = [self._hydrate_video_metadata(video_point) for video_point in ranked[: request.limit]]
+        videos = tuple(Video.model_validate(video_point.model_dump()) for video_point in hydrated_ranked)
 
         return FetchTopVideosResult(videos=videos)
+
+    def _hydrate_video_metadata(self, video_point: VideoPoint) -> VideoPoint:
+        """Enrich a timeseries point with canonical metadata when available."""
+        canonical_video = self._video_metadata_repo.get(video_point.video_id)
+        if canonical_video is None:
+            return video_point
+
+        channel_name = canonical_video.channel_name or (
+            video_point.channel.name if video_point.channel and video_point.channel.name else None
+        )
+        duration = (
+            int(canonical_video.duration_seconds) if canonical_video.duration_seconds > 0 else video_point.duration
+        )
+
+        return video_point.model_copy(
+            update={
+                "title": canonical_video.title or video_point.title,
+                "description": canonical_video.description or video_point.description,
+                "channel": Channel(name=channel_name) if channel_name else video_point.channel,
+                "duration": duration,
+            }
+        )
 
     def _get_defined_range_timeseries_videos(
         self,

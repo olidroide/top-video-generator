@@ -1,13 +1,35 @@
-import isodate
+import re
+from typing import Final
 
 from src.domain.models import CanonicalVideo
 from src.infrastructure.youtube import YTClient
 from src.infrastructure.youtube.schemas import YTVideo
 
+_YT_DURATION_REGEX: Final[re.Pattern[str]] = re.compile(
+    r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$"
+)
+
+
+def _parse_yt_duration_seconds(duration: str) -> float:
+    """Parse YouTube ISO-8601 duration (e.g. PT4M15S) to seconds."""
+    if not duration:
+        return 0.0
+
+    if not (match := _YT_DURATION_REGEX.fullmatch(duration)):
+        return 0.0
+
+    days = int(match.group("days") or 0)
+    hours = int(match.group("hours") or 0)
+    minutes = int(match.group("minutes") or 0)
+    seconds = int(match.group("seconds") or 0)
+
+    total_seconds = (days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60) + seconds
+    return float(total_seconds)
+
 
 class YouTubeSource:
-    def __init__(self) -> None:
-        self.client = YTClient()
+    def __init__(self, client: YTClient | None = None) -> None:
+        self.client = client if client is not None else YTClient()
 
     async def fetch_trending_videos(
         self,
@@ -45,10 +67,7 @@ class YouTubeSource:
 
         duration_seconds = 0.0
         if content_details and content_details.duration:
-            try:
-                duration_seconds = float(isodate.parse_duration(content_details.duration).total_seconds())
-            except (ValueError, AttributeError):
-                duration_seconds = 0.0
+            duration_seconds = _parse_yt_duration_seconds(content_details.duration)
 
         description = (snippet.description or "") if snippet else ""
 

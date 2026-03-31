@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from tinyflux import Point
 
-from src.domain.models import VideoPoint, VideoScoreStatus
+from src.domain.models import Channel, VideoPoint, VideoScoreStatus
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 
 
@@ -103,6 +103,28 @@ class TestGetVideoPointsByDateRange:
         assert vp.views == 9999
         assert vp.likes == 111
         assert vp.score == 3
+
+    def test_does_not_persist_optional_video_metadata_fields(self, repo: TimeSeriesRepository) -> None:
+        dt = datetime(2026, 3, 31, 8, 0, 0, tzinfo=UTC)
+        point = make_point(video_id="v-meta", views=9999, likes=111, views_growth=500, score=3, dt=dt)
+        point.title = "Hydrated title"
+        point.description = "Hydrated description"
+        point.channel = Channel(name="Hydrated channel")
+        point.duration = 182
+
+        repo.add_video_point(point)
+
+        start = datetime(2026, 3, 30, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC)
+        results = repo.get_video_points_by_date_range(start, end)
+
+        assert len(results) == 1
+        vp = results[0]
+        assert vp.video_id == "v-meta"
+        assert vp.title is None
+        assert vp.description is None
+        assert vp.channel is None
+        assert vp.duration is None
 
     def test_maps_nullable_numeric_fields_to_none(self) -> None:
         dt = datetime(2026, 3, 31, 10, 0, 0, tzinfo=UTC)

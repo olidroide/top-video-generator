@@ -25,7 +25,7 @@ async def test_weekly_publish_returns_early_when_already_published(monkeypatch: 
     fetch_use_case_initialized = False
 
     class _FetchTopVideosUseCaseGuard:
-        def __init__(self, _repo: object) -> None:
+        def __init__(self, _timeseries_repo: object, _video_repo: object) -> None:
             nonlocal fetch_use_case_initialized
             fetch_use_case_initialized = True
 

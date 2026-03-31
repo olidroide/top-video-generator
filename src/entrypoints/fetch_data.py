@@ -7,7 +7,7 @@ from pathlib import Path
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_trending_use_case import FetchTrendingRequest, FetchTrendingUseCase
 from src.config.settings import AppSettings, get_app_settings
-from src.domain.models import VideoPoint
+from src.domain.models import Channel, VideoPoint
 from src.domain.services.scoring_service import score_and_rank_video_points
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
@@ -86,6 +86,10 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
             video_id=video_item.video_id,
             views=video_item.views,
             likes=video_item.likes,
+            title=video_item.title or None,
+            description=video_item.description or None,
+            channel=Channel(name=video_item.channel_name) if video_item.channel_name else None,
+            duration=int(video_item.duration_seconds) if video_item.duration_seconds > 0 else None,
         )
         current_timeseries_videos_fetched.append(last_video_point)
 

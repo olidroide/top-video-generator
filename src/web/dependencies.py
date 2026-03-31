@@ -13,6 +13,7 @@ from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
+from src.infrastructure.storage.video_repository import VideoRepository
 from src.infrastructure.youtube import YTClient, get_yt_client
 
 
@@ -40,6 +41,10 @@ def get_timeseries_repo() -> TimeSeriesRepository:
     return TimeSeriesRepository(get_app_settings().db_timeseries_file)
 
 
+def get_video_repo() -> VideoRepository:
+    return VideoRepository(Path(get_app_settings().db_data_file))
+
+
 def get_authorize_use_case(
     auth_repo: Annotated[AuthenticationRepository, Depends(get_auth_repo)],
     yt_provider: Annotated[YTClient, Depends(get_yt_provider)],
@@ -56,8 +61,9 @@ def get_authorize_use_case(
 
 def get_fetch_top_videos_use_case(
     timeseries_repo: Annotated[TimeSeriesRepository, Depends(get_timeseries_repo)],
+    video_repo: Annotated[VideoRepository, Depends(get_video_repo)],
 ) -> FetchTopVideosUseCase:
-    return FetchTopVideosUseCase(timeseries_repo)
+    return FetchTopVideosUseCase(timeseries_repo, video_repo)
 
 
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]
@@ -68,3 +74,4 @@ SpotifyProviderDep = Annotated[SpotifyClient, Depends(get_spotify_provider)]
 TikTokProviderDep = Annotated[TikTokClient, Depends(get_tiktok_provider)]
 YouTubeProviderDep = Annotated[YTClient, Depends(get_yt_provider)]
 TimeSeriesRepositoryDep = Annotated[TimeSeriesRepository, Depends(get_timeseries_repo)]
+VideoRepositoryDep = Annotated[VideoRepository, Depends(get_video_repo)]

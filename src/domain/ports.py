@@ -33,6 +33,10 @@ class TimeSeriesPort(Protocol):
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]: ...
 
 
+class VideoMetadataPort(Protocol):
+    def get(self, video_id: str) -> CanonicalVideo | None: ...
+
+
 @runtime_checkable
 class YouTubeOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for YouTube (sync flow)."""

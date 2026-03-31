@@ -25,6 +25,7 @@ from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
+from src.infrastructure.storage.video_repository import VideoRepository
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
@@ -175,8 +176,12 @@ def _persist_publisher_release(
     )
 
 
-async def _load_daily_videos(timeseries_repo: TimeSeriesRepository, day: datetime.date) -> list[Video]:
-    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
+async def _load_daily_videos(
+    timeseries_repo: TimeSeriesRepository,
+    video_repo: VideoRepository,
+    day: datetime.date,
+) -> list[Video]:
+    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
     request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.DAILY, day=day)
     result = await fetch_videos_use_case.execute(request)
     return list(result.videos)
@@ -277,6 +282,7 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
 
     # Initialize repositories
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    video_repo = VideoRepository(Path(db_data_file))
     release_repo = ReleaseRepository(db_data_file)
     publishers = build_publishers()
     pending_publishers = _pending_publishers(release_repo, publishers, day)
@@ -286,7 +292,7 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
         logger.info("publish_vertical.already_completed", day=str(day))
         return
 
-    video_list = await _load_daily_videos(timeseries_repo, day)
+    video_list = await _load_daily_videos(timeseries_repo, video_repo, day)
     await _maybe_update_spotify_original_playlist(settings, release_repo, spotify_release_pending, video_list)
 
     if not pending_publishers:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -56,10 +56,8 @@ class TestYouTubeSourceFetchTrending:
         mock_client = MagicMock()
         mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([make_yt_video("v1")]))
 
-        with patch("src.adapters.youtube_source.YTClient", return_value=mock_client):
-            source = YouTubeSource()
-            source.client = mock_client
-            results = await source.fetch_trending_videos()
+        source = YouTubeSource(client=mock_client)
+        results = await source.fetch_trending_videos()
 
         assert len(results) == 1
         assert results[0].video_id == "v1"
@@ -70,8 +68,7 @@ class TestYouTubeSourceFetchTrending:
         mock_client = MagicMock()
         mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([video]))
 
-        source = YouTubeSource()
-        source.client = mock_client
+        source = YouTubeSource(client=mock_client)
         results = await source.fetch_trending_videos()
 
         assert results[0].views == 2_000_000
@@ -82,19 +79,37 @@ class TestYouTubeSourceFetchTrending:
         mock_client = MagicMock()
         mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([video]))
 
-        source = YouTubeSource()
-        source.client = mock_client
+        source = YouTubeSource(client=mock_client)
         results = await source.fetch_trending_videos()
 
         assert results[0].duration_seconds == pytest.approx(255.0)
+
+    async def test_maps_duration_with_days_and_hours(self) -> None:
+        video = make_yt_video("v4", duration="P1DT2H3M4S")
+        mock_client = MagicMock()
+        mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([video]))
+
+        source = YouTubeSource(client=mock_client)
+        results = await source.fetch_trending_videos()
+
+        assert results[0].duration_seconds == pytest.approx(93_784.0)
+
+    async def test_invalid_duration_falls_back_to_zero(self) -> None:
+        video = make_yt_video("v5", duration="INVALID")
+        mock_client = MagicMock()
+        mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([video]))
+
+        source = YouTubeSource(client=mock_client)
+        results = await source.fetch_trending_videos()
+
+        assert results[0].duration_seconds == 0.0
 
     async def test_handles_missing_snippet(self) -> None:
         video = YTVideo(kind="youtube#video", etag="etag", id="no_snippet")
         mock_client = MagicMock()
         mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root([video]))
 
-        source = YouTubeSource()
-        source.client = mock_client
+        source = YouTubeSource(client=mock_client)
         results = await source.fetch_trending_videos()
 
         assert results[0].title == ""
@@ -105,8 +120,7 @@ class TestYouTubeSourceFetchTrending:
         mock_client = MagicMock()
         mock_client.get_popular_videos = AsyncMock(return_value=make_yt_root(videos))
 
-        source = YouTubeSource()
-        source.client = mock_client
+        source = YouTubeSource(client=mock_client)
         results = await source.fetch_trending_videos(limit=5)
 
         assert len(results) == 5
