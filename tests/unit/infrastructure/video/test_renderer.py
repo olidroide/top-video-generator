@@ -138,6 +138,8 @@ class TestVideoRenderer:
         assert created_text_clips[0].text == "07"
         assert created_text_clips[2].text == "My Song"
         assert created_text_clips[3].text == "© Test Channel"
+        assert created_text_clips[4].text == "1.23M"
+        assert created_text_clips[5].text == "98.77k"
         assert created_text_clips[0].position == (190, 705)
         assert all(clip.duration == 8.0 for clip in created_text_clips)
         assert all(clip.start == 0 for clip in created_text_clips)
@@ -165,6 +167,8 @@ class TestVideoRenderer:
         assert created_text_clips[0].text == "07"
         assert created_text_clips[2].text == "9"
         assert created_text_clips[3].text == video.yt_video_title_cleaned[:38]
+        assert created_text_clips[5].text == "1.23M"
+        assert created_text_clips[7].text == "98.77k"
         assert created_text_clips[5].position == (83, 1400)
         assert created_text_clips[7].position == (400, 1400)
         assert all(clip.duration == 12.5 for clip in created_text_clips)

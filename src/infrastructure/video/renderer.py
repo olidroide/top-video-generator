@@ -14,11 +14,11 @@ This module handles all video rendering operations:
 Dependencies: VideoAssetManager (paths), moviepy, segno
 """
 
+import math
 import pathlib
 from typing import TYPE_CHECKING
 
 import segno
-from millify import millify
 
 from src.domain.models import Video, VideoScoreStatus
 from src.shared.logging import get_logger
@@ -42,6 +42,17 @@ if TYPE_CHECKING:
     from src.infrastructure.video.asset_manager import VideoAssetManager
 
 logger = get_logger(__name__)
+
+_MILLNAMES = ("", "k", "M", "B", "T", "P", "E", "Z", "Y")
+
+
+def _format_compact_number(value: float | None, *, precision: int = 0) -> str:
+    """Format numeric values with short suffixes used by the video overlays."""
+    amount = float(0 if value is None else value)
+    magnitude = 0 if amount == 0 else math.floor(math.log10(abs(amount)) / 3)
+    index = max(0, min(len(_MILLNAMES) - 1, magnitude))
+    scaled_amount = amount / 10 ** (3 * index)
+    return f"{scaled_amount:.{precision}f}{_MILLNAMES[index]}"
 
 
 class VideoRenderer:
@@ -122,8 +133,8 @@ class VideoRenderer:
             .strip()
         )[:max_length]
 
-        views = millify(video.views, precision=2, drop_nulls=False)
-        views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
+        views = _format_compact_number(video.views, precision=2)
+        views_growth = _format_compact_number(video.views_growth, precision=2)
 
         # Generate QR code if not exists
         qr_path = pathlib.Path(f"{self._asset_manager.video_yt_resources_folder}/{video.video_id}_qr.png")
@@ -308,8 +319,8 @@ class VideoRenderer:
         max_length = 38
         title = video.yt_video_title_cleaned[:max_length]
 
-        views = millify(video.views, precision=2, drop_nulls=False)
-        views_growth = millify(video.views_growth, precision=2, drop_nulls=False)
+        views = _format_compact_number(video.views, precision=2)
+        views_growth = _format_compact_number(video.views_growth, precision=2)
 
         # Font path resolution with fallbacks
         font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
