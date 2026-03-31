@@ -17,6 +17,8 @@ from src.web.state import logger, request_had_any_credentials, templates
 
 router = APIRouter()
 
+_ISO_ALPHA2_LENGTH = 2
+
 
 class TimeseriesDailyDateModel(BaseModel):
     value: date
@@ -25,6 +27,21 @@ class TimeseriesDailyDateModel(BaseModel):
     @classmethod
     def validate_date(cls, v: date) -> date:
         return v
+
+
+def _title_flag(region_code: str | None) -> str:
+    candidate = (region_code or "").strip()
+    if not candidate:
+        return "🌍"
+    if len(candidate) != _ISO_ALPHA2_LENGTH or not candidate.isalpha():
+        logger.warning("invalid_title_region_code", region_code=candidate)
+        return "🌍"
+
+    try:
+        return flag.flag(candidate)
+    except flag.UnknownCountryCode:
+        logger.warning("invalid_title_region_code", region_code=candidate)
+        return "🌍"
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -55,7 +72,7 @@ async def index(
         yt_video_published = False
 
     credentials_owner = await request_had_any_credentials(request)
-    title_flag = flag.flag(get_app_settings().yt_search_region_code or "")
+    title_flag = _title_flag(get_app_settings().yt_search_region_code)
     data_context: dict[str, Any] = {
         "request": request,
         "video_list": video_list,
