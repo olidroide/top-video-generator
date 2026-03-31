@@ -12,9 +12,10 @@
 
 ## Local Enforcement
 
-- Install tracked git hooks once per clone: make install-hooks
+- Install pre-commit managed hooks once per clone: make install-hooks
 - Pre-commit runs fast staged-file checks: file hygiene, secrets, ruff fix, and ruff format.
-- Pre-push runs full-repository quality checks plus the main pytest suite.
+- Ruff hooks run only at the pre-commit stage.
+- Pre-push runs through pre-commit and enforces the heavy repository gate: make quality plus the main pytest suite.
 
 ## Dependency Defaults
 

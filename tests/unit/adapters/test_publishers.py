@@ -175,3 +175,16 @@ class TestInstagramPublisher:
 
         publisher = InstagramPublisher()
         assert publisher.platform_name == Platform.INSTAGRAM
+
+    def test_is_disabled_when_optional_dependency_is_missing(self) -> None:
+        from src.adapters.instagram_publisher import InstagramPublisher
+
+        class _Settings:
+            instagram_client_username = "configured-user"
+
+        with (
+            patch("src.adapters.instagram_publisher.get_app_settings", return_value=_Settings()),
+            patch("src.adapters.instagram_publisher.is_instagrapi_available", return_value=False),
+        ):
+            publisher = InstagramPublisher()
+            assert publisher.is_enabled is False

@@ -7,16 +7,14 @@ dev-install:
 	uv sync --all-extras --dev
 
 install-hooks:
-	git config core.hooksPath .githooks
-	chmod +x .githooks/pre-commit
-	chmod +x .githooks/pre-push
+	git config --unset core.hooksPath || true
+	uv run pre-commit install --install-hooks
 
 pre-commit-run:
-	uv run pre-commit run --all-files
+	uv run pre-commit run --hook-stage pre-commit --all-files
 
 pre-push-check:
-	make quality
-	uv run pytest tests/ -x -q --ignore=tests/integration/video
+	uv run pre-commit run --hook-stage pre-push --all-files
 
 build-local-image:
 	docker buildx bake -f docker-bake.hcl top-video-generator-local

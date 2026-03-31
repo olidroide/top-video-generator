@@ -19,15 +19,24 @@ from typing import TYPE_CHECKING
 
 import segno
 from millify import millify
-from moviepy.Clip import Clip as MoviePyClip
-from moviepy.video.fx.crop import crop
-from moviepy.video.fx.mask_color import mask_color
-from moviepy.video.fx.resize import resize
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.video.VideoClip import ColorClip, ImageClip, TextClip
 
 from src.domain.models import Video, VideoScoreStatus
 from src.shared.logging import get_logger
+
+from .moviepy_compat import (
+    ColorClip,
+    MoviePyClip,
+    VideoFileClip,
+    build_image_clip,
+    build_text_clip,
+    clip_cropped,
+    clip_mask_color,
+    clip_resized,
+    clip_with_duration,
+    clip_with_position,
+    clip_with_start,
+    video_target_resolution,
+)
 
 if TYPE_CHECKING:
     from src.infrastructure.video.asset_manager import VideoAssetManager
@@ -58,7 +67,7 @@ class VideoRenderer:
         """
         self._asset_manager = asset_manager
 
-    def overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
+    def overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[MoviePyClip]:
         """Generate horizontal format text overlays (6 TextClips + 1 ImageClip).
 
         Creates text overlays for score, title, channel, views, and QR code
@@ -71,6 +80,8 @@ class VideoRenderer:
         Returns:
             List of 7 clips: 6 TextClip instances + 1 ImageClip (QR code)
         """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
         map_score_growth = {
             VideoScoreStatus.NEW: "~",
             VideoScoreStatus.UP: "5",
@@ -129,93 +140,118 @@ class VideoRenderer:
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
 
-        score_text_clip = (
-            TextClip(
-                f"{video.score:02d}",
-                font=font_droid_sans,
-                fontsize=130,
-                color="white",
-                stroke_color="white",
-                stroke_width=1,
-            )
-            .set_position((190, 705))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        score_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score:02d}",
+                        font=font_droid_sans,
+                        font_size=130,
+                        color="white",
+                        stroke_color="white",
+                        stroke_width=1,
+                    ),
+                    (190, 705),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        score_growth_status_text_clip = (
-            TextClip(
-                score_growth_status_value,
-                font=font_webdings,
-                fontsize=77,
-                color=score_growth_status_color,
-                stroke_color="white",
-                stroke_width=4,
-            )
-            .set_position((335, 730))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        score_growth_status_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        str(score_growth_status_value),
+                        font=font_webdings,
+                        font_size=77,
+                        color=score_growth_status_color,
+                        stroke_color="white",
+                        stroke_width=4,
+                    ),
+                    (335, 730),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        title_text_clip = (
-            TextClip(
-                title,
-                font=font_monocraft,
-                color="white",
-                fontsize=42,
-                kerning=-2,
-                size=(1250, 120),
-                align="West",
-                method="caption",
-            )
-            .set_position((180, 940))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        title,
+                        font=font_monocraft,
+                        color="white",
+                        font_size=42,
+                        kerning=-2,
+                        size=(1250, 120),
+                        align="West",
+                        method="caption",
+                    ),
+                    (180, 940),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        channel_text_clip = (
-            TextClip(
-                f"© {channel_name}",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-            )
-            .set_position((258, 115))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_text_clip = (
-            TextClip(
-                f"{views}",
-                font=font_monocraft,
-                fontsize=41,
-                color="black",
-                kerning=0,
-                size=(240, 80),
-                align="center",
-                method="caption",
-            )
-            .set_position((1525, 210))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_growth_text_clip = (
-            TextClip(
-                f"{views_growth}",
-                font=font_monocraft,
-                fontsize=38,
-                color=view_growth_color,
-                kerning=0,
-                size=(240, 80),
-                align="center",
-                method="caption",
-            )
-            .set_position((1525, 480))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        channel_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"© {channel_name}",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                    ),
+                    (258, 115),
+                ),
+                clip_duration,
+            ),
+            0,
         )
 
-        qr_image_clip = (
-            ImageClip(str(qr_path), ismask=False).set_position((1498, 688)).set_duration(video_file_clip.duration)
+        views_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views}",
+                        font=font_monocraft,
+                        font_size=41,
+                        color="black",
+                        kerning=0,
+                        size=(240, 80),
+                        align="center",
+                        method="caption",
+                    ),
+                    (1525, 210),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views_growth}",
+                        font=font_monocraft,
+                        font_size=38,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(240, 80),
+                        align="center",
+                        method="caption",
+                    ),
+                    (1525, 480),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        qr_image_clip = clip_with_duration(
+            clip_with_position(build_image_clip(str(qr_path), is_mask=False), (1498, 688)),
+            clip_duration,
         )
 
         return [
@@ -228,7 +264,7 @@ class VideoRenderer:
             qr_image_clip,
         ]
 
-    def overlay_texts_vertical_template(self, video_file_clip: VideoFileClip, video: Video) -> list[TextClip]:
+    def overlay_texts_vertical_template(self, video_file_clip: VideoFileClip, video: Video) -> list[MoviePyClip]:
         """Generate vertical format text overlays (9 TextClips).
 
         Creates text overlays positioned for vertical video format (1080x1920).
@@ -241,6 +277,8 @@ class VideoRenderer:
         Returns:
             List of 9 TextClip instances
         """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
         map_score_growth = {
             VideoScoreStatus.NEW: "~",
             VideoScoreStatus.UP: "5",
@@ -282,132 +320,168 @@ class VideoRenderer:
         font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
         font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
 
-        score_text_clip = (
-            TextClip(
-                f"{video.score:02d}",
-                font=font_droid_sans,
-                fontsize=240,
-                color="white",
-                stroke_color="white",
-                stroke_width=1,
-            )
-            .set_position((96, 770))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        score_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score:02d}",
+                        font=font_droid_sans,
+                        font_size=240,
+                        color="white",
+                        stroke_color="white",
+                        stroke_width=1,
+                    ),
+                    (96, 770),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        score_growth_status_text_clip = (
-            TextClip(
-                score_growth_status_value,
-                font=font_webdings,
-                fontsize=77,
-                color=score_growth_status_color,
-                stroke_color="white",
-                stroke_width=4,
-            )
-            .set_position((170, 990))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        score_growth_status_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        str(score_growth_status_value),
+                        font=font_webdings,
+                        font_size=77,
+                        color=score_growth_status_color,
+                        stroke_color="white",
+                        stroke_width=4,
+                    ),
+                    (170, 990),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        score_previous_text_clip = (
-            TextClip(
-                f"{video.score_previous or 'N'}",
-                font=font_droid_sans,
-                fontsize=66,
-                color=score_growth_status_color,
-            )
-            .set_position((245, 995))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        score_previous_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score_previous or 'N'}",
+                        font=font_droid_sans,
+                        font_size=66,
+                        color=score_growth_status_color,
+                    ),
+                    (245, 995),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        title_text_clip = (
-            TextClip(
-                title,
-                font=font_monocraft,
-                color="white",
-                fontsize=58,
-                kerning=-2,
-                size=(850, 180),
-                align="West",
-                method="caption",
-            )
-            .set_position((83, 1180))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        title,
+                        font=font_monocraft,
+                        color="white",
+                        font_size=58,
+                        kerning=-2,
+                        size=(850, 180),
+                        align="West",
+                        method="caption",
+                    ),
+                    (83, 1180),
+                ),
+                clip_duration,
+            ),
+            0,
         )
-        channel_text_clip = (
-            TextClip(
-                f"© {channel_name}",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-            )
-            .set_position((83, 1347))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_text_clip = (
-            TextClip(
-                f"{views}",
-                font=font_monocraft,
-                fontsize=58,
-                color="white",
-                kerning=0,
-                size=(300, 200),
-                align="center",
-                method="caption",
-            )
-            .set_position((83, 1400))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
-        )
-
-        views_title_text_clip = (
-            TextClip(
-                "views",
-                font=font_monocraft,
-                fontsize=24,
-                color="white",
-                kerning=0,
-                size=(190, 131),
-                align="center",
-                method="caption",
-            )
-            .set_position((83, 1400 + 80))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        channel_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"© {channel_name}",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                    ),
+                    (83, 1347),
+                ),
+                clip_duration,
+            ),
+            0,
         )
 
-        views_growth_text_clip = (
-            TextClip(
-                f"{views_growth}",
-                font=font_monocraft,
-                fontsize=58,
-                color=view_growth_color,
-                kerning=0,
-                size=(300, 200),
-                align="center",
-                method="caption",
-            )
-            .set_position((400, 1400))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        views_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views}",
+                        font=font_monocraft,
+                        font_size=58,
+                        color="white",
+                        kerning=0,
+                        size=(300, 200),
+                        align="center",
+                        method="caption",
+                    ),
+                    (83, 1400),
+                ),
+                clip_duration,
+            ),
+            0,
         )
 
-        views_growth_title_text_clip = (
-            TextClip(
-                "NEW views",
-                font=font_monocraft,
-                fontsize=24,
-                color=view_growth_color,
-                kerning=0,
-                size=(190, 131),
-                align="center",
-                method="caption",
-            )
-            .set_position((480, 1400 + 80))
-            .set_duration(video_file_clip.duration)
-            .set_start(0)
+        views_title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        "views",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                        kerning=0,
+                        size=(190, 131),
+                        align="center",
+                        method="caption",
+                    ),
+                    (83, 1480),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views_growth}",
+                        font=font_monocraft,
+                        font_size=58,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(300, 200),
+                        align="center",
+                        method="caption",
+                    ),
+                    (400, 1400),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        "NEW views",
+                        font=font_monocraft,
+                        font_size=24,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(190, 131),
+                        align="center",
+                        method="caption",
+                    ),
+                    (480, 1480),
+                ),
+                clip_duration,
+            ),
+            0,
         )
 
         return [
@@ -434,16 +508,24 @@ class VideoRenderer:
         Returns:
             List of 3 clips: [base_clip, video_file_clip, masked_template_clip]
         """
-        overlay_clip = VideoFileClip(
-            filename=self._asset_manager.template_file,
-            target_resolution=(video_file_clip.h, video_file_clip.w),
-        ).set_duration(video_file_clip.duration)
-        masked_clip = overlay_clip.fx(mask_color, color=[0, 0, 255], thr=40, s=3).set_duration(video_file_clip.duration)
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
+        overlay_clip = clip_with_duration(
+            VideoFileClip(
+                filename=self._asset_manager.template_file,
+                target_resolution=video_target_resolution(video_file_clip.w, video_file_clip.h),
+            ),
+            clip_duration,
+        )
+        masked_clip = clip_with_duration(
+            clip_mask_color(overlay_clip, color=(0, 0, 255), threshold=40, stiffness=3),
+            clip_duration,
+        )
 
         base_clip = ColorClip(
             size=(video_file_clip.w, video_file_clip.h),
             color=(0, 0, 0),
-            duration=video_file_clip.duration,
+            duration=clip_duration,
         )
         return [
             base_clip,
@@ -463,23 +545,36 @@ class VideoRenderer:
         Returns:
             List of 3 clips: [base_clip, transformed_video, masked_template_clip]
         """
-        overlay_clip = VideoFileClip(
-            filename=self._asset_manager.template_vertical_file,
-            target_resolution=(1920, 1080),
-        ).set_duration(video_file_clip.duration)
-        masked_clip = overlay_clip.fx(mask_color, color=[0, 0, 255], thr=50, s=3).set_duration(video_file_clip.duration)
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
 
-        clip2 = (
-            video_file_clip.fx(crop, x1=15)
-            .fx(resize, width=1080 / 1.3, height=1920 / 1.3)
-            .set_pos("top")
-            .set_position((-500, -150))
+        overlay_clip = clip_with_duration(
+            VideoFileClip(
+                filename=self._asset_manager.template_vertical_file,
+                target_resolution=video_target_resolution(1080, 1920),
+            ),
+            clip_duration,
+        )
+        masked_clip = clip_with_duration(
+            clip_mask_color(overlay_clip, color=(0, 0, 255), threshold=50, stiffness=3),
+            clip_duration,
+        )
+
+        clip2 = clip_with_position(
+            clip_with_position(
+                clip_resized(
+                    clip_cropped(video_file_clip, x1=15),
+                    width=1080 / 1.3,
+                    height=1920 / 1.3,
+                ),
+                "top",
+            ),
+            (-500, -150),
         )
 
         base_clip = ColorClip(
             size=(1080, 1920),
             color=(0, 0, 0),
-            duration=video_file_clip.duration,
+            duration=clip_duration,
         )
         return [
             base_clip,

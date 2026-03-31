@@ -1,9 +1,8 @@
 import asyncio
+import importlib
+import importlib.util
 from pathlib import Path
 from typing import Any
-
-from instagrapi import Client as InstagrapiClientLib
-from instagrapi.exceptions import LoginRequired
 
 from src.config.settings import get_app_settings
 from src.shared.logging import get_logger
@@ -15,13 +14,35 @@ class InstagramLoginError(RuntimeError):
     """Raised when the Instagram client cannot authenticate."""
 
 
-def _get_instagram_client() -> InstagrapiClientLib:
+class InstagramDependencyError(RuntimeError):
+    """Raised when the optional Instagram dependency is not installed."""
+
+
+def is_instagrapi_available() -> bool:
+    """Return whether the optional instagrapi dependency is installed."""
+    return importlib.util.find_spec("instagrapi") is not None
+
+
+def _import_instagram_client_types() -> tuple[type[Any], type[Exception]]:
+    if not is_instagrapi_available():
+        raise InstagramDependencyError(
+            "instagrapi is not installed. Install the 'instagram' optional dependency to enable Instagram publishing."
+        )
+
+    instagrapi_module = importlib.import_module("instagrapi")
+    exceptions_module = importlib.import_module("instagrapi.exceptions")
+    return instagrapi_module.Client, exceptions_module.LoginRequired
+
+
+def _get_instagram_client() -> Any:
     username = get_app_settings().instagram_client_username
     password = get_app_settings().instagram_client_password
     settings_session_file = get_app_settings().instagram_client_session_file or "instagram_session.json"
     settings_file_path = Path(settings_session_file)
 
-    instagram_client_instance = InstagrapiClientLib()
+    instagrapi_client_lib, login_required_exception = _import_instagram_client_types()
+
+    instagram_client_instance = instagrapi_client_lib()
     login_via_session = False
     login_via_pw = False
     session = None
@@ -38,7 +59,7 @@ def _get_instagram_client() -> InstagrapiClientLib:
 
             try:
                 instagram_client_instance.get_timeline_feed()
-            except LoginRequired:
+            except login_required_exception:
                 logger.info("Session is invalid, need to login via username and password")
                 old_session = instagram_client_instance.get_settings()
                 instagram_client_instance.set_settings({})

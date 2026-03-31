@@ -145,7 +145,39 @@ uv run publish-video
 
 # Run quality checks
 make quality
+
+# Run the full pre-push gate manually
+make pre-push-check
 ```
+
+### Git Hooks
+
+This repository uses pre-commit as the single hook runner for both commit and push checks.
+
+Run this once per clone:
+
+```bash
+make install-hooks
+```
+
+What happens after that:
+
+- `git commit` runs the `pre-commit` stage with fast checks for merge conflicts, private keys, whitespace cleanup, `ruff check --fix`, and `ruff format`.
+- `git push` runs the `pre-push` stage with the full repository gate: `make quality` plus `pytest tests/ -x -q --ignore=tests/integration/video`.
+
+Important: a commit can pass and a push can still fail. This is expected because `pre-push` runs stricter checks (including `ty check` through `make quality`) that are not part of the fast `pre-commit` stage.
+
+Useful manual commands:
+
+```bash
+# Run all pre-commit hooks across the repository
+make pre-commit-run
+
+# Run the same checks used by the pre-push hook
+make pre-push-check
+```
+
+If this clone used the older tracked `.githooks/` setup before, rerun `make install-hooks` to migrate to the native `.git/hooks` installation managed by pre-commit.
 
 ### Docker
 
