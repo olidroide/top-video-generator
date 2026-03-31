@@ -207,9 +207,9 @@ class YTClient:
 
     async def upload_video(
         self,
-        video_path,
-        title,
-        description,
+        video_path: str,
+        title: str,
+        description: str,
         thumbnail_path: str | None = None,
         playlist_id: str | None = None,
         tags: list[str] | None = None,

@@ -21,8 +21,8 @@ def extract_video_hashtags(video_list: list[Video] | None = None) -> list[str]:
     if not video_list:
         return []
 
-    hashtag_set = set()
+    hashtag_set: set[str] = set()
     for video in video_list:
         hashtag_set.update(video.hashtags_in_description)
 
-    return sorted(list(hashtag_set))
+    return sorted(hashtag_set)

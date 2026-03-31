@@ -49,13 +49,13 @@ def main_main(port: int, screen_orientation: str) -> None:
 
     while True:
         logger.debug("listen on port:", port=port)
-        video_work_json = consumer_receiver.recv_json()
+        video_work_json: list[str] = consumer_receiver.recv_json()  # type: ignore[assignment]
         logger.debug("Process videos: ", number_of_videos=len(video_work_json))
         for video_json in video_work_json:
             video = Video.model_validate_json(video_json)
             asyncio.run(map_screen_orientation_process.get(screen_orientation, compositor.post_process_video)(video))
             result = {"video_id": video.video_id}
-            consumer_sender.send_json(result)
+            consumer_sender.send_json(result)  # type: ignore[no-untyped-call]
             gc.collect()
         logger.debug("finish process all the videos, worker exit", number_of_videos=len(video_work_json))
         sys.exit()

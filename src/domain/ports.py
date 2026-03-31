@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -41,18 +41,18 @@ class VideoMetadataPort(Protocol):
 class YouTubeOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for YouTube (sync flow)."""
 
-    def step_2_exchange_code_authentication(self, url_requested: str) -> dict: ...
+    def step_2_exchange_code_authentication(self, url_requested: str) -> dict[str, Any]: ...
 
 
 @runtime_checkable
 class TikTokOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for TikTok (async flow)."""
 
-    async def step_2_exchange_code_authentication(self, user_code: str) -> dict: ...
+    async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, Any]: ...
 
 
 @runtime_checkable
 class SpotifyOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for Spotify (async flow)."""
 
-    async def step_2_exchange_code_authentication(self, user_code: str) -> dict: ...
+    async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, Any]: ...

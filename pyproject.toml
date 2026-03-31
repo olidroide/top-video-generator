@@ -86,6 +86,11 @@ line-length = 120
 target-version = "py313"
 exclude = [".github/skills"]
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
 [tool.ruff.lint]
 select = [
   "A",
@@ -94,7 +99,7 @@ select = [
   "ASYNC",
   "B",
   "BLE",
-  "C40",
+  "C4",
   "C90",
   "COM",
   "DTZ",
@@ -102,6 +107,7 @@ select = [
   "ERA",
   "EXE",
   "F",
+  "FA",
   "FAST",
   "FBT",
   "FURB",

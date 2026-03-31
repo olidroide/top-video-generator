@@ -90,7 +90,7 @@ async def _write_heartbeat(
     last_successful_job_name: str | None,
     error: str | None = None,
 ) -> None:
-    payload = {
+    payload: dict[str, str | None] = {
         "status": status,
         "updated_at": datetime.now(UTC).isoformat(),
         "last_job": last_job_name,
@@ -105,7 +105,7 @@ def _write_heartbeat_sync(heartbeat_file: Path, payload: dict[str, str | None]) 
     heartbeat_file.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _heartbeat_is_fresh(heartbeat_file: Path, stale_seconds: int, now: datetime | None = None) -> bool:
+def heartbeat_is_fresh(heartbeat_file: Path, stale_seconds: int, now: datetime | None = None) -> bool:
     if not heartbeat_file.exists():
         return False
     heartbeat_raw = heartbeat_file.read_text(encoding="utf-8")
