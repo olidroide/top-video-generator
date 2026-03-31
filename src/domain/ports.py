@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from .models import CanonicalVideo, Platform, PublishingResult, VideoPoint
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from datetime import datetime
+
+    from .models import CanonicalVideo, Platform, PublishingResult, VideoPoint
 
 
 @runtime_checkable
@@ -29,3 +31,24 @@ class VideoPublisher(Protocol):
 
 class TimeSeriesPort(Protocol):
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]: ...
+
+
+@runtime_checkable
+class YouTubeOAuthProvider(Protocol):
+    """Provides OAuth step-2 exchange for YouTube (sync flow)."""
+
+    def step_2_exchange_code_authentication(self, url_requested: str) -> dict: ...
+
+
+@runtime_checkable
+class TikTokOAuthProvider(Protocol):
+    """Provides OAuth step-2 exchange for TikTok (async flow)."""
+
+    async def step_2_exchange_code_authentication(self, user_code: str) -> dict: ...
+
+
+@runtime_checkable
+class SpotifyOAuthProvider(Protocol):
+    """Provides OAuth step-2 exchange for Spotify (async flow)."""
+
+    async def step_2_exchange_code_authentication(self, user_code: str) -> dict: ...

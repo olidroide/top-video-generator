@@ -37,6 +37,16 @@ from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+def _get_authorize_use_case() -> AuthorizeUseCase:
+    """Factory that wires all OAuth providers into AuthorizeUseCase."""
+    return AuthorizeUseCase(
+        auth_repo=get_auth_repo(),
+        yt_provider=get_yt_client(),
+        tiktok_provider=TikTokClient(),
+        spotify_provider=SpotifyClient(),
+    )
+
 app = FastAPI()
 
 
@@ -133,7 +143,7 @@ async def yt_auth(
         logger.warning("Not CODE received in callback YT Auth", request=request.url)
         return RedirectResponse("/")
 
-    use_case = AuthorizeUseCase(get_auth_repo())
+    use_case = _get_authorize_use_case()
     yt_auth_response = await use_case.execute_yt(AuthorizeYtRequest(code=code, url_requested=str(request.url)))
     request.session["yt_credentials"] = yt_auth_response.client_id
 
@@ -157,7 +167,7 @@ async def tiktok_auth(
         logger.warning("Not CODE received in callback TikTok Auth", request=request.url)
         return RedirectResponse("/")
 
-    use_case = AuthorizeUseCase(get_auth_repo())
+    use_case = _get_authorize_use_case()
     tiktok_auth_response = await use_case.execute_tiktok(AuthorizeTikTokRequest(code=code))
     request.session["tiktok_credentials"] = tiktok_auth_response.client_id
 
@@ -181,7 +191,7 @@ async def spotify_auth(
         logger.warning("Not CODE received in callback Spotify Auth", request=request.url)
         return RedirectResponse("/")
 
-    use_case = AuthorizeUseCase(get_auth_repo())
+    use_case = _get_authorize_use_case()
     spotify_auth_response = await use_case.execute_spotify(AuthorizeSpotifyRequest(code=code))
     request.session["spotify_credentials"] = spotify_auth_response.client_id
 

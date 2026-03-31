@@ -124,7 +124,7 @@ from src.infrastructure.storage.release_repository import ReleaseRepository
 
 async def _already_published_today(repo: ReleaseRepository, day: date) -> bool:
     return all(
-        repo.is_release_at_date(platform=platform.value, day=day)
+        repo.is_release_at_date(platform=platform.value, release_date=day)
         for platform in ReleasePlatform
     )
 ```

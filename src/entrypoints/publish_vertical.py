@@ -39,7 +39,7 @@ def _build_video_compositor(video_downloader: VideoDownloader) -> VideoComposito
     return VideoCompositor(asset_manager, renderer)
 
 
-async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
+def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -48,7 +48,7 @@ async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -
     return format_yt_title
 
 
-async def generate_yt_description(video_list) -> str:
+def generate_yt_description(video_list) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d / %m / %Y")
     # Solo nombres válidos
     channels_names = list(
@@ -116,7 +116,7 @@ async def main_async():
 
     # Idempotency guard
     already_published = all(
-        release_repo.is_release_at_date(platform=platform.value, day=day) for platform in ReleasePlatform
+        release_repo.is_release_at_date(platform=platform.value, release_date=day) for platform in ReleasePlatform
     )
     if already_published:
         logger.info("vertical video already published today on all platforms, exiting early")
@@ -151,9 +151,9 @@ async def main_async():
     )
 
     hashtag_list = extract_video_hashtags(video_list)
-    yt_title = await generate_yt_title(video_list, hashtag_list=hashtag_list)
+    yt_title = generate_yt_title(video_list, hashtag_list=hashtag_list)
     logger.debug("generated title: ", yt_title=yt_title)
-    yt_description = await generate_yt_description(video_list)
+    yt_description = generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
 
     # Hexagonal: convertir Video → CanonicalVideo para adapters

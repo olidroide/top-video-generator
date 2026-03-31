@@ -38,7 +38,7 @@ def _build_video_pipeline(video_downloader: VideoDownloader) -> tuple[VideoCompo
     return VideoCompositor(asset_manager, renderer), ThumbnailGenerator(asset_manager)
 
 
-async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
+def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -47,7 +47,7 @@ async def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -
     return format_yt_title
 
 
-async def generate_yt_description(video_list) -> str:
+def generate_yt_description(video_list) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
     original_publishers = ",".join(channels_names)
@@ -119,9 +119,9 @@ async def main_async():
     file_path = await compositor.join_processed_videos([video.video_id for video in video_list])
 
     # file_path = "../videos/20230630_format.mp4"
-    yt_title = await generate_yt_title(video_list)
+    yt_title = generate_yt_title(video_list)
     logger.debug("generated title: ", yt_title=yt_title)
-    yt_description = await generate_yt_description(video_list)
+    yt_description = generate_yt_description(video_list)
     logger.debug("generated description:", yt_description=yt_description)
     thumbnail_path = await thumbnail_generator.generate_thumbnail(video_list[-4:])
     hashtag_list = extract_video_hashtags(video_list)

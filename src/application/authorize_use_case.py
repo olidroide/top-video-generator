@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.ports import SpotifyOAuthProvider, TikTokOAuthProvider, YouTubeOAuthProvider
+    from src.infrastructure.storage.auth_repository import AuthenticationRepository
 
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
-from src.infrastructure.social.spotify_client import SpotifyClient
-from src.infrastructure.social.tiktok_client import TikTokClient
-from src.infrastructure.storage.auth_repository import AuthenticationRepository
-from src.infrastructure.youtube import get_yt_client
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -34,13 +34,21 @@ class AuthorizeSpotifyRequest:
 class AuthorizeUseCase:
     """Handles OAuth authorization callbacks and persistence."""
 
-    def __init__(self, auth_repo: AuthenticationRepository) -> None:
+    def __init__(
+        self,
+        auth_repo: AuthenticationRepository,
+        yt_provider: YouTubeOAuthProvider,
+        tiktok_provider: TikTokOAuthProvider,
+        spotify_provider: SpotifyOAuthProvider,
+    ) -> None:
         self._auth_repo = auth_repo
+        self._yt_provider = yt_provider
+        self._tiktok_provider = tiktok_provider
+        self._spotify_provider = spotify_provider
 
     async def execute_yt(self, request: AuthorizeYtRequest) -> YtAuth:
         """Exchange code and save YT credentials."""
-        yt_client: Any = get_yt_client()
-        oauth_credentials = yt_client.step_2_exchange_code_authentication(
+        oauth_credentials = self._yt_provider.step_2_exchange_code_authentication(
             url_requested=request.url_requested,
         )
         return self._auth_repo.add_or_update_yt_auth(
@@ -56,8 +64,7 @@ class AuthorizeUseCase:
 
     async def execute_tiktok(self, request: AuthorizeTikTokRequest) -> TikTokAuth:
         """Exchange code and save TikTok credentials."""
-        client = TikTokClient()
-        oauth_credentials = await client.step_2_exchange_code_authentication(
+        oauth_credentials = await self._tiktok_provider.step_2_exchange_code_authentication(
             user_code=request.code,
         )
         return self._auth_repo.add_or_update_tiktok_auth(
@@ -71,8 +78,7 @@ class AuthorizeUseCase:
 
     async def execute_spotify(self, request: AuthorizeSpotifyRequest) -> SpotifyAuth:
         """Exchange code and save Spotify credentials."""
-        client = SpotifyClient()
-        oauth_credentials = await client.step_2_exchange_code_authentication(
+        oauth_credentials = await self._spotify_provider.step_2_exchange_code_authentication(
             user_code=request.code,
         )
         return self._auth_repo.add_or_update_spotify_auth(

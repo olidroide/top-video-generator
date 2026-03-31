@@ -6,7 +6,7 @@ sin instanciar la clase en import-time (a diferencia del anti-patrón assert isi
 
 from unittest.mock import create_autospec
 
-from src.domain.ports import VideoDataSource, VideoPublisher
+from src.domain.ports import SpotifyOAuthProvider, TikTokOAuthProvider, VideoDataSource, VideoPublisher, YouTubeOAuthProvider
 
 
 def test_youtube_source_implements_protocol() -> None:
@@ -35,3 +35,24 @@ def test_tiktok_publisher_implements_protocol() -> None:
 
     mock = create_autospec(TikTokPublisher, instance=True)
     assert isinstance(mock, VideoPublisher)
+
+
+def test_yt_client_implements_youtube_oauth_provider() -> None:
+    from src.infrastructure.youtube.client import YTClient
+
+    mock = create_autospec(YTClient, instance=True)
+    assert isinstance(mock, YouTubeOAuthProvider)
+
+
+def test_tiktok_client_implements_tiktok_oauth_provider() -> None:
+    from src.infrastructure.social.tiktok_client import TikTokClient
+
+    mock = create_autospec(TikTokClient, instance=True)
+    assert isinstance(mock, TikTokOAuthProvider)
+
+
+def test_spotify_client_implements_spotify_oauth_provider() -> None:
+    from src.infrastructure.social.spotify_client import SpotifyClient
+
+    mock = create_autospec(SpotifyClient, instance=True)
+    assert isinstance(mock, SpotifyOAuthProvider)
