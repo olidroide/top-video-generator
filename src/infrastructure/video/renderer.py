@@ -78,7 +78,7 @@ class VideoRenderer:
         """
         self._asset_manager = asset_manager
 
-    def overlay_texts_template(self, video_file_clip: VideoFileClip, video: Video) -> list[MoviePyClip]:
+    def overlay_texts_template(self, video_file_clip: MoviePyClip, video: Video) -> list[MoviePyClip]:
         """Generate horizontal format text overlays (6 TextClips + 1 ImageClip).
 
         Creates text overlays for score, title, channel, views, and QR code
@@ -275,7 +275,7 @@ class VideoRenderer:
             qr_image_clip,
         ]
 
-    def overlay_texts_vertical_template(self, video_file_clip: VideoFileClip, video: Video) -> list[MoviePyClip]:
+    def overlay_texts_vertical_template(self, video_file_clip: MoviePyClip, video: Video) -> list[MoviePyClip]:
         """Generate vertical format text overlays (9 TextClips).
 
         Creates text overlays positioned for vertical video format (1080x1920).
@@ -507,7 +507,7 @@ class VideoRenderer:
             views_growth_title_text_clip,
         ]
 
-    async def overlay_with_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
+    async def overlay_with_video_template(self, video_file_clip: MoviePyClip) -> list[MoviePyClip]:
         """Apply horizontal template overlay with blue screen masking.
 
         Creates a 3-layer composition: black base, original video, masked template.
@@ -544,7 +544,7 @@ class VideoRenderer:
             masked_clip,
         ]
 
-    async def overlay_with_vertical_video_template(self, video_file_clip: VideoFileClip) -> list[MoviePyClip]:
+    async def overlay_with_vertical_video_template(self, video_file_clip: MoviePyClip) -> list[MoviePyClip]:
         """Apply vertical template overlay with crop/resize transformations.
 
         Creates a 3-layer composition for vertical format (1080x1920).
