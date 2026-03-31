@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-from src.entrypoints.scheduler import ScheduledJob, _heartbeat_is_fresh, _job_is_due, _job_run_key
+from src.entrypoints.scheduler import ScheduledJob, _job_is_due, _job_run_key, heartbeat_is_fresh
 
 
 async def _noop() -> None:
@@ -33,5 +33,5 @@ def test_heartbeat_is_fresh_checks_timestamp_window(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    assert _heartbeat_is_fresh(heartbeat_file, stale_seconds=60, now=now)
-    assert not _heartbeat_is_fresh(heartbeat_file, stale_seconds=10, now=now)
+    assert heartbeat_is_fresh(heartbeat_file, stale_seconds=60, now=now)
+    assert not heartbeat_is_fresh(heartbeat_file, stale_seconds=10, now=now)
