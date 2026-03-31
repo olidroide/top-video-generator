@@ -27,13 +27,14 @@ class ReleaseRepository:
         """Initialize repository with TinyDB backend."""
         self._db = TinyDB(db_path)
 
-    def get_release(self, platform: str, client_id: str) -> Release | None:
+    def get_release(self, platform: str, client_id: str, release_kind: str | None = None) -> Release | None:
         """
         Retrieve the most recent release for a platform+client_id combination.
 
         Args:
             platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM, SPOTIFY).
             client_id: Client ID for the platform.
+            release_kind: Optional release category for scoped idempotency.
 
         Returns:
             Release if found, None otherwise.
@@ -43,6 +44,10 @@ class ReleaseRepository:
         results = table.search(query)
         if not results:
             return None
+        if release_kind is not None:
+            results = [result for result in results if result.get("release_kind") == release_kind]
+            if not results:
+                return None
         # Return the most recent (last inserted)
         return Release.model_validate(results[-1])
 
@@ -59,8 +64,13 @@ class ReleaseRepository:
         table = self._db.table(self._TABLE)
         platform = release.platform or ""
         client_id = release.client_id or ""
-        query = (Query().platform == platform) & (Query().client_id == client_id)
-        table.update(release.model_dump(), query)
+        matching_docs = self._get_matching_release_documents(
+            platform=platform,
+            client_id=client_id,
+            release_kind=release.release_kind,
+        )
+        if matching_docs:
+            table.update(release.model_dump(), doc_ids=[matching_docs[-1].doc_id])
         return release
 
     def add_or_update_release(self, release: Release) -> Release:
@@ -75,19 +85,20 @@ class ReleaseRepository:
         """
         platform = release.platform or ""
         client_id = release.client_id or ""
-        if self.get_release(platform, client_id):
+        if self.get_release(platform, client_id, release.release_kind):
             return self.update_release(release)
         table = self._db.table(self._TABLE)
         table.insert(release.model_dump())
         return release
 
-    def is_release_at_date(self, platform: str, release_date: date) -> bool:
+    def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool:
         """
         Check if a video was released on a specific platform on the given date.
 
         Args:
             platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM, SPOTIFY).
             release_date: Date to check.
+            release_kind: Optional release category for scoped idempotency.
 
         Returns:
             True if a release exists for this platform on this date, False otherwise.
@@ -101,6 +112,8 @@ class ReleaseRepository:
         # Check if any release timestamp falls on the given date
         for result in results:
             release = Release.model_validate(result)
+            if release_kind is not None and release.release_kind not in {None, release_kind}:
+                continue
             if release.published_at is None:
                 continue
             published_date = datetime.fromtimestamp(release.published_at, tz=UTC).date()
@@ -125,3 +138,12 @@ class ReleaseRepository:
     def close(self) -> None:
         """Close database connection."""
         self._db.close()
+
+    def _get_matching_release_documents(self, platform: str, client_id: str, release_kind: str | None) -> list:
+        """Return stored release documents matching platform, client and exact kind."""
+        table = self._db.table(self._TABLE)
+        query = (Query().platform == platform) & (Query().client_id == client_id)
+        results = table.search(query)
+        if release_kind is None:
+            return [result for result in results if result.get("release_kind") is None]
+        return [result for result in results if result.get("release_kind") == release_kind]

@@ -182,12 +182,28 @@ If this clone used the older tracked `.githooks/` setup before, rerun `make inst
 ### Docker
 
 ```bash
-# Build and run
-docker-compose up --build
+# 1) Prepare local config and secrets
+cp docker-environment.env docker-environment.local.env
+mkdir -p prod/videos prod/logs secrets
 
-# Run specific step
-docker-compose run --rm -e "STEP=fetch_data" top-video-generator
+# 2) Fill docker-environment.local.env and place secrets under ./secrets
+#    - ./secrets/yt_client_secret.json
+#    - ./secrets/instagram_session.json (optional if Instagram is disabled)
+
+# 3) Pull and start the long-running services
+docker compose pull
+docker compose up -d web scheduler
+
+# Run a specific step manually
+docker compose run --rm -e "STEP=fetch_data" top-video-generator
 ```
+
+The default production topology now runs two services from the same image:
+
+- `web`: FastAPI application on port `8080`
+- `scheduler`: internal 24/7 scheduler that runs `fetch_data`, `vertical_publish`, and `weekly_publish`
+
+The tracked `docker-environment.env` file is now a safe template. Put real secrets and overrides in `docker-environment.local.env`, which is git-ignored.
 
 ## License
 

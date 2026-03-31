@@ -4,11 +4,12 @@ import asyncio
 import datetime
 from collections.abc import Sequence
 from datetime import UTC
+from pathlib import Path
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
-from src.config.settings import get_app_settings
-from src.domain.models import Release, ReleasePlatform, TimeseriesRange, Video
+from src.config.settings import AppSettings, get_app_settings
+from src.domain.models import Release, ReleaseKind, ReleasePlatform, TimeseriesRange, Video
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
@@ -18,6 +19,7 @@ from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
 from src.infrastructure.youtube import get_yt_client
 from src.infrastructure.youtube.downloader import VideoDownloader
+from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -85,6 +87,14 @@ def generate_yt_description(video_list: Sequence[Video]) -> str:
 
 async def main_async() -> None:
     settings = get_app_settings()
+    with FileExecutionLock(Path(settings.scheduler_lock_file), "weekly_publish") as execution_lock:
+        if not execution_lock.acquired:
+            return
+        await _run_weekly_publish_job(settings)
+
+
+async def _run_weekly_publish_job(settings: AppSettings) -> None:
+    day = datetime.datetime.now(UTC).date()
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
 
@@ -95,13 +105,20 @@ async def main_async() -> None:
     # Initialize repositories and use case
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
     release_repo = ReleaseRepository(db_data_file)
+    if release_repo.is_release_at_date(
+        platform=ReleasePlatform.YOUTUBE.value,
+        release_date=day,
+        release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
+    ):
+        logger.info("publish_video.already_completed", day=str(day))
+        return
     fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
 
     # Fetch top videos for the week
-    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=datetime.datetime.now(UTC).date())
+    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=day)
     result = await fetch_videos_use_case.execute(request)
     video_list = list(result.videos)
-    video_list.sort(key=lambda x: x.score, reverse=True)
+    video_list.sort(key=lambda x: (x.score is None, x.score if x.score is not None else 0), reverse=True)
 
     logger.debug("start")
     downloader = VideoDownloader()
@@ -120,7 +137,7 @@ async def main_async() -> None:
     thumbnail_path = await thumbnail_generator.generate_thumbnail(video_list[-4:])
     hashtag_list = extract_video_hashtags(video_list)
     try:
-        playlist_id = get_app_settings().yt_playlist_id_daily
+        playlist_id = settings.yt_playlist_id_weekly
 
         yt_video_id = await get_yt_client().upload_video(
             video_path=file_path,
@@ -135,14 +152,16 @@ async def main_async() -> None:
         yt_video_id = None
 
     try:
-        release_repo.add_or_update_release(
-            Release(
-                platform=ReleasePlatform.YOUTUBE.value,
-                client_id=get_app_settings().yt_auth_user_id,
-                release_id=yt_video_id,
-                published_at=datetime.datetime.now(datetime.UTC).timestamp(),
+        if yt_video_id:
+            release_repo.add_or_update_release(
+                Release(
+                    platform=ReleasePlatform.YOUTUBE.value,
+                    client_id=settings.yt_auth_user_id,
+                    release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
+                    release_id=yt_video_id,
+                    published_at=datetime.datetime.now(datetime.UTC).timestamp(),
+                )
             )
-        )
     except Exception as exc:
         logger.exception("publish_video.release_persist_failed", error=str(exc))
 

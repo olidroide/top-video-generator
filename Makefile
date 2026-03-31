@@ -23,13 +23,13 @@ build-local-image:
 #	docker build -t top-video-generator .
 
 run-web:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=web" -p 8080:8080 --detach --rm top-video-generator
+	docker compose up -d web scheduler
 
 run-fetch-data:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=fetch_data" --rm top-video-generator
+	docker compose run --rm -e "STEP=fetch_data" top-video-generator
 
 run-compose-daily:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=vertical_publish" --rm top-video-generator
+	docker compose run --rm -e "STEP=vertical_publish" top-video-generator
 
 format:
 	uv run ruff format .
@@ -49,8 +49,7 @@ test:
 	uv run pytest tests/
 
 schedule:
-	@echo "No in-repo scheduler entrypoint is maintained. Run fetch-run/publish-run from cron, CI, or orchestration."
-	@exit 1
+	docker compose up -d scheduler
 
 web-run:
 	uv run api-server
@@ -63,3 +62,6 @@ publish-run:
 
 vertical-publish-run:
 	uv run publish-vertical
+
+scheduler-run:
+	uv run scheduler-run

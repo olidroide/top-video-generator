@@ -6,11 +6,12 @@ from pathlib import Path
 
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_trending_use_case import FetchTrendingRequest, FetchTrendingUseCase
-from src.config.settings import get_app_settings
+from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import VideoPoint
 from src.domain.services.scoring_service import score_and_rank_video_points
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
+from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,8 +38,16 @@ async def is_passed_enough_time_from_last_fetch(
 
 
 async def main_async() -> None:
-    start_process_datetime = datetime.now(UTC)
     settings = get_app_settings()
+    with FileExecutionLock(Path(settings.scheduler_lock_file), "fetch_data") as execution_lock:
+        if not execution_lock.acquired:
+            return
+        await _run_fetch_data_job(settings)
+
+
+async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
+    start_process_datetime = datetime.now(UTC)
+    settings = settings if settings is not None else get_app_settings()
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
 

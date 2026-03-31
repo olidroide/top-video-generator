@@ -1,27 +1,36 @@
-# Docker Compose override for local development
-# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
-
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: top-video-generator:dev
+    environment:
+      TOP_MUSIC_ENV: development
+      OAUTHLIB_INSECURE_TRANSPORT: "1"
+    volumes:
+      - ./src:/app/src:ro
+      - ./src/resources:/app/resources:ro
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: top-video-generator:dev
+    environment:
+      TOP_MUSIC_ENV: development
+      OAUTHLIB_INSECURE_TRANSPORT: "1"
+    volumes:
+      - ./src:/app/src:ro
+      - ./src/resources:/app/resources:ro
+
   top-video-generator:
     build:
       context: .
       dockerfile: Dockerfile
+    image: top-video-generator:dev
     environment:
-      - TOP_MUSIC_ENV=development
+      TOP_MUSIC_ENV: development
+      OAUTHLIB_INSECURE_TRANSPORT: "1"
     volumes:
-      - ./src:/app/src:ro # Mount source code for development
-      - ./db:/app/db
-      - ./videos:/app/videos
-      - ./logs:/app/logs
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - ./src:/app/src:ro
+      - ./src/resources:/app/resources:ro

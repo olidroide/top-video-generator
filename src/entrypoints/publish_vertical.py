@@ -4,12 +4,21 @@ import asyncio
 import datetime
 from collections.abc import Sequence
 from datetime import UTC
+from pathlib import Path
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.publish_video_use_case import PublishVideoRequest, PublishVideoResult, PublishVideoUseCase
 from src.application.workers.factory import WorkerFactory
-from src.config.settings import get_app_settings
-from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange, Video
+from src.config.settings import AppSettings, get_app_settings
+from src.domain.models import (
+    CanonicalVideo,
+    PublishingResult,
+    Release,
+    ReleaseKind,
+    ReleasePlatform,
+    TimeseriesRange,
+    Video,
+)
 from src.domain.ports import VideoPublisher
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.publisher_registry import build_publishers
@@ -20,6 +29,7 @@ from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.youtube.downloader import VideoDownloader
+from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -97,78 +107,142 @@ def generate_yt_description(video_list: Sequence[Video]) -> str:
 
 
 async def main_async() -> None:
-    day = datetime.datetime.now(UTC).date()
     settings = get_app_settings()
-    db_data_file = settings.db_data_file
-    db_timeseries_file = settings.db_timeseries_file
+    with FileExecutionLock(Path(settings.scheduler_lock_file), "vertical_publish") as execution_lock:
+        if not execution_lock.acquired:
+            return
+        await _run_vertical_publish_job(settings)
 
-    if not settings.is_production_env:
-        db_data_file += ".test"
-        db_timeseries_file += ".test"
 
-    # Initialize repositories
-    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-    release_repo = ReleaseRepository(db_data_file)
+def _pending_publishers(
+    release_repo: ReleaseRepository,
+    publishers: Sequence[VideoPublisher],
+    day: datetime.date,
+) -> list[VideoPublisher]:
+    return [
+        publisher
+        for publisher in publishers
+        if not release_repo.is_release_at_date(
+            platform=publisher.platform_name.value,
+            release_date=day,
+            release_kind=ReleaseKind.DAILY_VERTICAL.value,
+        )
+    ]
 
-    # Idempotency guard
-    already_published = all(
-        release_repo.is_release_at_date(platform=platform.value, release_date=day) for platform in ReleasePlatform
+
+def _is_spotify_release_pending(
+    release_repo: ReleaseRepository,
+    settings: AppSettings,
+    day: datetime.date,
+) -> bool:
+    if not (settings.spotify_playlist_original and settings.is_spotify_configured):
+        return False
+    return not release_repo.is_release_at_date(
+        platform=ReleasePlatform.SPOTIFY.value,
+        release_date=day,
+        release_kind=ReleaseKind.DAILY_VERTICAL.value,
     )
-    if already_published:
-        logger.info("vertical video already published today on all platforms, exiting early")
-        return
 
-    # Fetch top videos for today
+
+def _persist_spotify_release(release_repo: ReleaseRepository, settings: AppSettings) -> None:
+    release_repo.add_or_update_release(
+        Release(
+            platform=ReleasePlatform.SPOTIFY.value,
+            client_id=settings.spotify_user_id,
+            release_kind=ReleaseKind.DAILY_VERTICAL.value,
+            release_id=settings.spotify_playlist_original,
+            published_at=datetime.datetime.now(datetime.UTC).timestamp(),
+        )
+    )
+
+
+def _persist_publisher_release(
+    release_repo: ReleaseRepository,
+    settings: AppSettings,
+    publisher: VideoPublisher,
+    result: PublishingResult,
+) -> None:
+    release_repo.add_or_update_release(
+        Release(
+            platform=publisher.platform_name.name,
+            client_id=_publisher_client_id(settings, publisher.platform_name.name),
+            release_kind=ReleaseKind.DAILY_VERTICAL.value,
+            release_id=result.published_id,
+            published_at=result.published_at.timestamp()
+            if result.published_at
+            else datetime.datetime.now(datetime.UTC).timestamp(),
+        )
+    )
+
+
+async def _load_daily_videos(timeseries_repo: TimeSeriesRepository, day: datetime.date) -> list[Video]:
     fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
     request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.DAILY, day=day)
     result = await fetch_videos_use_case.execute(request)
-    video_list = list(result.videos)
+    return list(result.videos)
+
+
+async def _maybe_update_spotify_original_playlist(
+    settings: AppSettings,
+    release_repo: ReleaseRepository,
+    spotify_release_pending: bool,
+    video_list: Sequence[Video],
+) -> None:
+    if not spotify_release_pending:
+        return
 
     try:
         yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list if video.title]
         await SpotifyClient().update_link_original_playlist(
-            playlist_id=get_app_settings().spotify_playlist_original,
+            playlist_id=settings.spotify_playlist_original,
             song_title_list=yt_video_title_list,
         )
+        _persist_spotify_release(release_repo, settings)
     except Exception as exc:
         logger.exception("publish_vertical.spotify_playlist_update_failed", error=str(exc))
 
-    video_list = video_list[:5]
-    # sort: score None al final
-    video_list.sort(key=lambda x: (x.score is None, x.score if x.score is not None else 0), reverse=True)
+
+def _video_to_canonical(video: Video) -> CanonicalVideo:
+    return CanonicalVideo(
+        video_id=video.video_id,
+        title=video.title or "",
+        channel_name=video.channel.name if video.channel and video.channel.name else "",
+        views=video.views,
+        views_growth=video.views_growth or 0,
+        score=float(video.score) if video.score is not None else 0.0,
+        score_previous=float(video.score_previous) if video.score_previous is not None else 0.0,
+        thumbnail_url=video.yt_video_thumbnail_url if hasattr(video, "yt_video_thumbnail_url") else "",
+    )
+
+
+async def _publish_pending_vertical_videos(
+    settings: AppSettings,
+    release_repo: ReleaseRepository,
+    pending_publishers: Sequence[VideoPublisher],
+    video_list: Sequence[Video],
+) -> None:
+    selected_videos = list(video_list[:5])
+    selected_videos.sort(
+        key=lambda video: (video.score is None, video.score if video.score is not None else 0),
+        reverse=True,
+    )
+
     downloader = VideoDownloader()
-    await downloader.download_video(video_list)
-    WorkerFactory().start_vertical_workers(video_list)
+    await downloader.download_video(selected_videos)
+    WorkerFactory().start_vertical_workers(selected_videos)
 
     compositor = _build_video_compositor(downloader)
     file_path = await compositor.join_processed_videos(
-        video_id_list=[video.video_id for video in video_list],
+        video_id_list=[video.video_id for video in selected_videos],
         vertical=True,
     )
 
-    hashtag_list = extract_video_hashtags(video_list)
-    yt_title = generate_yt_title(video_list, hashtag_list=hashtag_list)
+    hashtag_list = extract_video_hashtags(selected_videos)
+    yt_title = generate_yt_title(selected_videos, hashtag_list=hashtag_list)
     logger.debug("generated title: ", yt_title=yt_title)
-    yt_description = generate_yt_description(video_list)
+    yt_description = generate_yt_description(selected_videos)
     logger.debug("generated description:", yt_description=yt_description)
-
-    # Hexagonal: convertir Video → CanonicalVideo para adapters
-    def video_to_canonical(v: Video) -> CanonicalVideo:
-        return CanonicalVideo(
-            video_id=v.video_id,
-            title=v.title or "",
-            channel_name=v.channel.name if v.channel and v.channel.name else "",
-            views=v.views,
-            views_growth=v.views_growth or 0,
-            score=float(v.score) if v.score is not None else 0.0,
-            score_previous=float(v.score_previous) if v.score_previous is not None else 0.0,
-            thumbnail_url=v.yt_video_thumbnail_url if hasattr(v, "yt_video_thumbnail_url") else "",
-        )
-
-    canonical_video_list = [video_to_canonical(v) for v in video_list]
-
-    publishers = build_publishers()
-    results = []
+    canonical_video_list = [_video_to_canonical(video) for video in selected_videos]
 
     async def _publish_one(publisher: VideoPublisher) -> PublishVideoResult:
         description = yt_description if publisher.platform_name.name == "YOUTUBE" else yt_title
@@ -182,31 +256,52 @@ async def main_async() -> None:
             )
         )
 
-    async with asyncio.TaskGroup() as tg:
-        tasks = []
-        for publisher in publishers:
-            task = tg.create_task(_publish_one(publisher))
-            tasks.append((publisher, task))
-        for publisher, task in tasks:
-            use_case_result = await task
-            result = use_case_result.results[0]
-            results.append(result)
-            release_repo.add_or_update_release(
-                Release(
-                    platform=publisher.platform_name.name,
-                    client_id=get_app_settings().instagram_client_username
-                    if publisher.platform_name.name == "INSTAGRAM"
-                    else (
-                        get_app_settings().tiktok_user_openid
-                        if publisher.platform_name.name == "TIKTOK"
-                        else get_app_settings().yt_auth_user_id
-                    ),
-                    release_id=result.published_id,
-                    published_at=result.published_at.timestamp()
-                    if result.published_at
-                    else datetime.datetime.now(datetime.UTC).timestamp(),
-                )
-            )
+    async with asyncio.TaskGroup() as task_group:
+        tasks = [(publisher, task_group.create_task(_publish_one(publisher))) for publisher in pending_publishers]
+
+    for publisher, task in tasks:
+        result = task.result().results[0]
+        if not result.success:
+            continue
+        _persist_publisher_release(release_repo, settings, publisher, result)
+
+
+async def _run_vertical_publish_job(settings: AppSettings) -> None:
+    day = datetime.datetime.now(UTC).date()
+    db_data_file = settings.db_data_file
+    db_timeseries_file = settings.db_timeseries_file
+
+    if not settings.is_production_env:
+        db_data_file += ".test"
+        db_timeseries_file += ".test"
+
+    # Initialize repositories
+    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    release_repo = ReleaseRepository(db_data_file)
+    publishers = build_publishers()
+    pending_publishers = _pending_publishers(release_repo, publishers, day)
+    spotify_release_pending = _is_spotify_release_pending(release_repo, settings, day)
+
+    if not pending_publishers and not spotify_release_pending:
+        logger.info("publish_vertical.already_completed", day=str(day))
+        return
+
+    video_list = await _load_daily_videos(timeseries_repo, day)
+    await _maybe_update_spotify_original_playlist(settings, release_repo, spotify_release_pending, video_list)
+
+    if not pending_publishers:
+        logger.info("publish_vertical.no_pending_publishers", day=str(day))
+        return
+
+    await _publish_pending_vertical_videos(settings, release_repo, pending_publishers, video_list)
+
+
+def _publisher_client_id(settings: AppSettings, platform_name: str) -> str | None:
+    if platform_name == ReleasePlatform.INSTAGRAM.value:
+        return settings.instagram_client_username
+    if platform_name == ReleasePlatform.TIKTOK.value:
+        return settings.tiktok_user_openid
+    return settings.yt_auth_user_id
 
 
 def main() -> None:

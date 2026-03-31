@@ -31,9 +31,7 @@ coverage.xml
 *~
 
 # Docker files
-Dockerfile*
 .dockerignore
-docker-compose*.yml
 
 # Documentation
 README.md
@@ -47,3 +45,4 @@ node_modules
 *.tmp
 *.temp
 .env*
+tests/

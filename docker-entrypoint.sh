@@ -1,27 +1,27 @@
-#!/bin/bash
+#!/bin/sh
 
-set -euo pipefail
+set -eu
 
+step="${STEP:-${1:-}}"
 
-arg1=${STEP:-NO}
-
-case $arg1 in
-    "fetch_data" )
-        python -m src.entrypoints.fetch_data
+case "$step" in
+    "fetch_data")
+        exec python -m src.entrypoints.fetch_data
         ;;
-    "vertical_publish" )
-        python -m src.entrypoints.publish_vertical
+    "vertical_publish")
+        exec python -m src.entrypoints.publish_vertical
         ;;
-    "weekly_publish" )
-        python -m src.entrypoints.publish_video
+    "weekly_publish")
+        exec python -m src.entrypoints.publish_video
         ;;
-    "web" )
-        python -m src.entrypoints.api_server
+    "web")
+        exec python -m src.entrypoints.api_server
+        ;;
+    "scheduler")
+        exec python -m src.entrypoints.scheduler
         ;;
     *)
-      echo "use STEP=[fetch_data | vertical_publish | weekly_publish | web]"
+        echo "use STEP=[fetch_data | vertical_publish | weekly_publish | web | scheduler]" >&2
+        exit 1
+        ;;
 esac
-
-#make schedule
-#python -m src.entrypoints.fetch_data
-#python -m src.entrypoints.publish_video

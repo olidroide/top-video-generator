@@ -94,11 +94,19 @@ class ReleasePlatform(StrEnum):
     SPOTIFY = "SPOTIFY"
 
 
+class ReleaseKind(StrEnum):
+    """Release categories used for idempotency."""
+
+    DAILY_VERTICAL = "DAILY_VERTICAL"
+    WEEKLY_HORIZONTAL = "WEEKLY_HORIZONTAL"
+
+
 class Release(BaseModel):
     """Represents a published release on a platform."""
 
     platform: str | None = None
     client_id: str | None = None
+    release_kind: str | None = None
     release_id: str | None = None
     published_at: float | None = None
 

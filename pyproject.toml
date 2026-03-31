@@ -48,6 +48,8 @@ api-server = "src.entrypoints.api_server:main"
 fetch-data = "src.entrypoints.fetch_data:main"
 publish-vertical = "src.entrypoints.publish_vertical:main"
 publish-video = "src.entrypoints.publish_video:main"
+scheduler-healthcheck = "src.entrypoints.scheduler_healthcheck:main"
+scheduler-run = "src.entrypoints.scheduler:main"
 
 [project.optional-dependencies]
 instagram = [

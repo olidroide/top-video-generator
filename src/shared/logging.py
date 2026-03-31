@@ -3,6 +3,7 @@
 import logging.config
 import sys
 from logging import handlers
+from pathlib import Path
 from typing import Any, cast
 
 import structlog
@@ -63,8 +64,12 @@ handler_stream.setFormatter(ProcessorFormatter(processor=structlog.dev.ConsoleRe
 handler_stream.setLevel(logging.INFO)
 
 
+log_file_path = Path(get_app_settings().log_file_path)
+log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+
 handler_file = handlers.TimedRotatingFileHandler(
-    filename=get_app_settings().log_file_path,
+    filename=log_file_path,
     encoding="utf-8",
     when="midnight",
     backupCount=7,

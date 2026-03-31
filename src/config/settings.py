@@ -29,6 +29,18 @@ class AppSettings(BaseSettings):
     cpu_workers: int = 0
     threads_workers: int = 1
     log_file_path: str = "logs/top_music.log"
+    scheduler_timezone: str | None = None
+    scheduler_poll_interval_seconds: int = 60
+    scheduler_heartbeat_file: str = "run/top-video-generator-scheduler-heartbeat.json"
+    scheduler_heartbeat_stale_seconds: int = 10800
+    scheduler_lock_file: str = "run/top-video-generator-scheduler.lock"
+    scheduler_fetch_hour: int = 15
+    scheduler_fetch_minute: int = 0
+    scheduler_vertical_publish_hour: int = 16
+    scheduler_vertical_publish_minute: int = 0
+    scheduler_weekly_publish_hour: int = 17
+    scheduler_weekly_publish_minute: int = 0
+    scheduler_weekly_publish_day_of_week: int = 5
 
     yt_client_secret_file: str | None = None
     yt_redirect_uri: str | None = None

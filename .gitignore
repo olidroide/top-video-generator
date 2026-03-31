@@ -123,6 +123,7 @@ cython_debug/
 .AppleDouble
 .LSOverride
 .Trashes.env
+docker-environment.local.env
 videos*
 db*
 logs*
