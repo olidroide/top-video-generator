@@ -6,6 +6,10 @@ install-requirements:
 dev-install:
 	uv sync --all-extras --dev
 
+install-hooks:
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-push
+
 build-local-image:
 	docker buildx bake -f docker-bake.hcl top-video-generator-local
 
@@ -29,6 +33,11 @@ lint:
 
 type-check:
 	uv run ty src tests
+
+quality:
+	uv run ruff format --check src/ tests/
+	uv run ruff check src/ tests/
+	uv run ty check src/
 
 test:
 	uv run pytest tests/

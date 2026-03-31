@@ -1,5 +1,5 @@
 # Build stage for compiling Python packages
-FROM python:3.12.8-slim-bookworm AS builder
+FROM python:3.13.9-slim-bookworm AS builder
 
 ENV PIP_DEFAULT_TIMEOUT=100 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -42,7 +42,7 @@ COPY ./uv.lock /uv.lock
 RUN uv sync --no-dev --frozen
 
 # Runtime stage - minimal final image
-FROM python:3.12.8-slim-bookworm
+FROM python:3.13.9-slim-bookworm
 LABEL MAINTAINER="top-video-generator@olidroide.es"
 
 ENV PYTHONUNBUFFERED=1 \

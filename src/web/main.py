@@ -32,20 +32,33 @@ from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
-from src.infrastructure.youtube import get_yt_client
+from src.infrastructure.youtube import YTClient, get_yt_client
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _get_yt_provider() -> YTClient:
+    return get_yt_client()
+
+
+def _get_tiktok_provider() -> TikTokClient:
+    return TikTokClient()
+
+
+def _get_spotify_provider() -> SpotifyClient:
+    return SpotifyClient()
 
 
 def _get_authorize_use_case() -> AuthorizeUseCase:
     """Factory that wires all OAuth providers into AuthorizeUseCase."""
     return AuthorizeUseCase(
         auth_repo=get_auth_repo(),
-        yt_provider=get_yt_client(),
-        tiktok_provider=TikTokClient(),
-        spotify_provider=SpotifyClient(),
+        yt_provider=_get_yt_provider(),
+        tiktok_provider=_get_tiktok_provider(),
+        spotify_provider=_get_spotify_provider(),
     )
+
 
 app = FastAPI()
 
@@ -69,11 +82,14 @@ async def request_had_any_credentials(request: Request) -> bool:
 def get_auth_repo() -> AuthenticationRepository:
     return AuthenticationRepository(Path(get_app_settings().db_data_file))
 
+
 def get_release_repo() -> ReleaseRepository:
     return ReleaseRepository(get_app_settings().db_data_file)
 
+
 def get_timeseries_repo() -> TimeSeriesRepository:
     return TimeSeriesRepository(get_app_settings().db_timeseries_file)
+
 
 async def already_finish_setup() -> bool:
     auth_repo = get_auth_repo()
@@ -218,17 +234,14 @@ async def index(
     weekly_date = weekly.value if weekly else None
     try:
         use_case = FetchTopVideosUseCase(get_timeseries_repo())
-        result = await use_case.execute(FetchTopVideosRequest(
-            timeseries_range=timeseries_range, 
-            day=weekly_date if weekly_date else daily_date,
-            limit=25
-        ))
+        result = await use_case.execute(
+            FetchTopVideosRequest(timeseries_range=timeseries_range, day=weekly_date or daily_date, limit=25)
+        )
         video_list = list(result.videos)
-        
+
         release_repo = get_release_repo()
         yt_video_published = release_repo.is_release_at_date(
-            platform=ReleasePlatform.YOUTUBE.value, 
-            release_date=daily_date
+            platform=ReleasePlatform.YOUTUBE.value, release_date=daily_date
         )
     except Exception as exc:
         logger.error(f"Error loading videos: {exc}")
@@ -268,14 +281,14 @@ async def setup_page(
     }
 
     auth_repo = get_auth_repo()
-    
+
     if yt_credentials := request.session.get("yt_credentials"):
         yt_client_id = yt_credentials
         yt_credentials_db = auth_repo.get_yt_auth(yt_client_id)
         if yt_credentials_db:
             data_context["yt_credentials"] = yt_credentials_db.model_dump()
     else:
-        data_context["yt_authentication_url"] = await get_yt_client().step_1_get_authentication_url()
+        data_context["yt_authentication_url"] = await _get_yt_provider().step_1_get_authentication_url()
 
     if tiktok_credential := request.session.get("tiktok_credentials"):
         tiktok_client_id = tiktok_credential
@@ -283,7 +296,7 @@ async def setup_page(
         if tiktok_credentials_db:
             data_context["tiktok_credentials"] = tiktok_credentials_db.model_dump()
     else:
-        data_context["tiktok_authentication_url"] = await TikTokClient().step_1_get_authentication_url()
+        data_context["tiktok_authentication_url"] = await _get_tiktok_provider().step_1_get_authentication_url()
 
     if spotify_credential := request.session.get("spotify_credentials"):
         spotify_client_id = spotify_credential
@@ -291,7 +304,7 @@ async def setup_page(
         if spotify_credentials_db:
             data_context["spotify_credentials"] = spotify_credentials_db.model_dump()
     else:
-        data_context["spotify_authentication_url"] = await SpotifyClient().step_1_get_authentication_url()
+        data_context["spotify_authentication_url"] = await _get_spotify_provider().step_1_get_authentication_url()
 
     return templates.TemplateResponse(
         "setup.html",
@@ -300,7 +313,7 @@ async def setup_page(
 
 
 settings = get_app_settings()
-app.add_middleware(cast(Any, SessionMiddleware), secret_key=settings.app_secret_key or "dev-secret")
+app.add_middleware(cast("Any", SessionMiddleware), secret_key=settings.app_secret_key or "dev-secret")
 
 
 # Health check and metrics storage
@@ -400,9 +413,7 @@ async def metrics():
 @app.post("/metrics/increment/{metric_name}")
 async def increment_metric(metric_name: str, error: bool = False):
     """Internal endpoint to increment metrics (used by background tasks)."""
-    if metric_name in _metrics:
-        if error:
-            _metrics[f"{metric_name}_errors"] += 1
-        else:
-            _metrics[metric_name] += 1
+    key = f"{metric_name}_errors" if error else f"{metric_name}_count"
+    if key in _metrics:
+        _metrics[key] += 1
     return {"status": "ok"}

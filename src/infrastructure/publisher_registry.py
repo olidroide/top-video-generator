@@ -1,5 +1,3 @@
-from typing import cast
-
 from src.adapters.instagram_publisher import InstagramPublisher
 from src.adapters.tiktok_publisher import TikTokPublisher
 from src.adapters.youtube_publisher import YouTubePublisher
@@ -10,11 +8,12 @@ logger = get_logger(__name__)
 
 
 def build_publishers() -> list[VideoPublisher]:
-    publishers: list[VideoPublisher] = [
-        cast(VideoPublisher, InstagramPublisher()),
-        cast(VideoPublisher, TikTokPublisher()),
-        cast(VideoPublisher, YouTubePublisher()),
+    candidates: list[InstagramPublisher | TikTokPublisher | YouTubePublisher] = [
+        InstagramPublisher(),
+        TikTokPublisher(),
+        YouTubePublisher(),
     ]
+    publishers: list[VideoPublisher] = list(candidates)
     enabled = [p for p in publishers if p.is_enabled]
     skipped = [p for p in publishers if not p.is_enabled]
     logger.info("publishers.active", platforms=[p.platform_name for p in enabled])

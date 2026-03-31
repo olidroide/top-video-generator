@@ -2,13 +2,14 @@
 
 import asyncio
 import datetime
+from collections.abc import Sequence
 from datetime import date
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.publish_video_use_case import PublishVideoRequest, PublishVideoUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
-from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange
+from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange, Video
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
@@ -39,7 +40,7 @@ def _build_video_compositor(video_downloader: VideoDownloader) -> VideoComposito
     return VideoCompositor(asset_manager, renderer)
 
 
-def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
+def generate_yt_title(video_list: Sequence[Video], hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
     format_yt_title = get_app_settings().yt_title_template
@@ -48,7 +49,7 @@ def generate_yt_title(video_list, hashtag_list: list[str] | None = None) -> str:
     return format_yt_title
 
 
-def generate_yt_description(video_list) -> str:
+def generate_yt_description(video_list: Sequence[Video]) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d / %m / %Y")
     # Solo nombres válidos
     channels_names = list(

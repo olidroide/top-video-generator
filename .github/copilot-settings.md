@@ -6,7 +6,13 @@
 - lint: uv run ruff check src/ tests/
 - format: uv run ruff format src/ tests/
 - typecheck: uv run ty check src/
+- quality: make quality
 - run: uv run {script}
+
+## Local Enforcement
+
+- Install tracked git hooks once per clone: make install-hooks
+- Pre-push hook blocks pushes when Ruff or Ty checks fail.
 
 ## Dependency Defaults
 
