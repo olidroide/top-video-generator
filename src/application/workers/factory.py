@@ -22,8 +22,9 @@ class WorkerFactory:
     @staticmethod
     def _create_worker_connection(context: Context, port: int, screen_orientation: str) -> Any:
         try:
-            dir_path = pathlib.Path(__file__).parent
-            worker_script_file_path = str(dir_path / "post_processor.py")
+            # post_processor lives in entrypoints/workers/ (it is an entrypoint, not app logic)
+            entrypoints_dir = pathlib.Path(__file__).parent.parent.parent / "entrypoints" / "workers"
+            worker_script_file_path = str(entrypoints_dir / "post_processor.py")
             subprocess.Popen(  # noqa: S603
                 [sys.executable, worker_script_file_path, f" {port} {screen_orientation}"],
                 shell=False,
