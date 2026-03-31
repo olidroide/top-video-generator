@@ -103,9 +103,6 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
         db_data_file += ".test"
         db_timeseries_file += ".test"
 
-    # Initialize repositories and use case
-    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-    video_repo = VideoRepository(Path(db_data_file))
     release_repo = ReleaseRepository(db_data_file)
     if release_repo.is_release_at_date(
         platform=ReleasePlatform.YOUTUBE.value,
@@ -114,6 +111,9 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
     ):
         logger.info("publish_video.already_completed", day=str(day))
         return
+
+    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
+    video_repo = VideoRepository(Path(db_data_file))
     fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
 
     # Fetch top videos for the week
