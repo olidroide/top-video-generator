@@ -20,7 +20,7 @@ from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
 from src.infrastructure.youtube import get_yt_client
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.execution_lock import FileExecutionLock
-from src.shared.logging import get_logger
+from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -168,6 +168,8 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
 
 def main() -> None:
     """Entry point for publish-video command."""
+    settings = get_app_settings()
+    setup_logging(settings.log_file_path)
     asyncio.run(main_async())
 
 

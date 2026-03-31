@@ -14,7 +14,7 @@ from src.config.settings import AppSettings, get_app_settings
 from src.entrypoints.fetch_data import main_async as fetch_data_main_async
 from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 from src.entrypoints.publish_video import main_async as publish_weekly_main_async
-from src.shared.logging import get_logger
+from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -183,6 +183,8 @@ async def main_async() -> None:
 
 def main() -> None:
     """Entry point for scheduler command."""
+    settings = get_app_settings()
+    setup_logging(settings.log_file_path)
     asyncio.run(main_async())
 
 

@@ -2,7 +2,8 @@
 
 from pathlib import Path
 
-from src.web.main import WEB_DIR, app
+from src.config.settings import AppSettings
+from src.web.main import WEB_DIR, create_app
 
 
 def test_web_assets_resolve_from_module_directory() -> None:
@@ -12,5 +13,6 @@ def test_web_assets_resolve_from_module_directory() -> None:
 
 
 def test_health_route_is_registered() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES"))
     paths = {route.path for route in app.routes}
     assert "/health" in paths

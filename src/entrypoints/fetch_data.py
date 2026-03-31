@@ -12,7 +12,7 @@ from src.domain.services.scoring_service import score_and_rank_video_points
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.execution_lock import FileExecutionLock
-from src.shared.logging import get_logger
+from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -51,10 +51,6 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
 
-    if not settings.is_production_env:
-        db_data_file += ".test"
-        db_timeseries_file += ".test"
-
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
     video_repo = VideoRepository(Path(db_data_file))
 
@@ -74,7 +70,7 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     yt_source = YouTubeSource()
     fetch_trending_use_case = FetchTrendingUseCase(source=yt_source)
     trending_result = await fetch_trending_use_case.execute(
-        FetchTrendingRequest(region=settings.yt_search_region_code or "ES", limit=25)
+        FetchTrendingRequest(region=settings.yt_search_region_code, limit=25)
     )
     video_id_list = [v.video_id for v in trending_result.videos]
 
@@ -101,6 +97,8 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
 
 def main() -> None:
     """Entry point for fetch-data command."""
+    settings = get_app_settings()
+    setup_logging(settings.log_file_path)
     asyncio.run(main_async())
 
 

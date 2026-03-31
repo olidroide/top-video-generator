@@ -7,9 +7,12 @@ from datetime import datetime
 
 from fastapi.testclient import TestClient
 
+from src.config.settings import AppSettings
 from src.web.dependencies import get_timeseries_repo
-from src.web.main import app
+from src.web.main import create_app
 from src.web.state import metrics_state
+
+app = create_app(AppSettings(yt_search_region_code="ES"))
 
 
 @dataclass

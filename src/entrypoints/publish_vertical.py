@@ -30,7 +30,7 @@ from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.execution_lock import FileExecutionLock
-from src.shared.logging import get_logger
+from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -306,6 +306,8 @@ def _publisher_client_id(settings: AppSettings, platform_name: str) -> str | Non
 
 def main() -> None:
     """Entry point for publish-vertical command."""
+    settings = get_app_settings()
+    setup_logging(settings.log_file_path)
     asyncio.run(main_async())
 
 

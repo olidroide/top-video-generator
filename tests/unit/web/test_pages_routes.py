@@ -8,9 +8,12 @@ from typing import TYPE_CHECKING
 from fastapi.testclient import TestClient
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosResult
+from src.config.settings import AppSettings
 from src.domain.models import Channel, Video
 from src.web.dependencies import get_fetch_top_videos_use_case, get_release_repo
-from src.web.main import app
+from src.web.main import create_app
+
+app = create_app(AppSettings(yt_search_region_code="ES"))
 
 if TYPE_CHECKING:
     import pytest

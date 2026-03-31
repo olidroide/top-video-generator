@@ -3,10 +3,19 @@
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
+from pydantic import StringConstraints, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.shared.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+logger = get_logger(__name__)
+RequiredSetting = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class Environment(StrEnum):
@@ -44,7 +53,7 @@ class AppSettings(BaseSettings):
 
     yt_client_secret_file: str | None = None
     yt_redirect_uri: str | None = None
-    yt_search_region_code: str | None = None
+    yt_search_region_code: RequiredSetting
     yt_search_language_code: str | None = None
     yt_search_category_code: str | None = None
     yt_title_template: str = ""
@@ -82,6 +91,26 @@ class AppSettings(BaseSettings):
     video_template_thumbnail_font_file: str | None = None
     video_generated_folder: str = "videos"
 
+    @model_validator(mode="before")
+    @classmethod
+    def log_missing_required_settings(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+
+        settings_data = cast("dict[str, object]", data)
+        region_code = settings_data.get("yt_search_region_code")
+        if region_code is None or not str(region_code).strip():
+            logger.error(
+                "settings.missing_required_value",
+                setting="TOP_MUSIC_YT_SEARCH_REGION_CODE",
+            )
+        return settings_data
+
+    @field_validator("yt_search_region_code")
+    @classmethod
+    def normalize_yt_search_region_code(cls, value: str) -> str:
+        return value.upper()
+
     @property
     def is_production_env(self) -> bool:
         return self.env == Environment.PRODUCTION
@@ -97,4 +126,5 @@ class AppSettings(BaseSettings):
 
 @lru_cache
 def get_app_settings() -> AppSettings:
-    return AppSettings()
+    settings_factory = cast("Callable[[], AppSettings]", AppSettings)
+    return settings_factory()

@@ -33,6 +33,6 @@ async def test_weekly_publish_returns_early_when_already_published(monkeypatch: 
     monkeypatch.setattr("src.entrypoints.publish_video.TimeSeriesRepository", _TimeSeriesRepositoryStub)
     monkeypatch.setattr("src.entrypoints.publish_video.FetchTopVideosUseCase", _FetchTopVideosUseCaseGuard)
 
-    await _run_weekly_publish_job(AppSettings(env=Environment.DEVELOPMENT))
+    await _run_weekly_publish_job(AppSettings(env=Environment.DEVELOPMENT, yt_search_region_code="ES"))
 
     assert not fetch_use_case_initialized

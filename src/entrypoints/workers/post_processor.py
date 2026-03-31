@@ -12,7 +12,7 @@ from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.youtube.downloader import VideoDownloader
-from src.shared.logging import get_logger
+from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -61,9 +61,14 @@ def main_main(port: int, screen_orientation: str) -> None:
         sys.exit()
 
 
-if __name__ == "__main__":
-    script_name = sys.argv
+def main() -> None:
+    settings = get_app_settings()
+    setup_logging(settings.log_file_path)
     arguments = sys.argv[1].strip().split(" ")
     port = int(arguments[0])
     screen_orientation = str(arguments[1])
     main_main(port, screen_orientation)
+
+
+if __name__ == "__main__":
+    main()

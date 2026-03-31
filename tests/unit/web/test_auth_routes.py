@@ -6,8 +6,11 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
+from src.config.settings import AppSettings
 from src.web.dependencies import get_authorize_use_case
-from src.web.main import app
+from src.web.main import create_app
+
+app = create_app(AppSettings(yt_search_region_code="ES"))
 
 
 @dataclass

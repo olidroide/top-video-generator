@@ -27,7 +27,7 @@ class YTClient:
         settings = get_app_settings()
         self._yt_client_secret_file_name: str = settings.yt_client_secret_file or ""
         self._yt_redirect_uri: str = settings.yt_redirect_uri or ""
-        self._yt_search_region_code: str = settings.yt_search_region_code or ""
+        self._yt_search_region_code: str = settings.yt_search_region_code
         self._yt_search_language_code: str = settings.yt_search_language_code or ""
         self._yt_search_category_code: str = settings.yt_search_category_code or ""
         self._yt_auth_user_id: str = settings.yt_auth_user_id or ""
