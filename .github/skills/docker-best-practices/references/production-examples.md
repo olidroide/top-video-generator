@@ -310,4 +310,3 @@ containers:
 - [ ] Vulnerability scanning passes (Trivy, Scout)
 - [ ] Tested locally with production Compose
 - [ ] Secrets injected via orchestrator, not .env
-

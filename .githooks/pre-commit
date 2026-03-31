@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -eu
+
+STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACMR)"
+
+if [ -z "$STAGED_FILES" ]; then
+	echo "[pre-commit] No staged files to check."
+	exit 0
+fi
+
+echo "[pre-commit] Running fast staged-file checks..."
+# shellcheck disable=SC2086
+uv run pre-commit run --hook-stage pre-commit --show-diff-on-failure --files $STAGED_FILES
+echo "[pre-commit] Checks passed."

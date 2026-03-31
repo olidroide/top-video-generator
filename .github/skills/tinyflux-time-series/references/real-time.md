@@ -53,22 +53,22 @@ class TinyFluxBuffer:
         self.batch = []
         self.batch_size = batch_size
         self.flush_interval = flush_interval
-    
+
     def add_point(self, point):
         self.batch.append(point)
         if len(self.batch) >= self.batch_size:
             self.flush()
-    
+
     def flush(self):
         if not self.batch:
             return
-        
+
         db = TinyFlux(self.db_path)
         for point in self.batch:
             db.insert(point)
         self.batch = []
         print(f"Flushed {len(self.batch)} points")
-    
+
     async def auto_flush_loop(self):
         """Flush every N seconds, even if batch not full."""
         while True:
@@ -138,7 +138,7 @@ def consume_and_write():
             count=1000,
             block=0
         )
-        
+
         for stream, stream_messages in messages:
             for msg_id, data in stream_messages:
                 point = Point(
@@ -165,17 +165,17 @@ Suitable for: Sub-second sampling that should be downsampled
 ```python
 def downsample_ingest(high_freq_stream, target_interval_ms=1000):
     """Downsample high-frequency readings."""
-    
+
     last_write = time.time()
     buffer = []
-    
+
     for reading in high_freq_stream:
         buffer.append(reading)
-        
+
         if (time.time() - last_write) * 1000 >= target_interval_ms:
             # Write aggregated point
             avg_value = sum(b["value"] for b in buffer) / len(buffer)
-            
+
             point = Point(
                 time=datetime.now(timezone.utc),
                 measurement="temperature",
@@ -183,7 +183,7 @@ def downsample_ingest(high_freq_stream, target_interval_ms=1000):
                 fields={"value": avg_value, "sample_count": len(buffer)}
             )
             db.insert(point)
-            
+
             buffer = []
             last_write = time.time()
 ```
@@ -197,11 +197,11 @@ If data loss or duplication is unacceptable (compliance, billing, etc.):
 ```python
 def write_to_tinyflux_and_tsdb(point):
     """Write to both local TinyFlux and central TSDB for durability."""
-    
+
     # Local (fast, for analysis)
     local_db = TinyFlux("local_metrics.csv")
     local_db.insert(point)
-    
+
     # Central (durable backup)
     from influxdb import InfluxDBClient
     client = InfluxDBClient(host='tsdb-server')
@@ -218,9 +218,9 @@ def write_to_tinyflux_and_tsdb(point):
 ```python
 def write_with_retry(db, point, max_retries=3):
     """Write with retry; log failures to dead letter queue."""
-    
+
     import json
-    
+
     for attempt in range(max_retries):
         try:
             db.insert(point)
@@ -249,15 +249,15 @@ class IngestMetrics:
     def __init__(self, window_size=100):
         self.write_times = deque(maxlen=window_size)
         self.start_time = time.time()
-    
+
     def record_write(self, duration_ms):
         self.write_times.append(duration_ms)
-    
+
     def report(self):
         elapsed = time.time() - self.start_time
         avg_latency = sum(self.write_times) / len(self.write_times) if self.write_times else 0
         throughput = len(self.write_times) / elapsed
-        
+
         print(f"Avg latency: {avg_latency:.1f}ms, Throughput: {throughput:.0f} points/sec")
 
 metrics = IngestMetrics()
@@ -266,7 +266,7 @@ for point in ingest_stream:
     start = time.time()
     db.insert(point)
     metrics.record_write((time.time() - start) * 1000)
-    
+
     if /* periodic */ :
         metrics.report()
 ```

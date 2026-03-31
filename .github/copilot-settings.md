@@ -2,6 +2,7 @@
 
 ## Fast Defaults
 
+- pre-commit: uv run pre-commit run --all-files
 - test: uv run pytest
 - lint: uv run ruff check src/ tests/
 - format: uv run ruff format src/ tests/
@@ -12,7 +13,8 @@
 ## Local Enforcement
 
 - Install tracked git hooks once per clone: make install-hooks
-- Pre-push hook runs full-repository quality checks via make quality.
+- Pre-commit runs fast staged-file checks: file hygiene, secrets, ruff fix, and ruff format.
+- Pre-push runs full-repository quality checks plus the main pytest suite.
 
 ## Dependency Defaults
 

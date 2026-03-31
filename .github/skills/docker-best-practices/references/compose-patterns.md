@@ -263,4 +263,3 @@ services:
         max-size: "10m"
         max-file: "3"
 ```
-

@@ -61,14 +61,14 @@ class TestVideoProcessingCharacterization:
     """Characterization tests — document behavior before refactor.
     These tests MUST pass before migration and PASS after each migration step.
     """
-    
+
     def test_asset_manager_get_asset_path(self, tmp_path: Path) -> None:
         """Document current VideoProcessing.asset_manager.get_asset_path behavior."""
         vp = VideoProcessing()
         path = vp._get_asset_path("fonts/Roboto-Bold.ttf")
         # This test captures the CURRENT behavior
         assert path.exists() or path.parent.exists()
-    
+
     def test_renderer_render_text_clip(self, tmp_path: Path) -> None:
         """Document current VideoProcessing.render_text_clip behavior."""
         from moviepy.editor import CompositeVideoClip
@@ -76,7 +76,7 @@ class TestVideoProcessingCharacterization:
         clip = vp.render_text_clip(text="Hello", duration=5.0, fontsize=40)
         assert isinstance(clip, CompositeVideoClip)
         assert clip.duration == 5.0
-    
+
     def test_thumbnail_generator_grid(self, tmp_path: Path) -> None:
         """Document current VideoProcessing.generate_thumbnail_grid behavior."""
         from PIL import Image
@@ -85,7 +85,7 @@ class TestVideoProcessingCharacterization:
         grid = vp.generate_thumbnail_grid(images)
         assert isinstance(grid, Image.Image)
         assert grid.size == (640, 360)  # 2x2 grid of 320x180
-    
+
     def test_compositor_assemble_final(self, tmp_path: Path) -> None:
         """Document current VideoProcessing.assemble_final_clip behavior."""
         from moviepy.editor import VideoFileClip
@@ -113,18 +113,18 @@ from typing import Optional
 
 class VideoAssetManager:
     """Manages file paths, font rendering, and cleanup for video production."""
-    
+
     def __init__(self, base_path: Optional[Path] = None):
         self.base_path = base_path or Path("src/resources")
-    
+
     def get_asset_path(self, asset_name: str) -> Path:
         """Return path to asset (fonts, images, etc.)"""
         return self.base_path / asset_name
-    
+
     def render_font_to_disk(self, font_name: str) -> Path:
         """Render or fetch font, return local path."""
         ...
-    
+
     def cleanup_temp_assets(self) -> None:
         """Remove temporary files from video generation."""
         ...

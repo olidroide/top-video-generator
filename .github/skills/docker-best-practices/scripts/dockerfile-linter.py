@@ -40,7 +40,7 @@ class DockerfileLinter:
         """Check if Dockerfile follows cache-optimal ordering."""
         copy_seen = False
         run_after_copy = False
-        
+
         for i, line in enumerate(self.lines, 1):
             stripped = line.strip()
             if stripped.startswith('COPY') and 'requirements.txt' not in line and 'package' not in line:
@@ -48,7 +48,7 @@ class DockerfileLinter:
             elif stripped.startswith('RUN') and copy_seen:
                 run_after_copy = True
                 break
-        
+
         if run_after_copy:
             self.warnings.append("Consider copying dependency files before application code for better layer caching")
 
@@ -59,7 +59,7 @@ class DockerfileLinter:
             if 'USER' in line and 'appuser' in line or 'nobody' in line:
                 user_found = True
                 break
-        
+
         if not user_found:
             self.issues.append("No non-root user found. Add 'RUN useradd -m appuser' and 'USER appuser'")
 
@@ -78,7 +78,7 @@ class DockerfileLinter:
             r'ENV\s+.*KEY\s*=',
             r'ENV\s+.*SECRET\s*=',
         ]
-        
+
         for i, line in enumerate(self.lines, 1):
             for pattern in secret_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
@@ -113,20 +113,20 @@ class DockerfileLinter:
     def report(self):
         """Print formatted report."""
         print(f"\n=== Dockerfile Linter Report: {self.path} ===\n")
-        
+
         if self.issues:
             print(f"❌ ERRORS ({len(self.issues)}):")
             for issue in self.issues:
                 print(f"   • {issue}")
-        
+
         if self.warnings:
             print(f"\n⚠️  WARNINGS ({len(self.warnings)}):")
             for warning in self.warnings:
                 print(f"   • {warning}")
-        
+
         if not self.issues and not self.warnings:
             print("✅ No issues found!")
-        
+
         print()
         return len(self.issues) == 0
 
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Usage: python3 dockerfile-linter.py <Dockerfile>")
         sys.exit(1)
-    
+
     linter = DockerfileLinter(sys.argv[1])
     issues, warnings = linter.lint()
     success = linter.report()

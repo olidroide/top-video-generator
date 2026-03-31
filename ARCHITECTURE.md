@@ -62,7 +62,7 @@ web → application → domain ← adapters ← infrastructure
 # ❌ ACTUAL (evaluado en import-time)
 def calculate_datetime_for_range(timeseries_range, day: PastDate = date.today()):
     ...
-    
+
 # ✅ TARGET
 def datetime_range_start(days_back: int, reference: date | None = None) -> datetime:
     ref = reference or date.today()  # Evaluado en llamada

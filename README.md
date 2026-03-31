@@ -96,11 +96,11 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Improvements Implemented
 
-✅ **Async Adapters** (`src/adapters/`): Wrap blocking clients in `run_in_executor()`  
-✅ **Retry Utilities** (`src/utils/retry.py`): Exponential backoff with jitter for resilient uploads  
-✅ **Health Checks** (`/health` endpoint): Validates ffmpeg, templates, database  
-✅ **Metrics** (`/metrics` endpoint): Tracks fetch/upload/processing counts and errors  
-✅ **CI/CD** (`.github/workflows/ci.yml`): Automated testing, linting, type checking  
+✅ **Async Adapters** (`src/adapters/`): Wrap blocking clients in `run_in_executor()`
+✅ **Retry Utilities** (`src/utils/retry.py`): Exponential backoff with jitter for resilient uploads
+✅ **Health Checks** (`/health` endpoint): Validates ffmpeg, templates, database
+✅ **Metrics** (`/metrics` endpoint): Tracks fetch/upload/processing counts and errors
+✅ **CI/CD** (`.github/workflows/ci.yml`): Automated testing, linting, type checking
 
 ### Planned Improvements
 

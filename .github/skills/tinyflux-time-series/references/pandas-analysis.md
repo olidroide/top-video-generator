@@ -105,27 +105,27 @@ Create lag features, calendar features, and moving statistics:
 ```python
 def engineer_features(df, measurement_col="value"):
     """Add lag, calendar, and rolling features."""
-    
+
     df = df.copy()
     df = df.sort_index()
-    
+
     # Lags
     df["lag_1"] = df[measurement_col].shift(1)
     df["lag_24"] = df[measurement_col].shift(24)  # 24-hour lag
     df["lag_7d"] = df[measurement_col].shift(7 * 24)  # 7-day lag
-    
+
     # Rolling statistics
     df["rolling_mean_24h"] = df[measurement_col].rolling("24H").mean()
     df["rolling_std_24h"] = df[measurement_col].rolling("24H").std()
-    
+
     # Calendar features
     df["hour"] = df.index.hour
     df["day_of_week"] = df.index.dayofweek
     df["month"] = df.index.month
-    
+
     # Drop NaN rows created by lags
     df = df.dropna()
-    
+
     return df
 ```
 
@@ -136,12 +136,12 @@ Use statistical or ML-based approaches:
 ```python
 def detect_anomalies_statistical(df, measurement_col="value", std_threshold=3):
     """Flag points beyond N standard deviations."""
-    
+
     mean = df[measurement_col].mean()
     std = df[measurement_col].std()
-    
+
     df["is_anomaly"] = (df[measurement_col] - mean).abs() > std_threshold * std
-    
+
     return df[df["is_anomaly"]]
 
 # Usage
@@ -159,15 +159,15 @@ from statsmodels.tsa.arima.model import ARIMA
 
 def forecast_arima(df, measurement_col="value", order=(1, 1, 1), steps=24):
     """Simple ARIMA forecast."""
-    
+
     # Fit model on historical data
     model = ARIMA(df[measurement_col], order=order)
     fitted = model.fit()
-    
+
     # Forecast future steps
     forecast = fitted.get_forecast(steps=steps)
     forecast_df = forecast.summary_frame()
-    
+
     return forecast_df
 
 # Usage
@@ -192,17 +192,17 @@ from prophet import Prophet
 
 def forecast_prophet(df, measurement_col="value", periods=24):
     """Simple Prophet forecast."""
-    
+
     # Prophet expects columns named 'ds' and 'y'
     prophet_df = df[[measurement_col]].reset_index()
     prophet_df.columns = ["ds", "y"]
-    
+
     model = Prophet(interval_width=0.95)
     model.fit(prophet_df)
-    
+
     future = model.make_future_dataframe(periods=periods)
     forecast = model.predict(future)
-    
+
     return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
 ```
 
@@ -213,7 +213,7 @@ Persist aggregations or predictions as new measurement types:
 ```python
 def write_hourly_aggregates(db, device_id, hourly_mean):
     """Write hourly aggregates as a new measurement."""
-    
+
     for timestamp, value in hourly_mean.items():
         agg_point = Point(
             time=timestamp,
@@ -239,16 +239,16 @@ write_hourly_aggregates(db, "sensor_1", hourly_mean)
 ```python
 def process_in_chunks(db, start, end, measurement, chunk_weeks=4):
     """Process large datasets in time chunks."""
-    
+
     current = start
     while current < end:
         chunk_end = current + timedelta(weeks=chunk_weeks)
-        
+
         q = (TimeQuery() >= current) & (TimeQuery() < chunk_end) & (MeasurementQuery() == measurement)
         points = db.search(q)
-        
+
         df = pd.DataFrame([...])  # Convert
         # Process chunk
-        
+
         current = chunk_end
 ```

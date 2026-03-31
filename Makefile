@@ -8,7 +8,15 @@ dev-install:
 
 install-hooks:
 	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
 	chmod +x .githooks/pre-push
+
+pre-commit-run:
+	uv run pre-commit run --all-files
+
+pre-push-check:
+	make quality
+	uv run pytest tests/ -x -q --ignore=tests/integration/video
 
 build-local-image:
 	docker buildx bake -f docker-bake.hcl top-video-generator-local

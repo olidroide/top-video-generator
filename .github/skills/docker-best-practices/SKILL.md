@@ -514,4 +514,3 @@ For deeper guidance on specific topics, refer to:
 - [ ] Compose: volumes for persistence, bind mounts for dev only
 - [ ] Secrets in production come from orchestrator
 - [ ] Tested on target environment before deployment
-

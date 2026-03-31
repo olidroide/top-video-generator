@@ -107,23 +107,23 @@ If you have 5+ years in a single file:
 ```python
 def migrate_to_partitioned(old_db_path, output_dir):
     """Read old monolithic database, write to partitioned files."""
-    
+
     import os
     from collections import defaultdict
-    
+
     old_db = TinyFlux(old_db_path)
     all_points = old_db.all()  # Load all (be careful with memory!)
-    
+
     # Group by year-month
     by_month = defaultdict(list)
     for point in all_points:
         key = (point.time.year, point.time.month)
         by_month[key].append(point)
-    
+
     # Write partitioned files
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    
+
     for (year, month), points in by_month.items():
         filename = f"{output_dir}/metrics_{year}-{month:02d}.csv"
         new_db = TinyFlux(filename)
@@ -149,20 +149,20 @@ from datetime import datetime, timezone, timedelta
 
 def process_in_time_windows(db, start, end, window_days=7):
     """Process large date ranges in manageable chunks."""
-    
+
     current = start
     while current < end:
         window_end = current + timedelta(days=window_days)
-        
+
         q = (TimeQuery() >= current) & (TimeQuery() < window_end)
         points = db.search(q)
-        
+
         # Process this window
         df = pd.DataFrame([...])
         result = df["value"].mean()
-        
+
         current = window_end
-        
+
         # Window data is garbage collected
 ```
 

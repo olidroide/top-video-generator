@@ -152,13 +152,13 @@ Build queries programmatically:
 ```python
 def build_query(start, end, devices=None, min_value=None):
     q = (TimeQuery() >= start) & (TimeQuery() < end)
-    
+
     if devices:
         q = q & ((TagQuery().device_id == devices[0]) |
                  (TagQuery().device_id == devices[1]))
-    
+
     if min_value is not None:
         q = q & (FieldQuery().value >= min_value)
-    
+
     return q
 ```

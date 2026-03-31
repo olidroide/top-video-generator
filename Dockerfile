@@ -116,7 +116,7 @@ WORKDIR /app
 
 # Copy application files
 COPY ./src /app/src
-COPY ./src/resources /app/resources  
+COPY ./src/resources /app/resources
 COPY ./src/web /app/web
 COPY pyproject.toml /app
 COPY Makefile /app
@@ -126,4 +126,3 @@ ENV PYTHONPATH=/app
 USER app
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-
