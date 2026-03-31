@@ -5,9 +5,9 @@ x-top-video-generator-common: &top-video-generator-common
   restart: unless-stopped
   stop_grace_period: 90s
   env_file:
-    - path: ./docker-environment.env
+    - path: ./.env
       required: true
-    - path: ./docker-environment.local.env
+    - path: ./.env.local
       required: false
   volumes:
     - ./prod:/app/db

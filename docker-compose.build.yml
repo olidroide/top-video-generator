@@ -9,4 +9,7 @@ services:
         - "UID=${UID:-1000}"
         - "GID=${GID:-1000}"
     env_file:
-      - ./docker-environment.env
+      - path: ./.env
+        required: true
+      - path: ./.env.local
+        required: false

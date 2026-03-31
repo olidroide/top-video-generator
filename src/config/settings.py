@@ -16,7 +16,7 @@ class Environment(StrEnum):
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
+        env_file=(str(PROJECT_ROOT / ".env"), str(PROJECT_ROOT / ".env.local")),
         env_file_encoding="utf-8",
         env_prefix="TOP_MUSIC_",
         case_sensitive=False,

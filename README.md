@@ -70,15 +70,17 @@ This application fetches daily/weekly top YouTube music videos for a configured 
 All configuration is via environment variables with `TOP_MUSIC_` prefix:
 
 ```bash
-# Copy the example file to the repository root as .env
-# and adjust values for your local environment.
+# Copy .env.example to .env for local runs and Docker Compose.
+# Use .env.local only if you want an optional untracked override on the same machine.
+# Paths in .env and .env.local are resolved from the repository root.
+# Run uv, make, and docker compose commands from the repository root.
 
 # Core settings
 TOP_MUSIC_ENV=production|development
 TOP_MUSIC_DAYS_BETWEEN_TOP=7
 
 # YouTube API
-TOP_MUSIC_YT_CLIENT_SECRET_FILE=yt_client_secret.json
+TOP_MUSIC_YT_CLIENT_SECRET_FILE=secrets/yt_client_secret.json
 TOP_MUSIC_YT_SEARCH_REGION_CODE=IN
 TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
@@ -125,6 +127,8 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 - Docker (optional)
 
 ### Local Development
+
+Important: the file paths configured in `.env` and `.env.local` are relative to the repository root. Run the commands below from the repository root so paths like `secrets/...`, `db/...`, `logs/...`, and `src/resources/...` resolve correctly.
 
 ```bash
 # Install dependencies and git hooks
@@ -181,14 +185,18 @@ If this clone used the older tracked `.githooks/` setup before, rerun `make inst
 
 ### Docker
 
+The commands below also assume you are in the repository root.
+
 ```bash
 # 1) Prepare local config and secrets
-cp docker-environment.env docker-environment.local.env
+cp .env.example .env
 mkdir -p prod/videos prod/logs secrets
 
-# 2) Fill docker-environment.local.env and place secrets under ./secrets
+# 2) Fill .env and place secrets under ./secrets
 #    - ./secrets/yt_client_secret.json
 #    - ./secrets/instagram_session.json (optional if Instagram is disabled)
+#
+# Optional: create .env.local if you want an extra untracked override layer.
 
 # 3) Pull and start the long-running services
 docker compose pull
@@ -203,7 +211,7 @@ The default production topology now runs two services from the same image:
 - `web`: FastAPI application on port `8080`
 - `scheduler`: internal 24/7 scheduler that runs `fetch_data`, `vertical_publish`, and `weekly_publish`
 
-The tracked `docker-environment.env` file is now a safe template. Put real secrets and overrides in `docker-environment.local.env`, which is git-ignored.
+The tracked `.env.example` file is now the single template for both local runs and Docker Compose. Put real secrets in `.env`, and use `.env.local` only as an optional untracked override.
 
 ## License
 
