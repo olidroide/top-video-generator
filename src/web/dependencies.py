@@ -1,13 +1,13 @@
 """Dependency factories for the FastAPI web layer."""
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from src.application.authorize_use_case import AuthorizeUseCase
 from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
-from src.config.settings import get_app_settings
+from src.config.settings import AppSettings, get_app_settings
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
@@ -29,20 +29,27 @@ def get_spotify_provider() -> SpotifyClient:
     return SpotifyClient()
 
 
-def get_auth_repo() -> AuthenticationRepository:
-    return AuthenticationRepository(Path(get_app_settings().db_data_file))
+def get_settings(request: Request) -> AppSettings:
+    app_settings = getattr(request.app.state, "settings", None)
+    if app_settings is not None:
+        return cast("AppSettings", app_settings)
+    return get_app_settings()
 
 
-def get_release_repo() -> ReleaseRepository:
-    return ReleaseRepository(get_app_settings().db_data_file)
+def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> AuthenticationRepository:
+    return AuthenticationRepository(Path(settings.db_data_file))
 
 
-def get_timeseries_repo() -> TimeSeriesRepository:
-    return TimeSeriesRepository(get_app_settings().db_timeseries_file)
+def get_release_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> ReleaseRepository:
+    return ReleaseRepository(settings.db_data_file)
 
 
-def get_video_repo() -> VideoRepository:
-    return VideoRepository(Path(get_app_settings().db_data_file))
+def get_timeseries_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> TimeSeriesRepository:
+    return TimeSeriesRepository(settings.db_timeseries_file)
+
+
+def get_video_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> VideoRepository:
+    return VideoRepository(Path(settings.db_data_file))
 
 
 def get_authorize_use_case(
@@ -67,6 +74,7 @@ def get_fetch_top_videos_use_case(
 
 
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]
+AppSettingsDep = Annotated[AppSettings, Depends(get_settings)]
 AuthenticationRepositoryDep = Annotated[AuthenticationRepository, Depends(get_auth_repo)]
 FetchTopVideosUseCaseDep = Annotated[FetchTopVideosUseCase, Depends(get_fetch_top_videos_use_case)]
 ReleaseRepositoryDep = Annotated[ReleaseRepository, Depends(get_release_repo)]

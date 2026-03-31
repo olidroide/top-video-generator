@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 
@@ -12,11 +11,6 @@ from src.config.settings import AppSettings
 from src.domain.models import Channel, Video
 from src.web.dependencies import get_fetch_top_videos_use_case, get_release_repo
 from src.web.main import create_app
-
-app = create_app(AppSettings(yt_search_region_code="ES"))
-
-if TYPE_CHECKING:
-    import pytest
 
 
 @dataclass
@@ -41,13 +35,8 @@ class _ReleaseRepoStub:
         return False
 
 
-@dataclass
-class _SettingsStub:
-    yt_search_region_code: str | None = None
-
-
-def test_index_renders_page_with_video_list(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.web.routes.pages.get_app_settings", lambda: _SettingsStub())
+def test_index_renders_page_with_video_list() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES"))
     app.dependency_overrides[get_fetch_top_videos_use_case] = lambda: _FetchTopVideosUseCaseStub()
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 
@@ -59,11 +48,11 @@ def test_index_renders_page_with_video_list(monkeypatch: pytest.MonkeyPatch) -> 
     assert response.status_code == 200
     assert "A Sample Song" in response.text
     assert "Channel A" in response.text
-    assert "🌍 🔝 VIDEO GENERATOR" in response.text
+    assert "🇪🇸 🔝 VIDEO GENERATOR" in response.text
 
 
-def test_index_uses_globe_when_region_code_is_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("src.web.routes.pages.get_app_settings", lambda: _SettingsStub("WORLD"))
+def test_index_uses_globe_when_region_code_is_invalid() -> None:
+    app = create_app(AppSettings(yt_search_region_code="WORLD"))
     app.dependency_overrides[get_fetch_top_videos_use_case] = lambda: _FetchTopVideosUseCaseStub()
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 

@@ -16,6 +16,7 @@ from src.entrypoints.fetch_data import main_async as script_fetch_yt_data
 from src.entrypoints.publish_vertical import main_async as script_daily
 from src.entrypoints.publish_video import main_async as script_weekly
 from src.web.dependencies import (
+    AppSettingsDep,
     AuthenticationRepositoryDep,
     AuthorizeUseCaseDep,
     SpotifyProviderDep,
@@ -128,8 +129,9 @@ async def setup_page(
     yt_provider: YouTubeProviderDep,
     tiktok_provider: TikTokProviderDep,
     spotify_provider: SpotifyProviderDep,
+    settings: AppSettingsDep,
 ) -> Response:
-    if already_finish_setup(auth_repo):
+    if already_finish_setup(auth_repo, settings):
         return RedirectResponse("/")
 
     data_context: dict[str, object] = {

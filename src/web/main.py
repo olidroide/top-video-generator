@@ -14,6 +14,7 @@ from src.web.state import WEB_DIR
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     resolved_settings = settings if settings is not None else get_app_settings()
     app = FastAPI()
+    app.state.settings = resolved_settings
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
     app.include_router(auth_router)

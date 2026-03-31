@@ -7,8 +7,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from src.config.settings import get_app_settings
-from src.web.dependencies import TimeSeriesRepositoryDep
+from src.config.settings import AppSettings
+from src.web.dependencies import AppSettingsDep, TimeSeriesRepositoryDep
 from src.web.state import HealthCheck, MetricsResponse, metrics_state
 
 router = APIRouter()
@@ -36,9 +36,8 @@ def _check_ffmpeg() -> dict[str, str]:
         return {"status": "error", "message": f"ffmpeg not found: {exc}"}
 
 
-def _check_templates() -> dict[str, str]:
+def _check_templates(settings: AppSettings) -> dict[str, str]:
     """Check if required template files exist."""
-    settings = get_app_settings()
     required_files = [
         settings.video_template_file,
         settings.video_template_vertical_file,
@@ -65,11 +64,11 @@ def _check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
 
 
 @router.get("/health")
-async def health_check(timeseries_repo: TimeSeriesRepositoryDep) -> HealthCheck:
+async def health_check(timeseries_repo: TimeSeriesRepositoryDep, settings: AppSettingsDep) -> HealthCheck:
     """Health check endpoint for monitoring."""
     checks = {
         "ffmpeg": _check_ffmpeg(),
-        "templates": _check_templates(),
+        "templates": _check_templates(settings),
         "database": _check_database(timeseries_repo),
     }
 

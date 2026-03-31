@@ -10,9 +10,8 @@ from pydantic import BaseModel, field_validator
 from starlette.responses import Response
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest
-from src.config.settings import get_app_settings
 from src.domain.models import ReleasePlatform, TimeseriesRange
-from src.web.dependencies import FetchTopVideosUseCaseDep, ReleaseRepositoryDep
+from src.web.dependencies import AppSettingsDep, FetchTopVideosUseCaseDep, ReleaseRepositoryDep
 from src.web.state import logger, request_had_any_credentials, templates
 
 router = APIRouter()
@@ -49,6 +48,7 @@ async def index(
     request: Request,
     use_case: FetchTopVideosUseCaseDep,
     release_repo: ReleaseRepositoryDep,
+    settings: AppSettingsDep,
     daily: TimeseriesDailyDateModel | None = None,
     weekly: TimeseriesDailyDateModel | None = None,
 ) -> Response:
@@ -72,7 +72,7 @@ async def index(
         yt_video_published = False
 
     credentials_owner = await request_had_any_credentials(request)
-    title_flag = _title_flag(get_app_settings().yt_search_region_code)
+    title_flag = _title_flag(settings.yt_search_region_code)
     data_context: dict[str, Any] = {
         "request": request,
         "video_list": video_list,
