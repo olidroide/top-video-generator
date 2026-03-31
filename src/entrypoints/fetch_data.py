@@ -27,7 +27,11 @@ async def is_passed_enough_time_from_last_fetch(
     delta_from_last_recollection = current_datetime - last_timeseries_datetime
 
     if not (is_enough_time := delta_from_last_recollection.days >= min_days):
-        logger.debug(f"Less than a {min_days} days ({delta_from_last_recollection}) to recollect data")
+        logger.debug(
+            "fetch_data.not_enough_time_elapsed",
+            min_days=min_days,
+            delta=str(delta_from_last_recollection),
+        )
     return is_enough_time
 
 
@@ -48,7 +52,7 @@ def _rank_video_points(
 
     for rank, video_point in enumerate(current_video_list, start=1):
         prev = previous_map.get(video_point.video_id)
-        prev_score = float(prev.score) if prev and prev.score else None
+        prev_score = prev.score if prev and prev.score is not None else None
         video_point.score = rank
         video_point.score_previous = prev_score
 
@@ -64,7 +68,7 @@ def _rank_video_points(
     return current_video_list
 
 
-async def main_async():
+async def main_async() -> None:
     start_process_datetime = datetime.now(UTC)
     settings = get_app_settings()
     db_data_file = settings.db_data_file
@@ -121,7 +125,7 @@ async def main_async():
     logger.info("Finish fetch YT Data", current_timeseries_videos_fetched=current_timeseries_videos_fetched)
 
 
-def main():
+def main() -> None:
     """Entry point for fetch-data command."""
     asyncio.run(main_async())
 

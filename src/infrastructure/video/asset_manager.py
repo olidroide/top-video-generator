@@ -122,9 +122,9 @@ class VideoAssetManager:
         try:
             shutil.rmtree(self._video_generated_folder)
             logger.info("deleted_processed_videos", folder=self._video_generated_folder)
-        except Exception as e:
-            logger.error(
+        except OSError as exc:
+            logger.exception(
                 "failed_to_delete_processed_videos",
                 folder=self._video_generated_folder,
-                exception=str(e),
+                exception=str(exc),
             )

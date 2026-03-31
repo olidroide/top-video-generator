@@ -1,13 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-echo "[pre-push] Running Ruff format check..."
-uv run ruff format --check src/ tests/
-
-echo "[pre-push] Running Ruff lint..."
-uv run ruff check src/ tests/
-
-echo "[pre-push] Running Ty type check..."
-uv run ty check src/
-
+echo "[pre-push] Running full repository quality checks..."
+make quality
 echo "[pre-push] Quality checks passed."

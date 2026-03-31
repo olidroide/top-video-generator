@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tinydb import Query, TinyDB
 
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.shared.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

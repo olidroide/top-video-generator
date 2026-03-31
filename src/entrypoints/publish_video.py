@@ -3,7 +3,7 @@
 import asyncio
 import datetime
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
@@ -42,10 +42,11 @@ def _build_video_pipeline(video_downloader: VideoDownloader) -> tuple[VideoCompo
 def generate_yt_title(video_list: Sequence[Video], hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
-    format_yt_title = get_app_settings().yt_title_template
-    format_yt_title = format_yt_title.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
-    format_yt_title = format_yt_title.replace("@@HASHTAGS@@", f"\n{hashtags}")
-    return format_yt_title
+    return (
+        get_app_settings()
+        .yt_title_template.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
+        .replace("@@HASHTAGS@@", f"\n{hashtags}")
+    )
 
 
 def generate_yt_description(video_list: Sequence[Video]) -> str:
@@ -66,14 +67,7 @@ def generate_yt_description(video_list: Sequence[Video]) -> str:
         "to own any of the original publishers recordings used in this video. "
         f"Original publishers : {original_publishers}."
     )
-    disclaimer = f"""
-➖➖➖➖➖➖
-Disclaimer 
-  · {legal_notice}\n
-  · {copyright_notice}\n 
-  · {fair_use_text}\n
-➖➖➖➖➖➖
-    """
+    disclaimer = f"------\nDisclaimer\n  - {legal_notice}\n\n  - {copyright_notice}\n\n  - {fair_use_text}\n------"
 
     video_list_names = ""
     for video in video_list:
@@ -81,15 +75,15 @@ Disclaimer
         if video.channel and video.channel.name:
             video_list_names += f"© {video.channel.name}\n\n"
 
-    yt_description = get_app_settings().yt_description_template
-    yt_description = yt_description.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
-    yt_description = yt_description.replace("@@VIDEO_LIST@@", f"{video_list_names}")
-    yt_description = yt_description.replace("@@DISCLAIMER@@", f"{disclaimer}")
+    return (
+        get_app_settings()
+        .yt_description_template.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
+        .replace("@@VIDEO_LIST@@", f"{video_list_names}")
+        .replace("@@DISCLAIMER@@", disclaimer)
+    )
 
-    return yt_description
 
-
-async def main_async():
+async def main_async() -> None:
     settings = get_app_settings()
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
@@ -104,7 +98,7 @@ async def main_async():
     fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo)
 
     # Fetch top videos for the week
-    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=date.today())
+    request = FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=datetime.datetime.now(UTC).date())
     result = await fetch_videos_use_case.execute(request)
     video_list = list(result.videos)
     video_list.sort(key=lambda x: x.score, reverse=True)
@@ -119,7 +113,6 @@ async def main_async():
     compositor, thumbnail_generator = _build_video_pipeline(downloader)
     file_path = await compositor.join_processed_videos([video.video_id for video in video_list])
 
-    # file_path = "../videos/20230630_format.mp4"
     yt_title = generate_yt_title(video_list)
     logger.debug("generated title: ", yt_title=yt_title)
     yt_description = generate_yt_description(video_list)
@@ -137,8 +130,8 @@ async def main_async():
             playlist_id=playlist_id,
             tags=hashtag_list,
         )
-    except Exception as e:
-        logger.error("Failed to upload Youtube", error=e)
+    except Exception as exc:
+        logger.exception("publish_video.youtube_upload_failed", error=str(exc))
         yt_video_id = None
 
     try:
@@ -150,13 +143,11 @@ async def main_async():
                 published_at=datetime.datetime.now(datetime.UTC).timestamp(),
             )
         )
-    except Exception as e:
-        logger.error("Failed to save Youtube Release", error=e)
-
-    # await _build_video_pipeline(downloader)[0]._asset_manager.delete_processed_videos()
+    except Exception as exc:
+        logger.exception("publish_video.release_persist_failed", error=str(exc))
 
 
-def main():
+def main() -> None:
     """Entry point for publish-video command."""
     asyncio.run(main_async())
 

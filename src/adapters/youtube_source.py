@@ -10,8 +10,13 @@ class YouTubeSource:
         self.client = YTClient()
 
     async def fetch_trending_videos(
-        self, *, region: str = "", date: str | None = None, limit: int = 50  # noqa: ARG002
+        self,
+        *,
+        region: str = "",
+        date: str | None = None,
+        limit: int = 50,
     ) -> list[CanonicalVideo]:
+        _ = region, date
         trending_data = await self.client.get_popular_videos(max_results=limit)
         return [self._yt_video_to_canonical(item) for item in trending_data.items]
 

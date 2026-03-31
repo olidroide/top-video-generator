@@ -196,5 +196,3 @@ class TimePoint(BaseModel):
 
 class VideoPoint(Video, TimePoint):
     """Video data with timestamp (timeseries point in TinyFlux)."""
-
-    pass

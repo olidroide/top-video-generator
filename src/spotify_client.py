@@ -7,7 +7,9 @@ Scheduled for removal after all imports are migrated.
 
 import warnings
 
-from src.infrastructure.social.spotify_client import SpotifyClient as SpotifyClient  # noqa: F401
+from src.infrastructure.social.spotify_client import SpotifyClient
+
+__all__ = ["SpotifyClient"]
 
 warnings.warn(
     "src.spotify_client is deprecated; use src.infrastructure.social.spotify_client instead",

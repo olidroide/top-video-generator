@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from src.application.authorize_use_case import (
     AuthorizeSpotifyRequest,
     AuthorizeTikTokRequest,
@@ -16,7 +14,6 @@ from src.application.authorize_use_case import (
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.domain.ports import SpotifyOAuthProvider, TikTokOAuthProvider, YouTubeOAuthProvider
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,9 +114,7 @@ class TestAuthorizeUseCaseTikTok:
         assert result.client_id == "tt_open_id"
 
     async def test_execute_tiktok_scopes_parsed_from_comma_separated(self, tmp_path: Path) -> None:
-        provider = make_tiktok_provider(
-            {"access_token": "t", "refresh_token": "r", "open_id": "oid", "scope": "a,b,c"}
-        )
+        provider = make_tiktok_provider({"access_token": "t", "refresh_token": "r", "open_id": "oid", "scope": "a,b,c"})
         auth_repo = AuthenticationRepository(tmp_path / "auth.json")
         use_case = AuthorizeUseCase(
             auth_repo=auth_repo,

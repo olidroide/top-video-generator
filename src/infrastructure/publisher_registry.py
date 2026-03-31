@@ -8,12 +8,11 @@ logger = get_logger(__name__)
 
 
 def build_publishers() -> list[VideoPublisher]:
-    candidates: list[InstagramPublisher | TikTokPublisher | YouTubePublisher] = [
+    publishers: list[VideoPublisher] = [
         InstagramPublisher(),
         TikTokPublisher(),
         YouTubePublisher(),
     ]
-    publishers: list[VideoPublisher] = list(candidates)
     enabled = [p for p in publishers if p.is_enabled]
     skipped = [p for p in publishers if not p.is_enabled]
     logger.info("publishers.active", platforms=[p.platform_name for p in enabled])

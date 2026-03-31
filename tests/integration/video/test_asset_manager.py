@@ -2,10 +2,8 @@
 
 import pathlib
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
 
 from src.infrastructure.video.asset_manager import VideoAssetManager
 
@@ -27,7 +25,7 @@ class TestVideoAssetManagerAfterMigration:
         )
 
         # Check dated folder created
-        today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+        today_str = datetime.now(UTC).strftime("%Y%m%d")
         expected_folder = tmp_path / "generated" / today_str
         assert expected_folder.exists()
         assert pathlib.Path(manager.video_generated_folder) == expected_folder

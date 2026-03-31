@@ -129,6 +129,20 @@ class TestFetchTopVideosUseCase:
         assert result.video_count == 1
         assert result.videos[0].video_id == "new_vid"
 
+    async def test_existing_video_keeps_previous_rank_as_integer(self) -> None:
+        previous = [make_video_point("v1", views=1000, score=4)]
+        current = [make_video_point("v1", views=3200)]
+        repo = make_repo(current, previous)
+        use_case = FetchTopVideosUseCase(repo)
+
+        result = await use_case.execute(
+            FetchTopVideosRequest(timeseries_range=TimeseriesRange.WEEKLY, day=date(2026, 3, 30))
+        )
+
+        assert result.videos[0].score == 1
+        assert result.videos[0].score_previous == 4
+        assert result.videos[0].score_status == VideoScoreStatus.UP
+
     async def test_default_limit_is_25(self) -> None:
         current = [make_video_point(f"v{i}", views=i * 10) for i in range(30)]
         repo = make_repo(current)

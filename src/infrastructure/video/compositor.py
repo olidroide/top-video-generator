@@ -26,6 +26,8 @@ from .renderer import VideoRenderer
 
 logger = get_logger(__name__)
 
+CLIP_TRIM_THRESHOLD_SECONDS = 50
+
 
 class VideoCompositor:
     """Composes video clips with overlays and renders final videos.
@@ -74,7 +76,7 @@ class VideoCompositor:
         )
         raw_duration: Any = getattr(clip, "duration", 0.0)
         clip_duration = float(raw_duration or 0.0)
-        if clip_duration < 50:
+        if clip_duration < CLIP_TRIM_THRESHOLD_SECONDS:
             clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
         else:
             start = int(clip_duration / 2)
@@ -94,7 +96,7 @@ class VideoCompositor:
         Args:
             video: Video object with metadata for overlays.
         """
-        logger.debug(f"start {self.post_process_vertical_video.__name__}", video=video.video_id)
+        logger.debug("start post_process_vertical_video", video=video.video_id)
         _x_width = 1080
         _y_height = 1920
         seconds_per_clip = 8
@@ -103,7 +105,7 @@ class VideoCompositor:
         )
         clip = clip.set_position("top")
         clip_duration = float(clip.duration or 0.0)
-        if clip_duration < 50:
+        if clip_duration < CLIP_TRIM_THRESHOLD_SECONDS:
             clip = clip.subclip(t_start=0, t_end=seconds_per_clip)
         else:
             start = int(clip_duration / 2)

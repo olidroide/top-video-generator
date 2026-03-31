@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from src.domain.models import Video
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.domain.models import Video
 
 
 def extract_video_hashtags(video_list: list[Video] | None = None) -> list[str]:

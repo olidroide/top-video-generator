@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from src.domain.models import CanonicalVideo
-from src.domain.ports import VideoDataSource
+if TYPE_CHECKING:
+    from src.domain.models import CanonicalVideo
+    from src.domain.ports import VideoDataSource
 
 
 @dataclass(frozen=True)

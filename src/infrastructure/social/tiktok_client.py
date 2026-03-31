@@ -4,6 +4,7 @@ import math
 import pathlib
 import random
 import string
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
@@ -58,7 +59,7 @@ class TiktokResponsePublishVideoInitUrl(TiktokResponse):
 
 
 @asynccontextmanager
-async def get_default_client():
+async def get_default_client() -> AsyncIterator[aiohttp.ClientSession]:
     conn = None
     async with aiohttp.ClientSession(
         connector=conn,
@@ -113,7 +114,7 @@ class TikTokClient:
         logger.debug("url", request_code_url=request_code_url)
         return request_code_url
 
-    async def step_2_exchange_code_authentication(self, user_code: str):
+    async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, object]:
         authorize_url = f"{self._base_url}/v2/oauth/token/"
         data = {
             "client_key": self._tiktok_client_key,
@@ -134,7 +135,7 @@ class TikTokClient:
         logger.debug("auth token:", response_dict=response_dict)
         return response_dict
 
-    async def fetch_user_info(self):
+    async def fetch_user_info(self) -> dict[str, object]:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {await self._get_user_token_bearer_credentials(self._tiktok_user_openid)}",
@@ -147,6 +148,7 @@ class TikTokClient:
             response = await client.get(url=url, headers=headers, params=params)
             response_dict = await response.json()
         logger.debug("response_dict:", response_dict=response_dict)
+        return response_dict
 
     async def refresh_token(self) -> str:
         url = f"{self._base_url}/v2/oauth/token/"
@@ -197,10 +199,10 @@ class TikTokClient:
     def _file_sender(
         file_name: str,
         chunk_size_bytes: int,
-    ):
-        with open(file_name, "rb") as f:
+    ) -> Iterator[bytes]:
+        with pathlib.Path(file_name).open("rb") as file_handle:
             while True:
-                chunk = f.read(chunk_size_bytes)
+                chunk = file_handle.read(chunk_size_bytes)
                 if not chunk:  # Break the loop if no more data is left to read
                     break
                 yield chunk
@@ -210,6 +212,7 @@ class TikTokClient:
         video_path: str,
         title: str | None = None,
     ) -> str | None:
+        _ = title
         access_token = await self.refresh_token()
         auth_header = {
             "Authorization": f"Bearer {access_token}",
@@ -246,7 +249,7 @@ class TikTokClient:
                     "source": "FILE_UPLOAD",
                     "video_size": int(file_size_bytes),
                     "chunk_size": chunk_size,
-                    "total_chunk_count": int(len(upload_data)),
+                    "total_chunk_count": len(upload_data),
                 }
             }
         )
@@ -264,9 +267,7 @@ class TikTokClient:
                 return None
             for video_data in upload_data:
                 content_length = str(len(video_data["data"]))
-                content_range = (
-                    f"{str(video_data['first_byte'])}-{str(video_data['last_byte'])}/{str(video_data['total_byte'])}"
-                )
+                content_range = f"{video_data['first_byte']!s}-{video_data['last_byte']!s}/{video_data['total_byte']!s}"
                 content_video_headers = {
                     "Content-Type": "video/mp4",
                     "Content-Length": content_length,

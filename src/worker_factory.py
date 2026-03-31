@@ -7,7 +7,9 @@ Scheduled for removal after all imports are migrated.
 
 import warnings
 
-from src.application.workers.factory import WorkerFactory as WorkerFactory  # noqa: F401
+from src.application.workers.factory import WorkerFactory
+
+__all__ = ["WorkerFactory"]
 
 warnings.warn(
     "src.worker_factory is deprecated; use src.application.workers.factory instead",

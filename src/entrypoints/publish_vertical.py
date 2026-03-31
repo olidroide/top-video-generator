@@ -3,13 +3,14 @@
 import asyncio
 import datetime
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
-from src.application.publish_video_use_case import PublishVideoRequest, PublishVideoUseCase
+from src.application.publish_video_use_case import PublishVideoRequest, PublishVideoResult, PublishVideoUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Release, ReleasePlatform, TimeseriesRange, Video
+from src.domain.ports import VideoPublisher
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
@@ -43,10 +44,11 @@ def _build_video_compositor(video_downloader: VideoDownloader) -> VideoComposito
 def generate_yt_title(video_list: Sequence[Video], hashtag_list: list[str] | None = None) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
     hashtags = " ".join(hashtag_list) if hashtag_list else ""
-    format_yt_title = get_app_settings().yt_title_template
-    format_yt_title = format_yt_title.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
-    format_yt_title = format_yt_title.replace("@@HASHTAGS@@", f"\n{hashtags}")
-    return format_yt_title
+    return (
+        get_app_settings()
+        .yt_title_template.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
+        .replace("@@HASHTAGS@@", f"\n{hashtags}")
+    )
 
 
 def generate_yt_description(video_list: Sequence[Video]) -> str:
@@ -71,14 +73,7 @@ def generate_yt_description(video_list: Sequence[Video]) -> str:
         "any of the original publishers recordings used in this video. "
         f"Original publishers : {original_publishers}."
     )
-    disclaimer = f"""
-➖➖➖➖➖➖
-Disclaimer 
-  · {legal_notice}\n
-  · {copyright_notice}\n 
-  · {fair_use_text}\n
-➖➖➖➖➖➖
-    """
+    disclaimer = f"------\nDisclaimer\n  - {legal_notice}\n\n  - {copyright_notice}\n\n  - {fair_use_text}\n------"
 
     video_list_names = ""
     for video in video_list:
@@ -93,16 +88,16 @@ Disclaimer
         if video.channel and video.channel.name:
             video_list_names += f"© {video.channel.name}\n\n"
 
-    yt_description = get_app_settings().yt_description_template
-    yt_description = yt_description.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
-    yt_description = yt_description.replace("@@VIDEO_LIST@@", f"{video_list_names}")
-    yt_description = yt_description.replace("@@DISCLAIMER@@", f"{disclaimer}")
+    return (
+        get_app_settings()
+        .yt_description_template.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
+        .replace("@@VIDEO_LIST@@", f"{video_list_names}")
+        .replace("@@DISCLAIMER@@", disclaimer)
+    )
 
-    return yt_description
 
-
-async def main_async():
-    day = date.today()
+async def main_async() -> None:
+    day = datetime.datetime.now(UTC).date()
     settings = get_app_settings()
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
@@ -135,8 +130,8 @@ async def main_async():
             playlist_id=get_app_settings().spotify_playlist_original,
             song_title_list=yt_video_title_list,
         )
-    except Exception as e:
-        logger.error("Failed to update Spotify original playlist", error=e)
+    except Exception as exc:
+        logger.exception("publish_vertical.spotify_playlist_update_failed", error=str(exc))
 
     video_list = video_list[:5]
     # sort: score None al final
@@ -158,7 +153,7 @@ async def main_async():
     logger.debug("generated description:", yt_description=yt_description)
 
     # Hexagonal: convertir Video → CanonicalVideo para adapters
-    def video_to_canonical(v) -> CanonicalVideo:
+    def video_to_canonical(v: Video) -> CanonicalVideo:
         return CanonicalVideo(
             video_id=v.video_id,
             title=v.title or "",
@@ -175,7 +170,7 @@ async def main_async():
     publishers = build_publishers()
     results = []
 
-    async def _publish_one(publisher):
+    async def _publish_one(publisher: VideoPublisher) -> PublishVideoResult:
         description = yt_description if publisher.platform_name.name == "YOUTUBE" else yt_title
         use_case = PublishVideoUseCase([publisher])
         return await use_case.execute(
@@ -213,10 +208,8 @@ async def main_async():
                 )
             )
 
-    # Nota: la actualización de playlist de YouTube original debe hacerse aparte si es necesario
 
-
-def main():
+def main() -> None:
     """Entry point for publish-vertical command."""
     asyncio.run(main_async())
 

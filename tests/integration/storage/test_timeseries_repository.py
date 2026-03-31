@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from tinyflux import Point
 
 from src.domain.models import VideoPoint, VideoScoreStatus
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
@@ -101,6 +103,29 @@ class TestGetVideoPointsByDateRange:
         assert vp.views == 9999
         assert vp.likes == 111
         assert vp.score == 3
+
+    def test_maps_nullable_numeric_fields_to_none(self) -> None:
+        dt = datetime(2026, 3, 31, 10, 0, 0, tzinfo=UTC)
+        point = Point(
+            measurement="Video visualizations",
+            time=dt,
+            tags={"video_id": "v-null", "score_status": "NEW"},
+            fields={"views": 1500, "likes": 75, "views_growth": None, "score": None},
+        )
+        result = TimeSeriesRepository._map_point(point)
+
+        assert result.views_growth is None
+        assert result.score is None
+
+    def test_map_point_raises_when_time_is_missing(self) -> None:
+        point = SimpleNamespace(
+            time=None,
+            tags={"video_id": "v-missing-time"},
+            fields={"views": 1, "likes": 1},
+        )
+
+        with pytest.raises(ValueError, match="missing time"):
+            TimeSeriesRepository._map_point(point)
 
 
 class TestGetLastTimestamp:

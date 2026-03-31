@@ -1,6 +1,8 @@
 """YouTube authentication and service bootstrap helpers."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any, ClassVar
 
 import aiohttp
 from google.oauth2.credentials import Credentials
@@ -10,7 +12,7 @@ from googleapiclient.discovery_cache.base import Cache
 
 
 @asynccontextmanager
-async def get_default_client():
+async def get_default_client() -> AsyncIterator[aiohttp.ClientSession]:
     """Return a default aiohttp session for generic API requests."""
     conn = None
     async with aiohttp.ClientSession(
@@ -24,12 +26,12 @@ async def get_default_client():
 class MemoryCache(Cache):
     """In-memory cache for Google discovery documents."""
 
-    _CACHE: dict[str, bytes] = {}
+    _CACHE: ClassVar[dict[str, bytes]] = {}
 
-    def get(self, url):
+    def get(self, url: str) -> bytes | None:
         return MemoryCache._CACHE.get(url)
 
-    def set(self, url, content):
+    def set(self, url: str, content: bytes) -> None:
         MemoryCache._CACHE[url] = content
 
 
@@ -72,7 +74,7 @@ class YouTubeAuthManager:
         )
         return authorization_url
 
-    def exchange_code_authentication(self, url_requested: str) -> dict:
+    def exchange_code_authentication(self, url_requested: str) -> dict[str, str | list[str] | None]:
         flow = self._get_flow()
         flow.fetch_token(authorization_response=url_requested)
         credentials: Credentials = flow.credentials
@@ -85,7 +87,7 @@ class YouTubeAuthManager:
             "scopes": credentials.scopes,
         }
 
-    def build_authenticated_service(self, credentials_payload: dict):
+    def build_authenticated_service(self, credentials_payload: dict[str, Any]) -> Any:
         credentials = Credentials(**credentials_payload)
         return build(
             serviceName=self._service_name,

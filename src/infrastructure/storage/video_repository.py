@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 from tinydb import Query, TinyDB
 
 from src.domain.models import CanonicalVideo
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class VideoRecord(BaseModel):

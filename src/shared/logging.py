@@ -3,7 +3,7 @@
 import logging.config
 import sys
 from logging import handlers
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from structlog.stdlib import ProcessorFormatter
@@ -11,7 +11,6 @@ from structlog.stdlib import ProcessorFormatter
 from src.config.settings import get_app_settings
 
 timestamper = structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S")
-# timestamper = structlog.processors.TimeStamper(fmt="iso")
 
 pre_chain = [
     # Add the log level and a timestamp to the event_dict if the log entry
@@ -25,25 +24,33 @@ pre_chain = [
 ]
 
 
-def event_dict_to_message(logger, name, event_dict):
+def event_dict_to_message(
+    logger: Any, name: str, event_dict: dict[str, Any]
+) -> tuple[tuple[dict[str, Any]], dict[str, Any]]:
     """Passes the event_dict to stdlib handler for special formatting."""
     return ((event_dict,), {"extra": {"_logger": logger, "_name": name}})
 
 
+processors: Any = [
+    structlog.stdlib.filter_by_level,
+    structlog.stdlib.add_logger_name,
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    timestamper,
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.format_exc_info,
+    event_dict_to_message,
+]
+
+file_processors: Any = [
+    structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+    structlog.dev.ConsoleRenderer(colors=False),
+]
+
+
 # Configure structlog stack.
 structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        timestamper,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        # Do not include last processor that converts to a string for stdlib
-        # since we leave that to the handler's formatter.
-        event_dict_to_message,
-    ],
+    processors=cast("Any", processors),
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
     wrapper_class=structlog.stdlib.BoundLogger,
@@ -64,19 +71,12 @@ handler_file = handlers.TimedRotatingFileHandler(
 )
 handler_file.setFormatter(
     ProcessorFormatter(
-        processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=False),
-        ],
+        processors=cast("Any", file_processors),
         foreign_pre_chain=pre_chain,
     )
 )
 handler_file.setLevel(logging.DEBUG)
 
-
-# Library logger to info level.
-# logger = structlog.get_logger("lib")
-# logger.setLevel(logging.DEBUG)
 
 # Apply the handlers only to the root logger.
 logging.root.setLevel(logging.DEBUG)
@@ -87,4 +87,5 @@ logging.root.addHandler(handler_file)
 
 
 def get_logger(*args: Any, **initial_values: Any) -> Any:
+    """Return a structlog logger bound with optional initial values."""
     return structlog.get_logger(*args, **initial_values)

@@ -7,7 +7,9 @@ Scheduled for removal after all imports are migrated.
 
 import warnings
 
-from src.shared.logging import get_logger as get_logger  # noqa: F401
+from src.shared.logging import get_logger
+
+__all__ = ["get_logger"]
 
 warnings.warn(
     "src.logger is deprecated; use src.shared.logging instead",

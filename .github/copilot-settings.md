@@ -12,7 +12,7 @@
 ## Local Enforcement
 
 - Install tracked git hooks once per clone: make install-hooks
-- Pre-push hook blocks pushes when Ruff or Ty checks fail.
+- Pre-push hook runs full-repository quality checks via make quality.
 
 ## Dependency Defaults
 

@@ -16,7 +16,9 @@ warnings.warn(
 )
 
 # Forward to the new module for direct execution (if needed)
-from src.application.workers.post_processor import main_main  # noqa: F401
+from src.application.workers.post_processor import main_main
+
+__all__ = ["main_main"]
 
 if __name__ == "__main__":
     import sys

@@ -120,15 +120,40 @@ class TimeSeriesRepository:
     def _map_point(point: Point) -> VideoPoint:
         """Convert a raw TinyFlux Point to a VideoPoint model."""
         raw_status = point.tags.get("score_status")
+        point_time = TimeSeriesRepository._require_point_time(point)
         return VideoPoint(
-            time=point.time.astimezone(UTC),
+            time=point_time,
             video_id=point.tags.get("video_id") or "",
-            views=int(point.fields.get("views", 0)),
-            likes=int(point.fields.get("likes", 0)),
-            views_growth=int(point.fields.get("views_growth", 0)) or None,
-            score=int(point.fields.get("score", 0)) or None,
+            views=TimeSeriesRepository._int_field(point, "views"),
+            likes=TimeSeriesRepository._int_field(point, "likes"),
+            views_growth=TimeSeriesRepository._optional_int_field(point, "views_growth"),
+            score=TimeSeriesRepository._optional_int_field(point, "score"),
             score_status=VideoScoreStatus(raw_status) if raw_status else None,
         )
+
+    @staticmethod
+    def _require_point_time(point: Point) -> datetime:
+        """Return a point timestamp normalized to UTC."""
+        if point.time is None:
+            msg = "TinyFlux point is missing time"
+            raise ValueError(msg)
+        return point.time.astimezone(UTC)
+
+    @staticmethod
+    def _int_field(point: Point, field_name: str) -> int:
+        """Read a numeric TinyFlux field as an int with 0 as fallback."""
+        raw_value = point.fields.get(field_name, 0)
+        if raw_value is None:
+            return 0
+        return int(raw_value)
+
+    @staticmethod
+    def _optional_int_field(point: Point, field_name: str) -> int | None:
+        """Read an optional numeric TinyFlux field as an int or None."""
+        raw_value = point.fields.get(field_name, 0)
+        if raw_value in (None, 0):
+            return None
+        return int(raw_value)
 
     def close(self) -> None:
         """Close database connection."""

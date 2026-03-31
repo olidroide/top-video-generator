@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import sys
 from collections.abc import Iterator
+from typing import Any
 
 import zmq
 from zmq import Context
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 
 class WorkerFactory:
     @staticmethod
-    def _create_worker_connection(context: Context, port: int, screen_orientation: str):
+    def _create_worker_connection(context: Context, port: int, screen_orientation: str) -> Any:
         try:
             dir_path = pathlib.Path(__file__).parent
             worker_script_file_path = str(dir_path / "post_processor.py")
@@ -27,8 +28,8 @@ class WorkerFactory:
                 [sys.executable, worker_script_file_path, f" {port} {screen_orientation}"],
                 shell=False,
             )
-        except OSError as e:
-            logger.error("Execution failed:", e, file=sys.stderr)
+        except OSError:
+            logger.exception("worker_factory.spawn_failed", port=port, orientation=screen_orientation)
 
         zmq_socket = context.socket(zmq.PUSH)
         zmq_socket.bind(f"tcp://127.0.0.1:{port}")
@@ -42,10 +43,10 @@ class WorkerFactory:
     def _wait_workers(
         self,
         video_list: list[Video],
-        list_worker,
-        context,
-        results_receiver,
-    ):
+        list_worker: list[Any],
+        context: Context,
+        results_receiver: Any,
+    ) -> None:
         videos_per_worker = math.ceil(len(video_list) / len(list_worker))
         for index, videos_to_send in enumerate(self._divide_in_chunks(video_list, videos_per_worker)):
             list_worker[index].send_json(videos_to_send)
@@ -54,12 +55,14 @@ class WorkerFactory:
             result = results_receiver.recv_json()
             finished_video_id_list.append(result)
             logger.debug(
-                f"finish ({len(finished_video_id_list)} of {len(video_list)} )",
+                "worker_factory.worker_finished",
+                completed=len(finished_video_id_list),
+                total=len(video_list),
                 result=result,
             )
         context.destroy()
 
-    def _start_workers(self, video_list: list[Video], screen_orientation: str):
+    def _start_workers(self, video_list: list[Video], screen_orientation: str) -> None:
         context = zmq.Context()
         results_receiver = context.socket(zmq.PULL)
         results_receiver.bind("tcp://127.0.0.1:5559")
@@ -82,8 +85,8 @@ class WorkerFactory:
             results_receiver=results_receiver,
         )
 
-    def start_workers(self, video_list: list[Video]):
+    def start_workers(self, video_list: list[Video]) -> None:
         self._start_workers(video_list=video_list, screen_orientation="horizontal")
 
-    def start_vertical_workers(self, video_list: list[Video]):
+    def start_vertical_workers(self, video_list: list[Video]) -> None:
         self._start_workers(video_list=video_list, screen_orientation="vertical")

@@ -6,7 +6,13 @@ sin instanciar la clase en import-time (a diferencia del anti-patrón assert isi
 
 from unittest.mock import create_autospec
 
-from src.domain.ports import SpotifyOAuthProvider, TikTokOAuthProvider, VideoDataSource, VideoPublisher, YouTubeOAuthProvider
+from src.domain.ports import (
+    SpotifyOAuthProvider,
+    TikTokOAuthProvider,
+    VideoDataSource,
+    VideoPublisher,
+    YouTubeOAuthProvider,
+)
 
 
 def test_youtube_source_implements_protocol() -> None:

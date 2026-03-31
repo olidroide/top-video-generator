@@ -68,17 +68,14 @@ class ThumbnailGenerator:
                 clips_thumbnails.append(clip_thumbnail.resize(size=(middle_width_point, middle_height_point)))
 
         canvas = Image.new("RGB", (base_thumbnail.width, base_thumbnail.height))
+        positions = [
+            (0, 0),
+            (middle_width_point, 0),
+            (0, middle_height_point),
+            (middle_width_point, middle_height_point),
+        ]
         for index, clip_thumbnail in enumerate(clips_thumbnails):
-            if index == 0:
-                position = (0, 0)
-            elif index == 1:
-                position = (middle_width_point, 0)
-            elif index == 2:
-                position = (0, middle_height_point)
-            else:
-                position = (middle_width_point, middle_height_point)
-
-            canvas.paste(clip_thumbnail, position)
+            canvas.paste(clip_thumbnail, positions[index])
 
         canvas.paste(base_thumbnail, (0, 0), base_thumbnail)
         title_font = ImageFont.truetype(self._thumbnail_font_file, size=70)

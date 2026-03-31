@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
-
-from pydantic import PastDate
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from src.domain.models import TimeseriesRange, Video, VideoPoint, VideoScoreStatus
-from src.domain.ports import TimeSeriesPort
 from src.shared.logging import get_logger
+
+if TYPE_CHECKING:
+    from pydantic import PastDate
+
+    from src.domain.ports import TimeSeriesPort
 
 logger = get_logger(__name__)
 
@@ -55,7 +58,7 @@ class FetchTopVideosUseCase:
 
     async def execute(self, request: FetchTopVideosRequest) -> FetchTopVideosResult:
         """Execute ranking workflow."""
-        day = request.day or date.today()
+        day = request.day or datetime.now(UTC).date()
 
         # Fetch previous period
         previous_list = self._get_defined_range_timeseries_videos(request.timeseries_range, day)
@@ -119,12 +122,12 @@ class FetchTopVideosUseCase:
         # Assign ranks and status
         for rank, video_point in enumerate(current_video_list, start=1):
             prev = previous_map.get(video_point.video_id)
-            prev_score = float(prev.score) if prev and prev.score else None
+            prev_score = prev.score if prev and prev.score is not None else None
             video_point.score = rank
             video_point.score_previous = prev_score
 
             # Status: compare rank with previous rank (lower rank score = higher ranking)
-            if not prev_score:
+            if prev_score is None:
                 video_point.score_status = VideoScoreStatus.NEW
             elif video_point.score == prev_score:
                 video_point.score_status = VideoScoreStatus.EQUAL

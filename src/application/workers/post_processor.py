@@ -17,7 +17,7 @@ from src.shared.logging import get_logger
 logger = get_logger(__name__)
 
 
-def main_main(port, screen_orientation):
+def main_main(port: int, screen_orientation: str) -> None:
     context = zmq.Context()
 
     # receiver work

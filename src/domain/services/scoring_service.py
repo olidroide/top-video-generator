@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from datetime import UTC, date, datetime, timedelta
 
 from src.domain.exceptions import ScoringError
 from src.domain.models import CanonicalVideo, VideoScoreStatus
-
-if TYPE_CHECKING:
-    pass
 
 
 def calculate_views_growth(current: CanonicalVideo, previous: CanonicalVideo | None) -> int:
@@ -24,8 +20,8 @@ def calculate_views_growth(current: CanonicalVideo, previous: CanonicalVideo | N
 
 
 def calculate_score_status(
-    current_score: int | float,
-    previous_score: int | float | None,
+    current_score: float,
+    previous_score: float | None,
 ) -> VideoScoreStatus:
     """
     Determine if video rank improved, declined, stayed same, or is new.
@@ -115,6 +111,6 @@ def datetime_range_start(
         >>> datetime_range_start(7, reference=date(2026, 3, 5))
         datetime(2026, 2, 26, 0, 0, 0)
     """
-    ref = reference or date.today()
+    ref = reference or datetime.now(UTC).date()
     target_date = ref - timedelta(days=days_back)
     return datetime.combine(target_date, datetime.min.time())

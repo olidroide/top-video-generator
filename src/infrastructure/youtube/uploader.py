@@ -30,9 +30,9 @@ class YouTubeUploader:
 
     async def upload_video(
         self,
-        video_path,
-        title,
-        description,
+        video_path: str,
+        title: str,
+        description: str,
         thumbnail_path: str | None = None,
         playlist_id: str | None = None,
         tags: list[str] | None = None,
@@ -41,7 +41,7 @@ class YouTubeUploader:
         yt_tags.extend([tag.replace("#", "") for tag in tags] if tags else [])
         max_tags = 30
 
-        def _do_upload():
+        def _do_upload() -> str | None:
             youtube = self._get_authenticated_service()
             media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
@@ -95,7 +95,7 @@ class YouTubeUploader:
         try:
             return await asyncio.to_thread(_do_upload)
         except HttpError as exc:
-            logger.error("An error occurred", error=exc)
+            logger.exception("youtube_uploader.upload_failed", error=str(exc))
             return None
 
 

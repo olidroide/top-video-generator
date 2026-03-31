@@ -43,8 +43,6 @@ class RetryConfig:
 class RetryExhaustedError(Exception):
     """Raised when all retry attempts have been exhausted."""
 
-    pass
-
 
 def retry_with_backoff(
     config: RetryConfig | None = None, exceptions: tuple[type[Exception], ...] = (Exception,)
@@ -82,12 +80,21 @@ def retry_with_backoff(
                     if attempt < config.max_attempts - 1:
                         delay = config.calculate_delay(attempt)
                         logger.warning(
-                            f"⚠️ Attempt {attempt + 1}/{config.max_attempts} failed for {func_name}: {e}. "
-                            f"Retrying in {delay:.2f}s..."
+                            "retry_with_backoff.attempt_failed",
+                            attempt=attempt + 1,
+                            max_attempts=config.max_attempts,
+                            function=func_name,
+                            delay_seconds=delay,
+                            error=str(e),
                         )
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(f"❌ All {config.max_attempts} attempts exhausted for {func_name}: {e}")
+                        logger.exception(
+                            "retry_with_backoff.exhausted",
+                            max_attempts=config.max_attempts,
+                            function=func_name,
+                            error=str(e),
+                        )
 
             raise RetryExhaustedError(
                 f"Function {func_name} failed after {config.max_attempts} attempts"
@@ -133,10 +140,18 @@ async def retry_async(  # noqa: UP047
             if attempt < config.max_attempts - 1:
                 delay = config.calculate_delay(attempt)
                 logger.warning(
-                    f"⚠️ Attempt {attempt + 1}/{config.max_attempts} failed: {e}. Retrying in {delay:.2f}s..."
+                    "retry_async.attempt_failed",
+                    attempt=attempt + 1,
+                    max_attempts=config.max_attempts,
+                    delay_seconds=delay,
+                    error=str(e),
                 )
                 await asyncio.sleep(delay)
             else:
-                logger.error(f"❌ All {config.max_attempts} attempts exhausted: {e}")
+                logger.exception(
+                    "retry_async.exhausted",
+                    max_attempts=config.max_attempts,
+                    error=str(e),
+                )
 
     raise RetryExhaustedError(f"Function failed after {config.max_attempts} attempts") from last_exception

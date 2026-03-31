@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from tinydb import Query, TinyDB
 
@@ -103,7 +103,7 @@ class ReleaseRepository:
             release = Release.model_validate(result)
             if release.published_at is None:
                 continue
-            published_date = datetime.fromtimestamp(release.published_at).date()
+            published_date = datetime.fromtimestamp(release.published_at, tz=UTC).date()
             if published_date == release_date:
                 return True
 

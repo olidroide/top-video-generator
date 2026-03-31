@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from src.domain.models import CanonicalVideo, PublishingResult
-from src.domain.ports import VideoPublisher
 from src.shared.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.domain.ports import VideoPublisher
 
 logger = get_logger(__name__)
 

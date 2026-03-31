@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, create_autospec
 
-import pytest
-
 from src.application.publish_video_use_case import (
     PublishVideoRequest,
     PublishVideoUseCase,
