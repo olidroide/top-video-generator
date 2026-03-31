@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 from src.domain.exceptions import ScoringError
-from src.domain.models import CanonicalVideo, VideoScoreStatus
+from src.domain.models import CanonicalVideo, VideoPoint, VideoScoreStatus
 
 
 def calculate_views_growth(current: CanonicalVideo, previous: CanonicalVideo | None) -> int:
@@ -92,6 +92,38 @@ def score_and_rank(
     return result
 
 
+def score_and_rank_video_points(
+    current: list[VideoPoint],
+    previous: list[VideoPoint],
+) -> list[VideoPoint]:
+    """Rank VideoPoint items by growth and assign score/status metadata."""
+    if not current:
+        raise ScoringError("current video list is empty")
+
+    previous_by_id: dict[str, VideoPoint] = {video.video_id: video for video in previous}
+
+    for video_point in current:
+        prev = previous_by_id.get(video_point.video_id)
+        if prev:
+            video_point.views_growth = abs(video_point.views - prev.views)
+        else:
+            video_point.views_growth = video_point.views_growth or video_point.views
+
+    current.sort(key=lambda item: item.views_growth or 0, reverse=True)
+
+    for rank, video_point in enumerate(current, start=1):
+        prev = previous_by_id.get(video_point.video_id)
+        prev_score = prev.score if prev and prev.score is not None else None
+        video_point.score = rank
+        video_point.score_previous = prev_score
+        video_point.score_status = calculate_score_status(
+            float(rank),
+            float(prev_score) if prev_score is not None else None,
+        )
+
+    return current
+
+
 def datetime_range_start(
     days_back: int,
     reference: date | None = None,
@@ -113,4 +145,4 @@ def datetime_range_start(
     """
     ref = reference or datetime.now(UTC).date()
     target_date = ref - timedelta(days=days_back)
-    return datetime.combine(target_date, datetime.min.time())
+    return datetime.combine(target_date, datetime.min.time(), tzinfo=UTC)

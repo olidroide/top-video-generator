@@ -7,7 +7,8 @@ from pathlib import Path
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_trending_use_case import FetchTrendingRequest, FetchTrendingUseCase
 from src.config.settings import get_app_settings
-from src.domain.models import VideoPoint, VideoScoreStatus
+from src.domain.models import VideoPoint
+from src.domain.services.scoring_service import score_and_rank_video_points
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.logging import get_logger
@@ -33,39 +34,6 @@ async def is_passed_enough_time_from_last_fetch(
             delta=str(delta_from_last_recollection),
         )
     return is_enough_time
-
-
-def _rank_video_points(
-    current_video_list: list[VideoPoint],
-    previous_video_list: list[VideoPoint],
-) -> list[VideoPoint]:
-    previous_map = {v.video_id: v for v in previous_video_list}
-
-    for video_point in current_video_list:
-        prev = previous_map.get(video_point.video_id)
-        if prev:
-            video_point.views_growth = abs(video_point.views - prev.views)
-        else:
-            video_point.views_growth = video_point.views_growth or video_point.views
-
-    current_video_list.sort(key=lambda x: x.views_growth or 0, reverse=True)
-
-    for rank, video_point in enumerate(current_video_list, start=1):
-        prev = previous_map.get(video_point.video_id)
-        prev_score = prev.score if prev and prev.score is not None else None
-        video_point.score = rank
-        video_point.score_previous = prev_score
-
-        if prev_score is None:
-            video_point.score_status = VideoScoreStatus.NEW
-        elif video_point.score == prev_score:
-            video_point.score_status = VideoScoreStatus.EQUAL
-        elif video_point.score > prev_score:
-            video_point.score_status = VideoScoreStatus.DOWN
-        else:
-            video_point.score_status = VideoScoreStatus.UP
-
-    return current_video_list
 
 
 async def main_async() -> None:
@@ -116,10 +84,7 @@ async def main_async() -> None:
         )
         current_timeseries_videos_fetched.append(last_video_point)
 
-    for video_point in _rank_video_points(
-        current_video_list=current_timeseries_videos_fetched,
-        previous_video_list=last_timeseries_videos_fetched,
-    ):
+    for video_point in score_and_rank_video_points(current_timeseries_videos_fetched, last_timeseries_videos_fetched):
         timeseries_repo.add_video_point(video_point=video_point)
 
     logger.info("Finish fetch YT Data", current_timeseries_videos_fetched=current_timeseries_videos_fetched)

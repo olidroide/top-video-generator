@@ -29,26 +29,26 @@ This application fetches daily/weekly top YouTube music videos for a configured 
 
 ### Key Components
 
-#### 1. Data Ingestion (`src/script_fetch_yt_data.py`)
+#### 1. Data Ingestion (`src/entrypoints/fetch_data.py`)
 - Scheduled daily fetch from YouTube API
 - Stores video metadata and view counts
 - Calculates view growth and rankings
 - Writes to TinyFlux (timeseries) and TinyDB (metadata)
 
 #### 2. Video Processing Pipeline
-- **Downloader** (`src/video_downloader.py`): Uses yt-dlp to fetch source videos
-- **Processing** (`src/video_processing.py`): Composites templates, overlays, transitions using moviepy
-- **Workers** (`src/worker_post_process_video.py`): ZeroMQ-based parallel processing
+- **Downloader** (`src/infrastructure/youtube/downloader.py`): Uses yt-dlp to fetch source videos
+- **Processing** (`src/infrastructure/video/compositor.py`, `src/infrastructure/video/renderer.py`): Composites templates, overlays, and transitions
+- **Workers** (`src/entrypoints/workers/post_processor.py`): ZeroMQ-based parallel processing
 
 #### 3. Publishing Scripts
-- **Daily Vertical** (`src/script_generate_vertical_publish_top_video.py`): Top 5 videos, vertical format for Reels/Shorts
-- **Weekly Horizontal** (`src/script_generate_publish_top_video.py`): Top videos, horizontal format for YouTube
+- **Daily Vertical** (`src/entrypoints/publish_vertical.py`): Top 5 videos, vertical format for Reels/Shorts
+- **Weekly Horizontal** (`src/entrypoints/publish_video.py`): Top videos, horizontal format for YouTube
 
 #### 4. Platform Clients
-- **YouTube** (`src/yt_client.py`): OAuth2, video upload, playlist management
-- **TikTok** (`src/tiktok_client.py`): OAuth2, video upload with chunked transfer
-- **Spotify** (`src/spotify_client.py`): OAuth2, playlist management
-- **Instagram** (`src/instagram_client.py`): Session-based auth via instagrapi
+- **YouTube** (`src/infrastructure/youtube/client.py`): OAuth2, video upload, playlist management
+- **TikTok** (`src/infrastructure/social/tiktok_client.py`): OAuth2, video upload with chunked transfer
+- **Spotify** (`src/infrastructure/social/spotify_client.py`): OAuth2, playlist management
+- **Instagram** (`src/infrastructure/social/instagram_client.py`): Session-based auth via instagrapi
 
 #### 5. Web Interface (`src/web/main.py`)
 - FastAPI + Jinja2 SSR
@@ -58,7 +58,7 @@ This application fetches daily/weekly top YouTube music videos for a configured 
 
 ### Technology Stack
 
-- **Backend**: Python 3.14+, FastAPI, Pydantic
+- **Backend**: Python 3.13, FastAPI, Pydantic
 - **Video**: moviepy, yt-dlp, ffmpeg, PIL
 - **Storage**: TinyFlux (timeseries CSV), TinyDB (JSON)
 - **Web**: Jinja2 templates, HTMX-ready
@@ -70,6 +70,9 @@ This application fetches daily/weekly top YouTube music videos for a configured 
 All configuration is via environment variables with `TOP_MUSIC_` prefix:
 
 ```bash
+# Copy the example file to the repository root as .env
+# and adjust values for your local environment.
+
 # Core settings
 TOP_MUSIC_ENV=production|development
 TOP_MUSIC_DAYS_BETWEEN_TOP=7
@@ -79,24 +82,25 @@ TOP_MUSIC_YT_CLIENT_SECRET_FILE=yt_client_secret.json
 TOP_MUSIC_YT_SEARCH_REGION_CODE=IN
 TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
-# Platform credentials (see src/.env.example)
+# Platform credentials (see .env.example)
 ```
 
 ### Current Architecture Issues
 
-1. **Blocking Operations in Async Code**: `googleapiclient` and `instagrapi` are synchronous libraries called from async contexts without executor isolation, risking event loop blocking.
+1. **Web Delivery Layer Still Dense**: `src/web/main.py` still concentrates routing, dependency wiring, OAuth callbacks, and setup/status endpoints in a single module.
 
-2. **Monolithic Deployment**: Single container handles all concerns (fetch, process, publish, web) via STEP env var, limiting scalability.
+2. **Monolithic Deployment**: A single container still handles fetch, processing, publishing, and web delivery via the `STEP` environment variable.
 
-3. **Local Storage**: TinyDB/TinyFlux work for single-instance but lack concurrency controls and backup mechanisms.
+3. **Local Storage Limits**: TinyDB and TinyFlux remain a good fit for single-instance deployments, but they still lack native concurrency controls and stronger operational tooling.
 
-4. **Limited Observability**: No health checks, metrics, or centralized logging correlation IDs.
+4. **Process-Local Observability**: `/health` and `/metrics` exist, but metrics are in-memory and local to a single process, not centralized or Prometheus-compatible.
 
-5. **Error Handling**: Uploads lack retry with exponential backoff; failures are logged but not queued for retry.
+5. **Scoring Logic Duplication**: Ranking behavior exists in the domain scoring service and is still duplicated in some application/entrypoint flows.
 
 ### Improvements Implemented
 
-✅ **Async Adapters** (`src/adapters/`): Wrap blocking clients in `run_in_executor()`
+✅ **Hexagonal Split** (`src/domain`, `src/application`, `src/adapters`, `src/infrastructure`): Core migration out of legacy god files is completed
+✅ **Async Isolation** (`src/infrastructure/`): Blocking integrations are isolated with `asyncio.to_thread()`
 ✅ **Retry Utilities** (`src/utils/retry.py`): Exponential backoff with jitter for resilient uploads
 ✅ **Health Checks** (`/health` endpoint): Validates ffmpeg, templates, database
 ✅ **Metrics** (`/metrics` endpoint): Tracks fetch/upload/processing counts and errors
@@ -115,24 +119,32 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.13
 - ffmpeg installed
+- ImageMagick installed
 - Docker (optional)
 
 ### Local Development
 
 ```bash
-# Install dependencies with uv
-uv pip install -e ".[dev]"
+# Install dependencies and git hooks
+make dev-install
+make install-hooks
 
 # Run web server
-uvicorn src.web.main:app --reload --port 8080
+uv run api-server
 
 # Run data fetch
-STEP=fetch_data python src/script_fetch_yt_data.py
+uv run fetch-data
 
 # Run daily publish
-STEP=vertical_publish python src/script_generate_vertical_publish_top_video.py
+uv run publish-vertical
+
+# Run weekly publish
+uv run publish-video
+
+# Run quality checks
+make quality
 ```
 
 ### Docker
@@ -142,7 +154,7 @@ STEP=vertical_publish python src/script_generate_vertical_publish_top_video.py
 docker-compose up --build
 
 # Run specific step
-docker-compose run --rm top-video-generator STEP=fetch_data
+docker-compose run --rm -e "STEP=fetch_data" top-video-generator
 ```
 
 ## License

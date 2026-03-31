@@ -36,6 +36,7 @@ dependencies = [
     "pyzmq>=26.0.0",
     "tenacity>=9.0.0",
     "cryptography>=42.0.0",
+    "itsdangerous>=2.2.0",
 ]
 
 # Entry points para ejecutar con 'uv run'
@@ -43,7 +44,7 @@ dependencies = [
 fetch-data = "src.entrypoints.fetch_data:main"
 publish-video = "src.entrypoints.publish_video:main"
 publish-vertical = "src.entrypoints.publish_vertical:main"
-api-server = "src.web.main:start"
+api-server = "src.entrypoints.api_server:main"
 
 
 [dependency-groups]

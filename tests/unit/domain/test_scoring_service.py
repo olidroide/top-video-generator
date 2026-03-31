@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
 from src.domain.exceptions import ScoringError
-from src.domain.models import CanonicalVideo, VideoScoreStatus
+from src.domain.models import CanonicalVideo, VideoPoint, VideoScoreStatus
 from src.domain.services.scoring_service import (
     calculate_score_status,
     calculate_views_growth,
     datetime_range_start,
     score_and_rank,
+    score_and_rank_video_points,
 )
 
 
@@ -169,7 +170,7 @@ class TestDatetimeRangeStart:
         ref = date(2026, 3, 5)
         result = datetime_range_start(7, reference=ref)
 
-        expected = datetime(2026, 2, 26, 0, 0, 0)
+        expected = datetime(2026, 2, 26, 0, 0, 0, tzinfo=UTC)
         assert result == expected
 
     def test_time_is_midnight(self) -> None:
@@ -183,5 +184,41 @@ class TestDatetimeRangeStart:
         """days_back=0 should return midnight of reference date."""
         ref = date(2026, 3, 5)
         result = datetime_range_start(0, reference=ref)
-        expected = datetime(2026, 3, 5, 0, 0, 0)
+        expected = datetime(2026, 3, 5, 0, 0, 0, tzinfo=UTC)
         assert result == expected
+
+
+class TestScoreAndRankVideoPoints:
+    def test_assigns_rank_and_status_for_video_points(self) -> None:
+        previous = [
+            VideoPoint(
+                time=datetime(2026, 3, 30, 0, 0, tzinfo=UTC),
+                video_id="v1",
+                views=1000,
+                likes=10,
+                score=1,
+            )
+        ]
+        current = [
+            VideoPoint(
+                time=datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+                video_id="v1",
+                views=1500,
+                likes=20,
+            ),
+            VideoPoint(
+                time=datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+                video_id="v2",
+                views=3000,
+                likes=30,
+            ),
+        ]
+
+        ranked = score_and_rank_video_points(current, previous)
+
+        assert ranked[0].video_id == "v2"
+        assert ranked[0].score == 1
+        assert ranked[0].score_status == VideoScoreStatus.NEW
+        assert ranked[1].video_id == "v1"
+        assert ranked[1].score_previous == 1
+        assert ranked[1].score_status == VideoScoreStatus.DOWN

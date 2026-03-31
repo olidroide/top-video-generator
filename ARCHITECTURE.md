@@ -1,157 +1,108 @@
 # Top Video Generator — Architecture Decision Record
 
-## Estado: Post-Phase 2 (vibes branch, 2026-03-05)
+## Estado: Phase 2 completada; estabilización y refactor incremental en curso (2026-03-31)
 
 ## Visión General
 
-Pipeline automatizado: fetch YouTube trending → score/rank → generate video → publish (YT/IG/TikTok) + Spotify playlist update.
+Pipeline automatizado: fetch de YouTube trending → score/rank → generación de vídeo → publicación en YT/IG/TikTok + actualización de Spotify.
 
-Arquitectura objetivo: **Hexagonal (Ports & Adapters)** con capas explícitas.
+La arquitectura activa es **hexagonal (Ports & Adapters)** y el grueso de la migración fuera de los antiguos god files ya está completado.
 
 ## Capas Actuales
 
 ```
 src/
-├── domain/           ✅ Phase 2 — Entities + Ports (Protocols)
-├── application/      ✅ Phase 2 — Use Cases (FetchTrending, PublishVideo)
-├── adapters/         ✅ Phase 2 — VideoPublisher × 3, YouTubeSource
-├── infrastructure/   ⚠️  Phase 2 parcial — solo publisher_registry.py
-│                              Phase 3 TARGET: youtube/, storage/, video/
-├── web/              ✅ FastAPI + HTMX + Jinja2
-├── config/           ✅ Phase 2 — Pydantic v2 Settings
-│
-│ ── LEGACY (pendiente migración Phase 3) ──
-├── yt_client.py      🔴 55KB God File → infrastructure/youtube/
-├── db_client.py      🔴 18KB God File → infrastructure/storage/ + domain/
-├── video_processing.py 🔴 22KB God File → infrastructure/video/
-├── instagram_client.py → infrastructure/social/
-├── spotify_client.py   → infrastructure/social/
-└── tiktok_client.py    → infrastructure/social/
+├── domain/           ✅ modelos canónicos, puertos y servicios de dominio
+├── application/      ✅ casos de uso y orquestación
+├── adapters/         ✅ adaptadores de publicación y fuente YouTube
+├── infrastructure/   ✅ youtube/, storage/, video/, social/, publisher_registry.py
+├── entrypoints/      ✅ fetch_data.py, publish_video.py, publish_vertical.py, api_server.py, workers/
+├── web/              ⚠️ FastAPI SSR funcional, pero con demasiado wiring concentrado en main.py
+├── config/           ✅ settings con Pydantic v2
+└── shared/           ✅ utilidades transversales como logging
 ```
 
-## Dependencias entre Capas (Dependency Rule)
+Los antiguos módulos `db_client.py`, `yt_client.py` y `video_processing.py` ya no forman parte del árbol principal. No deben reintroducirse ni como archivos nuevos ni como import paths “temporales”.
+
+## Dependencias entre Capas
 
 ```
-web → application → domain ← adapters ← infrastructure
-                    ↑
-              (solo Protocols)
+web / entrypoints → application → domain ← adapters ← infrastructure
+                                   ↑
+                              (solo puertos)
 ```
 
-**Regla:** Las flechas apuntan hacia el dominio. Nunca al revés.
+**Regla:** las dependencias apuntan hacia el dominio. Los handlers web y los entrypoints deben limitarse a validar entrada, resolver dependencias y delegar en casos de uso.
 
-## ADR-001: TinyDB + TinyFlux (storage actual)
+## ADR-001: TinyDB + TinyFlux
 
-- **Decisión:** Mantener para Phase 3. Sin SQLAlchemy aún.
-- **Razón:** El volumen de datos no justifica el overhead.
-- **Revisitar:** Si se añade multi-region o histórico > 1 año.
+- **Decisión:** mantener TinyDB + TinyFlux en la fase actual.
+- **Razón:** el volumen y la topología de despliegue siguen siendo de instancia única.
+- **Revisitar:** cuando se necesite concurrencia real, backups operativos más sólidos o histórico de mayor escala.
 
-## ADR-002: Scoring en Domain Service (Phase 3)
+## ADR-002: Scoring en Domain Service
 
-- `VideoPointTools.generate_top_list_compared` **pertenece al dominio**, no a la infraestructura.
-- Mover a `domain/services/scoring_service.py`.
+- El scoring pertenece al dominio y ya vive en `src/domain/services/scoring_service.py`.
+- **Trabajo pendiente:** eliminar duplicación de ranking en `src/application/fetch_top_videos_use_case.py` y `src/entrypoints/fetch_data.py` para que el servicio de dominio sea la única fuente de verdad.
 
-## ADR-003: Commit messages
+## ADR-003: Commit Messages
 
-- Formato: `type(scope): description` — Conventional Commits.
-- **No** mensajes genéricos como `"vibes"`.
+- Formato: `type(scope): description`.
+- Evitar mensajes genéricos o context-free.
 
-## Problemas críticos en `db_client.py` para arreglar
+## Deuda Actual Prioritaria
 
-### BUG 1: Mutable default argument
-```python
-# ❌ ACTUAL (evaluado en import-time)
-def calculate_datetime_for_range(timeseries_range, day: PastDate = date.today()):
-    ...
+1. **Web main demasiado denso**: `src/web/main.py` sigue concentrando callbacks OAuth, setup, health, metrics y parte del wiring.
+2. **Duplicación de scoring**: el dominio ya tiene la lógica canónica, pero todavía no toda la aplicación la reutiliza.
+3. **Despliegue monolítico**: el contenedor sigue multiplexando fetch, publish y web por `STEP`.
+4. **Observabilidad local al proceso**: `/metrics` no persiste ni exporta métricas centralizadas.
+5. **Convenciones de paths y runners**: cualquier cambio en entrypoints, assets o Docker debe cubrirse con smoke tests para evitar deriva entre código y documentación.
 
-# ✅ TARGET
-def datetime_range_start(days_back: int, reference: date | None = None) -> datetime:
-    ref = reference or date.today()  # Evaluado en llamada
-```
-
-### BUG 2: Pydantic v1 deprecado
-```python
-# ❌ ACTUAL (Pydantic v1)
-Video.parse_obj(results[0])   # → .model_validate()
-video.dict()                   # → .model_dump()
-
-# ✅ TARGET: Pydantic v2 API
-VideoRecord.model_validate(results[0])
-video.model_dump()
-```
-
-### BUG 3: Copy-paste en auth TikTok
-```python
-# ❌ ACTUAL – add_or_update_spotify_auth llama get_tiktok_auth!!!
-def add_or_update_spotify_auth(self, spotify_auth):
-    if self.get_tiktok_auth(spotify_auth.client_id):  # ← 🔴 ERROR
-        return self.update_spotify_auth(spotify_auth)
-```
-
----
-
-## 🗂️ Estructura Target Phase 3
+## Estructura Vigente Relevante
 
 ```
 src/
 ├── domain/
-│   ├── models.py              ✅ (CanonicalVideo, PublishingResult, Platform)
-│   ├── ports.py               ✅ (VideoDataSource, VideoPublisher)
-│   ├── exceptions.py          🆕 DomainError, FetchError, PublishError, ScoringError
+│   ├── models.py
+│   ├── ports.py
+│   ├── exceptions.py
 │   └── services/
-│       └── scoring_service.py 🆕 VideoPointTools migrado aquí
-│
+│       └── scoring_service.py
 ├── application/
-│   ├── fetch_trending_use_case.py  ✅
-│   ├── publish_video_use_case.py   ✅
-│   └── score_videos_use_case.py    🆕
-│
+│   ├── authorize_use_case.py
+│   ├── fetch_top_videos_use_case.py
+│   ├── fetch_trending_use_case.py
+│   └── publish_video_use_case.py
 ├── infrastructure/
-│   ├── youtube/
-│   │   ├── __init__.py
-│   │   ├── api_client.py      🔀 yt_client.py (API calls)
-│   │   ├── auth_manager.py    🔀 yt_client.py (OAuth flow)
-│   │   └── video_uploader.py  🔀 yt_client.py (upload logic)
+│   ├── social/
 │   ├── storage/
-│   │   ├── __init__.py
-│   │   ├── video_repository.py       🔀 db_client.py (TinyDB part)
-│   │   ├── timeseries_repository.py  🔀 db_client.py (TinyFlux part)
-│   │   └── auth_repository.py        🔀 db_client.py (auth tables)
 │   ├── video/
-│   │   ├── __init__.py
-│   │   ├── compositor.py      🔀 video_processing.py (ffmpeg/moviepy)
-│   │   ├── renderer.py        🔀 video_processing.py (text/overlay render)
-│   │   └── thumbnail.py       🔀 video_processing.py (Pillow/SVG)
-│   └── social/
-│       ├── instagram_client.py  🔀 src/instagram_client.py
-│       ├── spotify_client.py    🔀 src/spotify_client.py
-│       └── tiktok_client.py     🔀 src/tiktok_client.py
+│   │   ├── asset_manager.py
+│   │   ├── compositor.py
+│   │   ├── renderer.py
+│   │   └── thumbnail_generator.py
+│   └── youtube/
+│       ├── api_client.py
+│       ├── auth_manager.py
+│       ├── client.py
+│       ├── downloader.py
+│       ├── schemas.py
+│       └── uploader.py
+├── entrypoints/
+│   ├── api_server.py
+│   ├── fetch_data.py
+│   ├── publish_vertical.py
+│   ├── publish_video.py
+│   └── workers/
+└── web/
+    ├── dependencies.py
+    └── main.py
 ```
 
----
+## Validación Mínima
 
-## 📋 Orden de Ejecución Phase 3
-
-| # | Tarea | Riesgo | Dependencias |
-|---|---|---|---|
-| 1 | `domain/exceptions.py` | 🟢 Bajo | Ninguna |
-| 2 | `domain/services/scoring_service.py` | 🟢 Bajo | exceptions.py |
-| 3 | Tests de scoring (TDD primero) | 🟢 Bajo | scoring_service |
-| 4 | `infrastructure/storage/video_repository.py` | 🟡 Medio | Ninguna |
-| 5 | `infrastructure/storage/timeseries_repository.py` | 🟡 Medio | scoring_service |
-| 6 | Fix bugs `db_client.py` (`.dict()`→`.model_dump()`, copy-paste bug) | 🟡 Medio | Nada |
-| 7 | Split `yt_client.py` → `infrastructure/youtube/` | 🔴 Alto | repository listo |
-| 8 | Split `video_processing.py` → `infrastructure/video/` | 🔴 Alto | Independiente |
-| 9 | Eliminar `db_client.py` legacy | 🔴 Alto | 4 + 5 completados |
-| 10 | `application/score_videos_use_case.py` | 🟢 Bajo | scoring_service |
-
-**Regla de oro para Phase 3**: pasos 1–6 son seguros de hacer en paralelo. Los pasos 7–9 deben ir en ese orden estricto porque `yt_client.py` tiene dependencias cruzadas con `db_client.py` y con los adapters.
-
----
-
-## Checksums y Validación
-
-Cada paso debe validarse:
-- ✅ No hay imports circulares (`python -c "import src"`)
-- ✅ Linting: `ruff check src/`
-- ✅ Type checking: `ty` (pyright)
-- ✅ Tests pasan: `pytest tests/unit/domain/`
+Cualquier cambio arquitectural relevante debe validar:
+- ✅ Import limpio de la aplicación (`python -c "import src"`)
+- ✅ Linting (`ruff check src/ tests/`)
+- ✅ Type checking (`ty check src/`)
+- ✅ Tests relevantes del área tocada

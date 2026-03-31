@@ -51,16 +51,17 @@ test:
 	uv run pytest tests/
 
 schedule:
-	uv run python scheduler.py
+	@echo "No in-repo scheduler entrypoint is maintained. Run fetch-run/publish-run from cron, CI, or orchestration."
+	@exit 1
 
 web-run:
-	uv run python src/web/main.py
+	uv run api-server
 
 fetch-run:
-	uv run python src/script_fetch_yt_data.py
+	uv run fetch-data
 
 publish-run:
-	uv run python src/script_generate_publish_top_video.py
+	uv run publish-video
 
 vertical-publish-run:
-	uv run python src/script_generate_vertical_publish_top_video.py
+	uv run publish-vertical

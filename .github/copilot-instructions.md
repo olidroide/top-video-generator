@@ -24,7 +24,7 @@ Target layout:
 - config and shared: settings and cross-cutting utilities
 - entrypoints and web: thin delivery layers only
 
-Legacy shims may still exist, including src/db_client.py, src/logger.py, src/settings.py, src/video_processing.py, and src/yt_client.py. Do not add new code to those files unless the task is explicitly a migration or compatibility fix.
+Historical shims such as src/db_client.py, src/video_processing.py, and src/yt_client.py have already been migrated out of the main tree. Do not reintroduce those modules or their old import paths. The main remaining legacy concentration is in src/web/main.py and a few orchestration flows still pending further decomposition.
 
 ## Layer Rules
 

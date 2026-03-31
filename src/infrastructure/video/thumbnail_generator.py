@@ -32,7 +32,7 @@ class ThumbnailGenerator:
             asset_manager: VideoAssetManager instance providing resource paths.
         """
         self._asset_manager = asset_manager
-        self._thumbnail_file = asset_manager.template_file
+        self._thumbnail_file = asset_manager.thumbnail_file
         self._thumbnail_font_file = asset_manager.thumbnail_font_file
         self._video_generated_folder = asset_manager.video_generated_folder
 

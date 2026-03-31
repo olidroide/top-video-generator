@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from src.domain.models import TimeseriesRange, Video, VideoPoint, VideoScoreStatus
+from src.domain.models import TimeseriesRange, Video, VideoPoint
+from src.domain.services.scoring_service import datetime_range_start, score_and_rank_video_points
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
@@ -72,7 +73,7 @@ class FetchTopVideosUseCase:
             raise IndexError(error_msg)
 
         # Rank and compare
-        ranked = self._generate_top_list_compared(current_list, previous_list)
+        ranked = score_and_rank_video_points(current_list, previous_list)
 
         # Convert to Video models and limit
         videos = tuple(Video.model_validate(vp.model_dump()) for vp in ranked[: request.limit])
@@ -97,43 +98,4 @@ class FetchTopVideosUseCase:
         """Calculate start datetime for a time range."""
         map_range_days = {TimeseriesRange.DAILY: 1, TimeseriesRange.WEEKLY: 7}
         from_days_ago = map_range_days.get(timeseries_range, 7)
-        from_datetime = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
-        return from_datetime - timedelta(days=from_days_ago)
-
-    @staticmethod
-    def _generate_top_list_compared(
-        current_video_list: list[VideoPoint],
-        previous_video_list: list[VideoPoint],
-    ) -> list[VideoPoint]:
-        """Rank current videos by growth, compare with previous state."""
-        previous_map = {v.video_id: v for v in previous_video_list}
-
-        # Calculate growth
-        for video_point in current_video_list:
-            prev = previous_map.get(video_point.video_id)
-            if prev:
-                video_point.views_growth = abs(video_point.views - prev.views)
-            else:
-                video_point.views_growth = video_point.views_growth or video_point.views
-
-        # Sort by growth DESC
-        current_video_list.sort(key=lambda x: x.views_growth or 0, reverse=True)
-
-        # Assign ranks and status
-        for rank, video_point in enumerate(current_video_list, start=1):
-            prev = previous_map.get(video_point.video_id)
-            prev_score = prev.score if prev and prev.score is not None else None
-            video_point.score = rank
-            video_point.score_previous = prev_score
-
-            # Status: compare rank with previous rank (lower rank score = higher ranking)
-            if prev_score is None:
-                video_point.score_status = VideoScoreStatus.NEW
-            elif video_point.score == prev_score:
-                video_point.score_status = VideoScoreStatus.EQUAL
-            elif video_point.score > prev_score:
-                video_point.score_status = VideoScoreStatus.DOWN
-            else:
-                video_point.score_status = VideoScoreStatus.UP
-
-        return current_video_list
+        return datetime_range_start(from_days_ago, reference=day)
