@@ -1,7 +1,7 @@
 ---
 name: python-typing-patterns
-description: "Python type hints and type safety patterns. Triggers on: type hints, typing, TypeVar, Generic, Protocol, mypy, pyright, type annotation, overload, TypedDict."
-compatibility: "Python 3.10+ (uses union syntax X | Y). Some patterns require 3.11+ (Self, TypeVarTuple)."
+description: "Python type hints and type safety patterns. Triggers on: type hints, typing, TypeVar, Generic, Protocol, ty, type annotation, overload, TypedDict."
+compatibility: "Python 3.12+. Type checker: ty (uv run ty check src/). Union syntax X | Y throughout."
 ---
 
 # Python Typing Patterns

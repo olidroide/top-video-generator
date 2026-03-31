@@ -24,6 +24,6 @@
 Run these before finishing a change unless the task is documentation-only or explicitly exempted:
 
 - uv run ruff format src/ tests/
-- uv run ruff check src/ tests/
+- uv run ruff check --fix src/ tests/
 - uv run ty check src/
 - uv run pytest

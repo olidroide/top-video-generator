@@ -165,6 +165,7 @@ def test_example_publisher_implements_protocol() -> None:
 
 ## Testing Rules
 
+- Write tests before or alongside implementation. When adding new behavior, include a test in the same change. Do not change observable behavior without a corresponding test.
 - Unit tests live in tests/unit/{layer}/test_{module}.py.
 - Integration tests live in tests/integration/{layer}/.
 - End-to-end tests live in tests/e2e/.
