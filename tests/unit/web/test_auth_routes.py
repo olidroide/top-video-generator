@@ -55,8 +55,12 @@ def test_yt_auth_with_code_redirects_to_root() -> None:
 
 
 def test_yt_auth_without_code_redirects_to_root() -> None:
+    app.dependency_overrides[get_authorize_use_case] = lambda: _AuthorizeUseCaseStub()
+
     with TestClient(app) as client:
         response = client.get("/yt_auth/", follow_redirects=False)
+
+    app.dependency_overrides.clear()
 
     assert response.status_code == 307
     assert response.headers["location"] == "/"

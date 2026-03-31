@@ -29,6 +29,7 @@ class AuthenticationRepository:
 
     def __init__(self, db_path: Path) -> None:
         """Initialize repository with TinyDB backend."""
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = TinyDB(str(db_path))
 
     # ========================================================================
