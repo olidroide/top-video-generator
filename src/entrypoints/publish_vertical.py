@@ -64,7 +64,7 @@ def generate_yt_title(video_list: Sequence[Video], hashtag_list: list[str] | Non
 
 def generate_yt_description(video_list: Sequence[Video]) -> str:
     text_date = datetime.datetime.now(datetime.UTC).strftime("%d / %m / %Y")
-    # Solo nombres válidos
+    # Keep only valid channel names
     channels_names = list(
         {(video.channel.name if video.channel and video.channel.name else "") for video in video_list}
     )
@@ -275,10 +275,6 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
     day = datetime.datetime.now(UTC).date()
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
-
-    if not settings.is_production_env:
-        db_data_file += ".test"
-        db_timeseries_file += ".test"
 
     # Initialize repositories
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)

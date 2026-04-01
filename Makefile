@@ -23,7 +23,8 @@ build-local-image:
 #	docker build -t top-video-generator .
 
 run-web:
-	docker compose up -d web scheduler
+	docker compose build web
+	docker compose up -d web
 
 run-fetch-data:
 	docker compose run --rm -e "STEP=fetch_data" top-video-generator

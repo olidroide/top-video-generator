@@ -1,46 +1,49 @@
-# ruff: noqa: N815
-
 """
-Modelos Pydantic para respuestas de la API de YouTube.
-Extraídos de client.py (YTPageInfo..YTRoot).
+Pydantic models for YouTube API responses.
+Extracted from client.py (YTPageInfo..YTRoot).
 """
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
-class YTPageInfo(BaseModel):
-    totalResults: int
-    resultsPerPage: int
+class YTSchema(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)
 
 
-class YTBase(BaseModel):
+class YTPageInfo(YTSchema):
+    total_results: int
+    results_per_page: int
+
+
+class YTBase(YTSchema):
     kind: str
     etag: str
-    nextPageToken: str | None = None
-    pageInfo: YTPageInfo | None = None
+    next_page_token: str | None = None
+    page_info: YTPageInfo | None = None
 
 
-class YTVideoContentDetails(BaseModel):
+class YTVideoContentDetails(YTSchema):
     duration: str | None = None
     dimension: str | None = None  # 2d
     definition: str | None = None  # hd
     caption: str | None = None
-    licensedContent: bool | None = None
-    contentRating: dict | None = None
+    licensed_content: bool | None = None
+    content_rating: dict | None = None
     projection: str | None = None  # rectangular
-    videoId: str | None = None
-    videoPublishedAt: datetime | None = None
+    video_id: str | None = None
+    video_published_at: datetime | None = None
 
 
-class YTThumbnail(BaseModel):
+class YTThumbnail(YTSchema):
     url: str
     width: int
     height: int
 
 
-class YTVideoSnippetThumbnail(BaseModel):
+class YTVideoSnippetThumbnail(YTSchema):
     default: YTThumbnail | None = None
     medium: YTThumbnail | None = None
     high: YTThumbnail | None = None
@@ -48,82 +51,82 @@ class YTVideoSnippetThumbnail(BaseModel):
     maxres: YTThumbnail | None = None
 
 
-class YTVideoSnippetLocalized(BaseModel):
+class YTVideoSnippetLocalized(YTSchema):
     title: str | None = None
     description: str | None = None
 
 
-class YTVideoSnippetResource(BaseModel):
-    videoId: str
+class YTVideoSnippetResource(YTSchema):
+    video_id: str
 
 
-class YTVideoSnippet(BaseModel):
-    publishedAt: datetime | None = None
-    channelId: str | None = None
+class YTVideoSnippet(YTSchema):
+    published_at: datetime | None = None
+    channel_id: str | None = None
     title: str | None = None
     description: str | None = None
     thumbnails: YTVideoSnippetThumbnail | None = None
-    channelTitle: str | None = None
+    channel_title: str | None = None
     tags: list[str] | None = None
-    categoryId: str | None = None
-    liveBroadcastContent: str | None = None
+    category_id: str | None = None
+    live_broadcast_content: str | None = None
     localized: YTVideoSnippetLocalized | None = None
-    defaultAudioLanguage: str | None = None
+    default_audio_language: str | None = None
     position: int | None = None
-    playlistId: str | None = None
-    videoOwnerChannelTitle: str | None = None
-    videoOwnerChannelId: str | None = None
-    resourceId: YTVideoSnippetResource | None = None
+    playlist_id: str | None = None
+    video_owner_channel_title: str | None = None
+    video_owner_channel_id: str | None = None
+    resource_id: YTVideoSnippetResource | None = None
 
 
-class YTVideContentStatistics(BaseModel):
-    viewCount: int | None = None
-    likeCount: int | None = None
-    favoriteCount: int | None = None
-    commentCount: int | None = None
+class YTVideContentStatistics(YTSchema):
+    view_count: int | None = None
+    like_count: int | None = None
+    favorite_count: int | None = None
+    comment_count: int | None = None
 
 
-class YTVideoStatus(BaseModel):
+class YTVideoStatus(YTSchema):
     embeddable: bool | None = None
     license: str | None = None  # "youtube
-    privacyStatus: str | None = None  # "unlisted", "public", "private"
-    publicStatsViewable: bool | None = None
+    privacy_status: str | None = None  # "unlisted", "public", "private"
+    public_stats_viewable: bool | None = None
     # publishAt
-    selfDeclaredMadeForKids: bool | None = None
-    madeForKids: bool | None = None
-    rejectionReason: str | None = None
-    uploadStatus: str | None = None
+    self_declared_made_for_kids: bool | None = None
+    made_for_kids: bool | None = None
+    rejection_reason: str | None = None
+    upload_status: str | None = None
 
 
-class YTVideoAgeGating(BaseModel):
-    alcoholContent: bool | None = None
+class YTVideoAgeGating(YTSchema):
+    alcohol_content: bool | None = None
     restricted: bool | None = None
-    videoGameRating: str | None = None
+    video_game_rating: str | None = None
 
 
-class YTVideoMonetizationDetailsAccess(BaseModel):
+class YTVideoMonetizationDetailsAccess(YTSchema):
     allowed: bool | None = None
 
 
-class YTVideoMonetizationDetails(BaseModel):
+class YTVideoMonetizationDetails(YTSchema):
     access: YTVideoMonetizationDetailsAccess | None = None
 
 
-class YTVideoTopicDetails(BaseModel):
-    relevantTopicIds: list[str] | None = None
-    topicCategories: list[str] | None = None
-    topicIds: list[str] | None = None
+class YTVideoTopicDetails(YTSchema):
+    relevant_topic_ids: list[str] | None = None
+    topic_categories: list[str] | None = None
+    topic_ids: list[str] | None = None
 
 
 class YTVideo(YTBase):
     id: str
-    contentDetails: YTVideoContentDetails | None = None
+    content_details: YTVideoContentDetails | None = None
     snippet: YTVideoSnippet | None = None
     statistics: YTVideContentStatistics | None = None
     status: YTVideoStatus | None = None
-    ageGating: YTVideoAgeGating | None = None
-    monetizationDetails: YTVideoMonetizationDetails | None = None
-    topicDetails: YTVideoTopicDetails | None = None
+    age_gating: YTVideoAgeGating | None = None
+    monetization_details: YTVideoMonetizationDetails | None = None
+    topic_details: YTVideoTopicDetails | None = None
 
 
 class YTVideoUploadRequest(YTVideo):

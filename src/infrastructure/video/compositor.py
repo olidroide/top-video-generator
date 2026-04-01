@@ -19,6 +19,7 @@ from src.shared.logging import get_logger
 from .asset_manager import VideoAssetManager
 from .moviepy_compat import (
     CompositeVideoClip,
+    MoviePyClip,
     VideoFileClip,
     clip_subclipped,
     clip_with_audio_fade_out,
@@ -88,7 +89,7 @@ class VideoCompositor:
             start = int(clip_duration / 2)
             clip = clip_subclipped(clip, start, start + seconds_per_clip)
 
-        composite_video_clip: CompositeVideoClip | None = None
+        composite_video_clip: MoviePyClip | None = None
         try:
             clips = list(await self._renderer.overlay_with_video_template(video_file_clip=clip))
             clips.extend(self._renderer.overlay_texts_template(video_file_clip=clip, video=video))
@@ -121,7 +122,7 @@ class VideoCompositor:
             start = int(clip_duration / 2)
             clip = clip_subclipped(clip, start, start + seconds_per_clip)
 
-        composite_video_clip: CompositeVideoClip | None = None
+        composite_video_clip: MoviePyClip | None = None
         try:
             clips = list(await self._renderer.overlay_with_vertical_video_template(video_file_clip=clip))
             clips.extend(self._renderer.overlay_texts_vertical_template(video_file_clip=clip, video=video))
@@ -186,7 +187,7 @@ class VideoCompositor:
                 )
             )
 
-        merged_clip: CompositeVideoClip | None = None
+        merged_clip: MoviePyClip | None = None
         try:
             merged_clip = CompositeVideoClip(clips=composite_clips)
             return await self._render_clip(
@@ -198,7 +199,7 @@ class VideoCompositor:
             for clip in composite_clips:
                 close_clip(clip)
 
-    async def _render_clip(self, video: CompositeVideoClip, video_id: str) -> str:
+    async def _render_clip(self, video: MoviePyClip, video_id: str) -> str:
         """Render CompositeVideoClip to MP4 file using FFmpeg.
 
         Skips rendering if output file already exists (idempotency check).
@@ -221,7 +222,6 @@ class VideoCompositor:
             str(path),
             remove_temp=True,
             temp_audiofile=str(pathlib.Path(tempfile.gettempdir()) / f"temp_{video_id}_audio.mp4"),
-            verbose=False,
             logger=None,
             fps=24,
             codec="libx264",

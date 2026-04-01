@@ -34,9 +34,9 @@ coverage.xml
 .dockerignore
 
 # Documentation
-README.md
 docs/
 *.md
+!README.md
 
 # Other
 .DS_Store

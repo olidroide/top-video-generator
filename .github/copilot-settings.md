@@ -9,6 +9,7 @@
 - typecheck: uv run ty check src/
 - quality: make quality
 - run: uv run {script}
+- docker-build: docker buildx build --load -t top-video-generator:local .
 
 ## Local Enforcement
 
@@ -23,10 +24,21 @@
 - Never use pip directly in docs, scripts, Makefile targets, CI, or Dockerfiles.
 - Preferred sync commands: uv sync --all-extras, uv sync --no-dev --frozen
 
+## Container Build Defaults
+
+- Always use Docker Buildx for image builds.
+- Do not use docker build (legacy builder) in docs, scripts, Makefile targets, CI, or runbooks.
+- If Buildx is unavailable, install Docker Buildx first and then run build commands with docker buildx build.
+
 ## Scope
 
 - Keep this file operational and concise.
 - Architecture, layering, anti-patterns, and migration rules belong in .github/copilot-instructions.md.
+
+## Documentation Language
+
+- All repository documentation must be written in English.
+- Do not add or update docs in other languages.
 
 ## Finish Checks
 

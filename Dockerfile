@@ -37,11 +37,11 @@ RUN apt-get update && \
 
 COPY pyproject.toml uv.lock README.md LICENSE /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen --no-install-project
+    uv sync --no-dev --frozen --extra instagram --no-install-project
 
 COPY ./src /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen
+    uv sync --no-dev --frozen --extra instagram
 
 FROM python:3.13.9-slim-bookworm
 LABEL MAINTAINER="top-video-generator@olidroide.es"

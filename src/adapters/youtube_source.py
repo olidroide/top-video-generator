@@ -49,12 +49,12 @@ class YouTubeSource:
     def _yt_video_to_canonical(self, item: YTVideo) -> CanonicalVideo:
         snippet = item.snippet
         statistics = item.statistics
-        content_details = item.contentDetails
+        content_details = item.content_details
 
         title = (snippet.title or "") if snippet else ""
-        channel_name = (snippet.channelTitle or "") if snippet else ""
-        views = int(statistics.viewCount or 0) if statistics else 0
-        likes = int(statistics.likeCount or 0) if statistics else 0
+        channel_name = (snippet.channel_title or "") if snippet else ""
+        views = int(statistics.view_count or 0) if statistics else 0
+        likes = int(statistics.like_count or 0) if statistics else 0
 
         thumbnail_url: str | None = None
         if snippet and snippet.thumbnails:

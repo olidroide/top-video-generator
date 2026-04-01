@@ -38,6 +38,7 @@ When responding under this skill:
    - Reproducibility (pinned versions, deterministic builds)
    - Security defaults (non-root user, secret management, trusted images)
    - Observability (healthchecks, stdout logging, OCI labels)
+  - Build command defaults: prefer Docker Buildx over legacy docker build
 
 3. **Balance conciseness with depth**:
    - Start with a **checklist summary**
@@ -47,6 +48,12 @@ When responding under this skill:
 4. **Avoid anti-patterns explicitly**:
    - Explain **why** something is problematic (security, performance, debugging)
    - Propose a clear, immediately actionable alternative
+  - Treat legacy docker build usage as an anti-pattern when Buildx is expected
+
+5. **Build command policy**:
+  - Use `docker buildx build` as the default command in examples and recommendations.
+  - For local image usage after build, prefer `docker buildx build --load -t <tag> .`.
+  - If Buildx is not installed, instruct to install/enable Buildx before proceeding.
 
 ---
 

@@ -74,7 +74,7 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     )
     video_id_list = [v.video_id for v in trending_result.videos]
 
-    # Paso 2: obtener detalles completos en batch
+    # Step 2: fetch full video details in batch
     details = await yt_source.fetch_video_details_batch(video_id_list)
 
     for video_item in details:

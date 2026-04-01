@@ -8,23 +8,67 @@ This application fetches daily/weekly top YouTube music videos for a configured 
 
 ### System Components
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Data Fetch    │────▶│  Video Processing │────▶│    Publishing   │
-│  (YouTube API)  │     │  (moviepy/ffmpeg) │     │ (YT/IG/TT/Spot)│
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-         │                       │                          │
-         ▼                       ▼                          ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   TinyFlux      │     │   Templates      │     │   Platform      │
-│  (Timeseries)   │     │   & Assets       │     │   Clients       │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│    TinyDB       │
-│   (Metadata)    │
-└─────────────────┘
+```mermaid
+flowchart LR
+    classDef edge        fill:#334155,stroke:#7DD3FC,stroke-width:2px,color:#F8FAFC
+    classDef application fill:#1D4ED8,stroke:#93C5FD,stroke-width:2px,color:#EFF6FF
+    classDef domain      fill:#065F46,stroke:#34D399,stroke-width:3px,color:#ECFDF5
+    classDef infra       fill:#C2410C,stroke:#FDBA74,stroke-width:2px,color:#FFF7ED
+    classDef platform    fill:#BE185D,stroke:#F9A8D4,stroke-width:2px,color:#FFF1F2
+    classDef store       fill:#047857,stroke:#6EE7B7,stroke-width:2px,color:#ECFDF5
+
+    subgraph Ingestion ["📥 Ingestion"]
+        FETCH(["Fetch Trending\nYouTube API ingestion"]):::infra
+        SCORE{{"Rank & Select\nApplication orchestration"}}:::application
+    end
+
+    subgraph Media ["🎬 Media Pipeline"]
+        RENDER(["Render Videos\nmoviepy / ffmpeg" ]):::infra
+        ASSETS["Templates & Assets\nfonts, images, overlays"]:::edge
+    end
+
+    subgraph Delivery ["🚀 Delivery"]
+        PUBLISH(["Publish Jobs\nvertical + weekly" ]):::infra
+        WEB["Web Interface\nFastAPI + Jinja2 SSR"]:::edge
+    end
+
+    subgraph Persistence ["💾 Persistence"]
+        TS[("TinyFlux<br/>Timeseries")]:::store
+        DB[("TinyDB<br/>Metadata")]:::store
+        VID[("Video Assets<br/>videos/")]:::store
+    end
+
+    subgraph Platforms ["🌍 External Platforms"]
+        YT["YouTube"]:::platform
+        IG["Instagram"]:::platform
+        TT["TikTok"]:::platform
+        SP["Spotify"]:::platform
+    end
+
+    CORE(("Canonical Models\nDomain + Ports")):::domain
+
+    FETCH --> SCORE
+    SCORE --> CORE
+    RENDER --> CORE
+    PUBLISH --> CORE
+    WEB -.-> DB
+    WEB -.-> TS
+    FETCH ==> TS
+    FETCH ==> DB
+    SCORE --> RENDER
+    RENDER -.-> ASSETS
+    RENDER ==> VID
+    PUBLISH -.-> VID
+    PUBLISH ==> YT
+    PUBLISH ==> IG
+    PUBLISH ==> TT
+    PUBLISH ==> SP
+
+    style Ingestion fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E
+    style Media fill:#FEF3C7,stroke:#F59E0B,stroke-width:2px,color:#451A03
+    style Delivery fill:#D1FAE5,stroke:#10B981,stroke-width:2px,color:#064E3B
+    style Persistence fill:#DCFCE7,stroke:#22C55E,stroke-width:2px,color:#14532D
+    style Platforms fill:#FCE7F3,stroke:#EC4899,stroke-width:2px,color:#831843
 ```
 
 ### Key Components
@@ -112,7 +156,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 - [ ] Message broker (Redis/RabbitMQ) for reliable task queuing
 - [ ] Separate container services for ingest/process/publish
-- [ ] Migrate from TinyDB to PostgreSQL for metadata
+- [ ] Migrate metadata storage from TinyDB to SQLite
 - [ ] Add Prometheus metrics export
 - [ ] Implement dead-letter queue for failed uploads
 - [ ] Add integration tests with mocked external APIs

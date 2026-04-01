@@ -1,7 +1,7 @@
-"""Tests de conformidad estructural con los Protocols del dominio.
+"""Structural compliance tests for domain Protocols.
 
-Verifican que cada adapter implementa correctamente el Protocol correspondiente
-sin instanciar la clase en import-time (a diferencia del anti-patrón assert isinstance).
+These tests verify that each adapter implements the corresponding Protocol
+without instantiating classes at import time (avoiding module-level asserts).
 """
 
 from unittest.mock import create_autospec

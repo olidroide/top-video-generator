@@ -10,9 +10,9 @@ x-top-video-generator-common: &top-video-generator-common
     - path: ./.env.local
       required: false
   volumes:
-    - ./prod:/app/db
-    - ./prod/videos:/app/videos
-    - ./prod/logs:/app/logs
+    - ./db:/app/db
+    - ./videos:/app/videos
+    - ./logs:/app/logs
     - ./secrets:/app/secrets:ro
   tmpfs:
     - /app/run:mode=1777
