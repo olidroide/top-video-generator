@@ -2,43 +2,37 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from unittest.mock import AsyncMock, create_autospec
 
 from fastapi.testclient import TestClient
 
-from src.application.fetch_top_videos_use_case import FetchTopVideosResult
+from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardResult, GetTopVideosDashboardUseCase
 from src.config.settings import AppSettings
 from src.domain.models import Channel, Video
-from src.web.dependencies import get_fetch_top_videos_use_case, get_release_repo
+from src.web.dependencies import get_top_videos_dashboard_use_case
 from src.web.main import create_app
 
 
-@dataclass
-class _FetchTopVideosUseCaseStub:
-    async def execute(self, _request: object) -> FetchTopVideosResult:
-        video = Video(
-            video_id="video-1",
-            title="A Sample Song",
-            channel=Channel(name="Channel A"),
-            score=1,
-            score_previous=2,
-            views=1234,
-            likes=98,
-        )
-        return FetchTopVideosResult(videos=(video,))
-
-
-@dataclass
-class _ReleaseRepoStub:
-    def is_release_at_date(self, platform: str, release_date: object) -> bool:
-        _ = (platform, release_date)
-        return False
+def _build_dashboard_use_case_stub() -> GetTopVideosDashboardUseCase:
+    mock_use_case = create_autospec(GetTopVideosDashboardUseCase, instance=True)
+    video = Video(
+        video_id="video-1",
+        title="A Sample Song",
+        channel=Channel(name="Channel A"),
+        score=1,
+        score_previous=2,
+        views=1234,
+        likes=98,
+    )
+    mock_use_case.execute = AsyncMock(
+        return_value=GetTopVideosDashboardResult(videos=(video,), yt_video_published=False)
+    )
+    return mock_use_case
 
 
 def test_index_renders_page_with_video_list() -> None:
     app = create_app(AppSettings(yt_search_region_code="ES"))
-    app.dependency_overrides[get_fetch_top_videos_use_case] = lambda: _FetchTopVideosUseCaseStub()
-    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
         response = client.get("/")
@@ -53,8 +47,7 @@ def test_index_renders_page_with_video_list() -> None:
 
 def test_index_uses_globe_when_region_code_is_invalid() -> None:
     app = create_app(AppSettings(yt_search_region_code="WORLD"))
-    app.dependency_overrides[get_fetch_top_videos_use_case] = lambda: _FetchTopVideosUseCaseStub()
-    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
         response = client.get("/")
@@ -63,3 +56,28 @@ def test_index_uses_globe_when_region_code_is_invalid() -> None:
 
     assert response.status_code == 200
     assert "🌍 🔝 VIDEO GENERATOR" in response.text
+
+
+def test_index_uses_requested_daily_query_param() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES"))
+
+    class _CaptureDashboardUseCase:
+        def __init__(self) -> None:
+            self.last_request = None
+
+        async def execute(self, request: object) -> GetTopVideosDashboardResult:
+            self.last_request = request
+            return GetTopVideosDashboardResult(videos=(), yt_video_published=False)
+
+    use_case_stub = _CaptureDashboardUseCase()
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = lambda: use_case_stub
+
+    with TestClient(app) as client:
+        response = client.get("/?daily=2026-03-31")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "?daily=2026-03-31" in response.text
+    assert use_case_stub.last_request is not None
+    assert getattr(use_case_stub.last_request, "day", None).isoformat() == "2026-03-31"

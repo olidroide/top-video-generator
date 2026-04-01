@@ -8,7 +8,7 @@
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
         <script defer src="https://use.fontawesome.com/releases/v5.13.1/js/all.js"></script>
         <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
-        <title>Item Details</title>
+        <title>{{ vm.page_title }}</title>
     {% endblock %}
 </head>
 
@@ -28,12 +28,12 @@
                     <form>
                         <div class="field">
                             <div class="control">
-                                {% if tiktok_authentication_url %}
+                                {% if vm.tiktok_authentication_url %}
                                     <a class="button is-block is-primary is-fullwidth is-medium is-success"
-                                       href="{{ tiktok_authentication_url }}">
+                                       href="{{ vm.tiktok_authentication_url }}">
                                         <i class="fab fa-tiktok"></i> TikTok
                                     </a>
-                                {% elif tiktok_credentials %}
+                                {% elif vm.tiktok_credentials %}
                                     <a class="button is-block is-primary is-fullwidth is-medium is-outlined" disabled>
                                         <i class="fab fa-tiktok"></i> TikTok
                                     </a>
@@ -44,12 +44,12 @@
 
                         <div class="field">
                             <div class="control">
-                                {% if yt_authentication_url %}
+                                {% if vm.yt_authentication_url %}
                                     <a class="button is-block is-primary is-fullwidth is-medium"
-                                       href="{{ yt_authentication_url }}">
+                                       href="{{ vm.yt_authentication_url }}">
                                         <i class="fab fa-youtube"></i> Youtube
                                     </a>
-                                {% elif yt_credentials %}
+                                {% elif vm.yt_credentials %}
                                     <a class="button is-block is-success is-fullwidth is-medium is-outlined" disabled>
                                         <i class="fab fa-youtube"></i> Youtube
                                     </a>
@@ -60,12 +60,12 @@
 
                         <div class="field">
                             <div class="control">
-                                {% if spotify_authentication_url %}
+                                {% if vm.spotify_authentication_url %}
                                     <a class="button is-block is-primary is-fullwidth is-medium"
-                                       href="{{ spotify_authentication_url }}">
+                                       href="{{ vm.spotify_authentication_url }}">
                                         <i class="fab fa-spotify"></i> Spotify
                                     </a>
-                                {% elif spotify_credentials %}
+                                {% elif vm.spotify_credentials %}
                                     <a class="button is-block is-success is-fullwidth is-medium is-outlined" disabled>
                                         <i class="fab fa-spotify"></i> Spotify
                                     </a>

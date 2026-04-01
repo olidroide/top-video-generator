@@ -6,8 +6,10 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
+from src.application.get_setup_page_use_case import GetSetupPageResult
 from src.config.settings import AppSettings
-from src.web.dependencies import get_authorize_use_case
+from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
+from src.web.dependencies import get_authorize_use_case, get_setup_page_use_case
 from src.web.main import create_app
 
 app = create_app(AppSettings(yt_search_region_code="ES"))
@@ -67,3 +69,56 @@ def test_yt_auth_without_code_redirects_to_root() -> None:
 
     assert response.status_code == 307
     assert response.headers["location"] == "/"
+
+
+def test_setup_page_renders_viewmodel() -> None:
+    setup_result = GetSetupPageResult(
+        yt_authentication_url="https://yt.example/auth",
+        yt_credentials=None,
+        tiktok_authentication_url="https://tt.example/auth",
+        tiktok_credentials=None,
+        spotify_authentication_url="https://sp.example/auth",
+        spotify_credentials=None,
+        is_completed=False,
+    )
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(setup_result)
+
+    with TestClient(app) as client:
+        response = client.get("/setup")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "Top Video Generator" in response.text
+    assert "https://yt.example/auth" in response.text
+    assert "https://tt.example/auth" in response.text
+    assert "https://sp.example/auth" in response.text
+
+
+def test_setup_page_redirects_when_completed() -> None:
+    setup_result = GetSetupPageResult(
+        yt_authentication_url=None,
+        yt_credentials=YtAuth(client_id="yt-session"),
+        tiktok_authentication_url=None,
+        tiktok_credentials=TikTokAuth(client_id="tt-session"),
+        spotify_authentication_url=None,
+        spotify_credentials=SpotifyAuth(client_id="sp-session"),
+        is_completed=True,
+    )
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(setup_result)
+
+    with TestClient(app) as client:
+        response = client.get("/setup", follow_redirects=False)
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/"
+
+
+class _SetupPageUseCaseStub:
+    def __init__(self, result: GetSetupPageResult) -> None:
+        self.result = result
+
+    async def execute(self, _request: object) -> GetSetupPageResult:
+        return self.result

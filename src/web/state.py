@@ -6,9 +6,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from src.config.settings import AppSettings
 from src.shared.logging import get_logger
-from src.web.dependencies import AuthenticationRepositoryDep
 
 logger = get_logger(__name__)
 WEB_DIR = Path(__file__).resolve().parent
@@ -44,12 +42,4 @@ async def request_had_any_credentials(request: Request) -> bool:
         request.session.get("yt_credentials")
         or request.session.get("tiktok_credentials")
         or request.session.get("spotify_credentials")
-    )
-
-
-def already_finish_setup(auth_repo: AuthenticationRepositoryDep, settings: AppSettings) -> bool:
-    return bool(
-        auth_repo.get_yt_auth(settings.yt_auth_user_id or "")
-        and auth_repo.get_tiktok_auth(settings.tiktok_user_openid or "")
-        and auth_repo.get_spotify_auth(settings.spotify_user_id or "")
     )

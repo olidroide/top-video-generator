@@ -11,6 +11,7 @@ from src.application.fetch_top_videos_use_case import (
     FetchTopVideosRequest,
     FetchTopVideosUseCase,
 )
+from src.domain.exceptions import ScoringError
 from src.domain.models import CanonicalVideo, Channel, TimeseriesRange, VideoPoint, VideoScoreStatus
 from src.domain.ports import TimeSeriesPort, VideoMetadataPort
 
@@ -112,11 +113,11 @@ class TestFetchTopVideosUseCase:
         video_ids = {v.video_id for v in result.videos}
         assert video_ids == {"v1", "v2"}
 
-    async def test_raises_index_error_when_no_current_data(self) -> None:
+    async def test_raises_scoring_error_when_no_current_data(self) -> None:
         repo = make_repo(current_points=[], previous_points=[])
         use_case = FetchTopVideosUseCase(repo, make_video_repo())
 
-        with pytest.raises(IndexError, match="No video timeseries for today"):
+        with pytest.raises(ScoringError, match="No video timeseries for today"):
             await use_case.execute(FetchTopVideosRequest(timeseries_range=TimeseriesRange.DAILY, day=date(2026, 3, 30)))
 
     async def test_limit_is_respected(self) -> None:

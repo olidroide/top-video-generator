@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from src.domain.exceptions import ScoringError
 from src.domain.models import Channel, TimeseriesRange, Video, VideoPoint
 from src.domain.services.scoring_service import datetime_range_start, score_and_rank_video_points
 from src.shared.logging import get_logger
@@ -72,7 +73,7 @@ class FetchTopVideosUseCase:
         if not current_list:
             error_msg = "No video timeseries for today; run fetch script first"
             logger.error(error_msg)
-            raise IndexError(error_msg)
+            raise ScoringError(error_msg)
 
         # Rank and compare
         ranked = score_and_rank_video_points(current_list, previous_list)

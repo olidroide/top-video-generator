@@ -2,16 +2,51 @@
 
 import logging
 import sys
+from collections.abc import MutableMapping
 from logging import handlers
 from pathlib import Path
-from typing import Any
+from typing import Protocol, Self
 
 import structlog
 from structlog.stdlib import ProcessorFormatter
+from structlog.typing import Processor
+
+
+class StructuredLogger(Protocol):
+    def bind(self, **new_values: object) -> Self: ...
+
+    def new(self, **new_values: object) -> Self: ...
+
+    def try_unbind(self, *keys: str) -> Self: ...
+
+    def unbind(self, *keys: str) -> Self: ...
+
+    def debug(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def info(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def warning(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def warn(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def error(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def exception(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def critical(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def fatal(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def err(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def log(self, level: int, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
+    def msg(self, event: str | None = None, *args: object, **kwargs: object) -> None: ...
+
 
 timestamper = structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S")
 
-pre_chain: list[Any] = [
+pre_chain: list[Processor] = [
     # Add the log level and a timestamp to the event_dict if the log entry
     # is not from structlog.
     structlog.stdlib.add_log_level,
@@ -24,13 +59,15 @@ pre_chain: list[Any] = [
 
 
 def event_dict_to_message(
-    logger: Any, name: str, event_dict: dict[str, Any]
-) -> tuple[tuple[dict[str, Any]], dict[str, Any]]:
+    logger: object,
+    name: str,
+    event_dict: MutableMapping[str, object],
+) -> tuple[object, ...]:
     """Passes the event_dict to stdlib handler for special formatting."""
     return ((event_dict,), {"extra": {"_logger": logger, "_name": name}})
 
 
-processors: list[Any] = [
+processors: list[Processor] = [
     structlog.stdlib.filter_by_level,
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
@@ -41,7 +78,7 @@ processors: list[Any] = [
     event_dict_to_message,
 ]
 
-file_processors: list[Any] = [
+file_processors: list[Processor] = [
     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
     structlog.dev.ConsoleRenderer(colors=False),
 ]
@@ -60,7 +97,7 @@ def _reset_configured_handlers() -> None:
 def _build_stream_handler() -> logging.Handler:
     handler_stream = logging.StreamHandler(sys.stdout)
     handler_stream.setFormatter(ProcessorFormatter(processor=structlog.dev.ConsoleRenderer()))
-    handler_stream.setLevel(logging.INFO)
+    handler_stream.setLevel(logging.DEBUG)
     return handler_stream
 
 
@@ -105,6 +142,6 @@ def setup_logging(log_file_path: Path | str) -> None:
     _configured_handlers.extend([stream_handler, file_handler])
 
 
-def get_logger(*args: Any, **initial_values: Any) -> Any:
+def get_logger(*args: object, **initial_values: object) -> StructuredLogger:
     """Return a structlog logger bound with optional initial values."""
     return structlog.get_logger(*args, **initial_values)

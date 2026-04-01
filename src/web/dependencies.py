@@ -7,7 +7,10 @@ from fastapi import Depends, Request
 
 from src.application.authorize_use_case import AuthorizeUseCase
 from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
+from src.application.get_setup_page_use_case import GetSetupPageUseCase
+from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
 from src.config.settings import AppSettings, get_app_settings
+from src.domain.ports import ReleaseReadPort
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
@@ -73,11 +76,35 @@ def get_fetch_top_videos_use_case(
     return FetchTopVideosUseCase(timeseries_repo, video_repo)
 
 
+def get_top_videos_dashboard_use_case(
+    fetch_top_videos_use_case: Annotated[FetchTopVideosUseCase, Depends(get_fetch_top_videos_use_case)],
+    release_port: Annotated[ReleaseReadPort, Depends(get_release_repo)],
+) -> GetTopVideosDashboardUseCase:
+    return GetTopVideosDashboardUseCase(fetch_videos=fetch_top_videos_use_case, release_port=release_port)
+
+
+def get_setup_page_use_case(
+    auth_repo: Annotated[AuthenticationRepository, Depends(get_auth_repo)],
+    yt_provider: Annotated[YTClient, Depends(get_yt_provider)],
+    tiktok_provider: Annotated[TikTokClient, Depends(get_tiktok_provider)],
+    spotify_provider: Annotated[SpotifyClient, Depends(get_spotify_provider)],
+) -> GetSetupPageUseCase:
+    return GetSetupPageUseCase(
+        auth_repo=auth_repo,
+        yt_provider=yt_provider,
+        tiktok_provider=tiktok_provider,
+        spotify_provider=spotify_provider,
+    )
+
+
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]
 AppSettingsDep = Annotated[AppSettings, Depends(get_settings)]
 AuthenticationRepositoryDep = Annotated[AuthenticationRepository, Depends(get_auth_repo)]
 FetchTopVideosUseCaseDep = Annotated[FetchTopVideosUseCase, Depends(get_fetch_top_videos_use_case)]
+GetTopVideosDashboardUseCaseDep = Annotated[GetTopVideosDashboardUseCase, Depends(get_top_videos_dashboard_use_case)]
+GetSetupPageUseCaseDep = Annotated[GetSetupPageUseCase, Depends(get_setup_page_use_case)]
 ReleaseRepositoryDep = Annotated[ReleaseRepository, Depends(get_release_repo)]
+ReleaseReadPortDep = Annotated[ReleaseReadPort, Depends(get_release_repo)]
 SpotifyProviderDep = Annotated[SpotifyClient, Depends(get_spotify_provider)]
 TikTokProviderDep = Annotated[TikTokClient, Depends(get_tiktok_provider)]
 YouTubeProviderDep = Annotated[YTClient, Depends(get_yt_provider)]

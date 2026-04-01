@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import datetime
+    from datetime import date, datetime
 
-    from .models import CanonicalVideo, Platform, PublishingResult, VideoPoint
+    from .models import CanonicalVideo, Platform, PublishingResult, SpotifyAuth, TikTokAuth, VideoPoint, YtAuth
 
 
 @runtime_checkable
@@ -38,8 +38,24 @@ class VideoMetadataPort(Protocol):
 
 
 @runtime_checkable
+class AuthenticationReadPort(Protocol):
+    def get_spotify_auth(self, client_id: str) -> SpotifyAuth | None: ...
+
+    def get_tiktok_auth(self, client_id: str) -> TikTokAuth | None: ...
+
+    def get_yt_auth(self, client_id: str) -> YtAuth | None: ...
+
+
+@runtime_checkable
+class ReleaseReadPort(Protocol):
+    def is_release_at_date(self, platform: str, release_date: date) -> bool: ...
+
+
+@runtime_checkable
 class YouTubeOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for YouTube (sync flow)."""
+
+    async def step_1_get_authentication_url(self) -> str: ...
 
     def step_2_exchange_code_authentication(self, url_requested: str) -> dict[str, Any]: ...
 
@@ -48,11 +64,15 @@ class YouTubeOAuthProvider(Protocol):
 class TikTokOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for TikTok (async flow)."""
 
+    async def step_1_get_authentication_url(self) -> str: ...
+
     async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, Any]: ...
 
 
 @runtime_checkable
 class SpotifyOAuthProvider(Protocol):
     """Provides OAuth step-2 exchange for Spotify (async flow)."""
+
+    async def step_1_get_authentication_url(self) -> str: ...
 
     async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, Any]: ...

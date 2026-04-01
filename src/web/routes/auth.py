@@ -3,7 +3,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.responses import RedirectResponse, Response
 from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
@@ -12,18 +12,17 @@ from src.application.authorize_use_case import (
     AuthorizeTikTokRequest,
     AuthorizeYtRequest,
 )
+from src.application.get_setup_page_use_case import GetSetupPageRequest
 from src.entrypoints.fetch_data import main_async as script_fetch_yt_data
 from src.entrypoints.publish_vertical import main_async as script_daily
 from src.entrypoints.publish_video import main_async as script_weekly
 from src.web.dependencies import (
     AppSettingsDep,
-    AuthenticationRepositoryDep,
     AuthorizeUseCaseDep,
-    SpotifyProviderDep,
-    TikTokProviderDep,
-    YouTubeProviderDep,
+    GetSetupPageUseCaseDep,
 )
-from src.web.state import already_finish_setup, logger, request_had_any_credentials, templates
+from src.web.state import logger, request_had_any_credentials, templates
+from src.web.viewmodels import build_setup_page_view_model
 
 router = APIRouter()
 
@@ -122,48 +121,30 @@ async def spotify_auth(
     return RedirectResponse("/")
 
 
-@router.get("/setup")
+@router.get("/setup", response_class=HTMLResponse)
 async def setup_page(
     request: Request,
-    auth_repo: AuthenticationRepositoryDep,
-    yt_provider: YouTubeProviderDep,
-    tiktok_provider: TikTokProviderDep,
-    spotify_provider: SpotifyProviderDep,
+    use_case: GetSetupPageUseCaseDep,
     settings: AppSettingsDep,
 ) -> Response:
-    if already_finish_setup(auth_repo, settings):
+    result = await use_case.execute(
+        GetSetupPageRequest(
+            yt_session_client_id=request.session.get("yt_credentials"),
+            tiktok_session_client_id=request.session.get("tiktok_credentials"),
+            spotify_session_client_id=request.session.get("spotify_credentials"),
+            yt_auth_user_id=settings.yt_auth_user_id or None,
+            tiktok_user_openid=settings.tiktok_user_openid or None,
+            spotify_user_id=settings.spotify_user_id or None,
+        )
+    )
+
+    if result.is_completed:
         return RedirectResponse("/")
 
-    data_context: dict[str, object] = {
-        "request": request,
-    }
-
-    if yt_credentials := request.session.get("yt_credentials"):
-        yt_client_id = yt_credentials
-        yt_credentials_db = auth_repo.get_yt_auth(yt_client_id)
-        if yt_credentials_db:
-            data_context["yt_credentials"] = yt_credentials_db.model_dump()
-    else:
-        data_context["yt_authentication_url"] = await yt_provider.step_1_get_authentication_url()
-
-    if tiktok_credential := request.session.get("tiktok_credentials"):
-        tiktok_client_id = tiktok_credential
-        tiktok_credentials_db = auth_repo.get_tiktok_auth(tiktok_client_id)
-        if tiktok_credentials_db:
-            data_context["tiktok_credentials"] = tiktok_credentials_db.model_dump()
-    else:
-        data_context["tiktok_authentication_url"] = await tiktok_provider.step_1_get_authentication_url()
-
-    if spotify_credential := request.session.get("spotify_credentials"):
-        spotify_client_id = spotify_credential
-        spotify_credentials_db = auth_repo.get_spotify_auth(spotify_client_id)
-        if spotify_credentials_db:
-            data_context["spotify_credentials"] = spotify_credentials_db.model_dump()
-    else:
-        data_context["spotify_authentication_url"] = await spotify_provider.step_1_get_authentication_url()
+    view_model = build_setup_page_view_model(result)
 
     return templates.TemplateResponse(
         request=request,
         name="setup.html",
-        context=data_context,
+        context={"request": request, "vm": view_model},
     )

@@ -25,7 +25,7 @@ class PublishError(DomainError):
         self.__cause__ = cause
 
 
-class ScoringError(DomainError):
+class ScoringError(IndexError, DomainError):
     """Raised when the scoring pipeline has insufficient data."""
 
     def __init__(self, reason: str) -> None:
