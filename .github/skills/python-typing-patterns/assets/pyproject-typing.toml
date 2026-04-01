@@ -1,7 +1,7 @@
 # pyproject.toml - Type checker configuration
 # Copy these sections to your pyproject.toml
 # This project uses `ty` (https://github.com/astral-sh/ty) — the Astral type checker.
-# Run: uv run ty check src/
+# Run: uv run ty check src/ tests/
 
 # ============================================================
 # ty Configuration

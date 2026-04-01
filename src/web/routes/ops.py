@@ -57,7 +57,7 @@ def _check_templates(settings: AppSettings) -> dict[str, str]:
 def _check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
     """Check database connectivity."""
     try:
-        _ = timeseries_repo.get_points_by_date_range(datetime.now(UTC) - timedelta(days=1), datetime.now(UTC))
+        _ = timeseries_repo.get_video_points_by_date_range(datetime.now(UTC) - timedelta(days=1), datetime.now(UTC))
         return {"status": "ok", "message": "Database accessible"}
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "message": f"Database error: {exc}"}

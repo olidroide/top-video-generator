@@ -1,7 +1,7 @@
 """YouTube infrastructure integration."""
 
 from src.infrastructure.youtube.auth_manager import MemoryCache, get_default_client
-from src.infrastructure.youtube.client import YTClient, YTClientFake, YTClientT, get_yt_client
+from src.infrastructure.youtube.client import YTClient, YTClientFake, get_yt_client
 from src.infrastructure.youtube.schemas import (
     YTBase,
     YTPageInfo,
@@ -27,7 +27,6 @@ __all__ = [
     "YTBase",
     "YTClient",
     "YTClientFake",
-    "YTClientT",
     "YTPageInfo",
     "YTRoot",
     "YTThumbnail",

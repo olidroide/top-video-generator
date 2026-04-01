@@ -74,11 +74,11 @@ class SpotifyClient:
 
     async def step_2_exchange_code_authentication(
         self,
-        user_code: str,
-    ) -> dict[str, Any]:
+        authorization_value: str,
+    ) -> SpotifyAuth:
         authorize_url = "https://accounts.spotify.com/api/token"
         data = {
-            "code": user_code,
+            "code": authorization_value,
             "grant_type": "authorization_code",
             "redirect_uri": self._redirect_uri,
         }
@@ -97,7 +97,12 @@ class SpotifyClient:
         response_dict["client_id"] = user_info.get("id")
 
         logger.debug("auth token:", response_dict=response_dict)
-        return response_dict
+        return SpotifyAuth(
+            token=response_dict.get("access_token"),
+            refresh_token=response_dict.get("refresh_token"),
+            client_id=response_dict.get("client_id"),
+            scopes=str(response_dict.get("scope") or "").split(" "),
+        )
 
     async def refresh_token(self) -> str:
         url = "https://accounts.spotify.com/api/token"

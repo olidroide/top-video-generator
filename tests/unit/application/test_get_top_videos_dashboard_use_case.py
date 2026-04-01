@@ -13,7 +13,7 @@ from src.application.get_top_videos_dashboard_use_case import (
 )
 from src.domain.exceptions import ScoringError
 from src.domain.models import Channel, TimeseriesRange, Video
-from src.domain.ports import ReleaseReadPort
+from src.domain.ports import ReleaseDateValidator
 
 
 def _make_video() -> Video:
@@ -34,8 +34,8 @@ def _build_fetch_use_case(videos: tuple[Video, ...]) -> FetchTopVideosUseCase:
     return mock_use_case
 
 
-def _build_release_port(published: bool = False) -> ReleaseReadPort:
-    mock_port = create_autospec(ReleaseReadPort, instance=True)
+def _build_release_port(published: bool = False) -> ReleaseDateValidator:
+    mock_port: ReleaseDateValidator = create_autospec(ReleaseDateValidator, instance=True)
     mock_port.is_release_at_date.return_value = published
     return mock_port
 

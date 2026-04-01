@@ -14,7 +14,7 @@ from src.shared.logging import get_logger
 if TYPE_CHECKING:
     from pydantic import PastDate
 
-    from src.domain.ports import TimeSeriesPort, VideoMetadataPort
+    from src.domain.ports import TimeSeriesReader, VideoMetadataReader
 
 logger = get_logger(__name__)
 
@@ -53,8 +53,8 @@ class FetchTopVideosUseCase:
 
     def __init__(
         self,
-        timeseries_repo: TimeSeriesPort,
-        video_metadata_repo: VideoMetadataPort,
+        timeseries_repo: TimeSeriesReader,
+        video_metadata_repo: VideoMetadataReader,
     ) -> None:
         """Initialize with repository."""
         self._timeseries_repo = timeseries_repo

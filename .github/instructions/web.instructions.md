@@ -8,6 +8,7 @@ applyTo: "src/web/**"
 
 - Routes delegate to `src.application` use cases only. No business logic, scoring, ranking, or direct DB queries in route handlers.
 - Import infrastructure only through `src.web.dependencies` — never directly from `src.infrastructure` inside a router file.
+- For OAuth and setup flows, depend on the canonical protocols from `src.domain.ports` such as `OAuthProvider[YtAuth]`, `OAuthProvider[TikTokAuth]`, `OAuthProvider[SpotifyAuth]`, and `AuthCredentialStore`; keep concrete clients and repositories inside `src.infrastructure`.
 
 ## Canonical Imports
 

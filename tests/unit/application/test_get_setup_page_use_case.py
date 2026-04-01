@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, create_autospec
+from unittest.mock import create_autospec
 
 from src.application.get_setup_page_use_case import GetSetupPageRequest, GetSetupPageUseCase
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
-from src.domain.ports import AuthenticationReadPort, SpotifyOAuthProvider, TikTokOAuthProvider, YouTubeOAuthProvider
+from src.domain.ports import AuthCredentialStore
+from src.infrastructure.social.spotify_client import SpotifyClient
+from src.infrastructure.social.tiktok_client import TikTokClient
+from src.infrastructure.youtube.client import YTClient
 
 
-def _build_auth_repo() -> AuthenticationReadPort:
-    auth_repo = create_autospec(AuthenticationReadPort, instance=True)
+def _build_auth_repo() -> AuthCredentialStore:
+    auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
     auth_repo.get_yt_auth.side_effect = lambda client_id: (
         YtAuth(client_id=client_id)
         if client_id == "yt-session"
@@ -35,21 +38,21 @@ def _build_auth_repo() -> AuthenticationReadPort:
     return auth_repo
 
 
-def _build_youtube_provider() -> YouTubeOAuthProvider:
-    provider = create_autospec(YouTubeOAuthProvider, instance=True)
-    provider.step_1_get_authentication_url = AsyncMock(return_value="https://yt.example/auth")
+def _build_youtube_provider() -> YTClient:
+    provider: YTClient = create_autospec(YTClient, instance=True)
+    provider.step_1_get_authentication_url.return_value = "https://yt.example/auth"
     return provider
 
 
-def _build_tiktok_provider() -> TikTokOAuthProvider:
-    provider = create_autospec(TikTokOAuthProvider, instance=True)
-    provider.step_1_get_authentication_url = AsyncMock(return_value="https://tt.example/auth")
+def _build_tiktok_provider() -> TikTokClient:
+    provider: TikTokClient = create_autospec(TikTokClient, instance=True)
+    provider.step_1_get_authentication_url.return_value = "https://tt.example/auth"
     return provider
 
 
-def _build_spotify_provider() -> SpotifyOAuthProvider:
-    provider = create_autospec(SpotifyOAuthProvider, instance=True)
-    provider.step_1_get_authentication_url = AsyncMock(return_value="https://sp.example/auth")
+def _build_spotify_provider() -> SpotifyClient:
+    provider: SpotifyClient = create_autospec(SpotifyClient, instance=True)
+    provider.step_1_get_authentication_url.return_value = "https://sp.example/auth"
     return provider
 
 
@@ -79,7 +82,7 @@ class TestGetSetupPageUseCase:
         assert result.spotify_authentication_url is None
 
     async def test_returns_session_credentials_without_urls_when_incomplete(self) -> None:
-        auth_repo = create_autospec(AuthenticationReadPort, instance=True)
+        auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
         auth_repo.get_yt_auth.side_effect = lambda client_id: (
             YtAuth(client_id=client_id) if client_id == "yt-session" else None
         )
@@ -117,7 +120,7 @@ class TestGetSetupPageUseCase:
         assert result.spotify_authentication_url is None
 
     async def test_returns_auth_urls_when_session_credentials_missing(self) -> None:
-        auth_repo = create_autospec(AuthenticationReadPort, instance=True)
+        auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
         auth_repo.get_yt_auth.return_value = None
         auth_repo.get_tiktok_auth.return_value = None
         auth_repo.get_spotify_auth.return_value = None

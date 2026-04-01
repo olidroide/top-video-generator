@@ -1,229 +1,116 @@
 ---
 name: python-typing-patterns
-description: "Python type hints and type safety patterns. Triggers on: type hints, typing, TypeVar, Generic, Protocol, ty, type annotation, overload, TypedDict."
-compatibility: "Python 3.12+. Type checker: ty (uv run ty check src/). Union syntax X | Y throughout."
+description: "Type hint patterns for this repo: Protocol, TypeVar, TypedDict, Literal, Final, and strict ty usage. Triggers on: type hints, typing, TypeVar, Protocol, Generic, TypedDict, ty check."
+compatibility: "Python 3.13+, Pydantic v2, uv run ty check src/ tests/."
 ---
 
 # Python Typing Patterns
 
-Modern type hints for safe, documented Python code.
+Use modern, precise type hints in this codebase.
 
-## Basic Annotations
+## Non-Negotiables
+
+- Prefer `X | Y` over `Union[X, Y]`.
+- Prefer built-in generics: `list[T]`, `dict[K, V]`, `tuple[T, ...]`.
+- Avoid `Any`; use concrete types, `Protocol`, `TypeVar`, or `object`.
+- Prefer `Sequence[T]` and `Mapping[K, V]` for read-only collection contracts.
+- Do not use `@runtime_checkable` in domain ports.
+- Do not use runtime `isinstance(..., Protocol)` checks in normal app code.
+- In this repo, keep OAuth provider result typing invariant: `OAuthResultT` (no covariance unless explicitly required).
+- For protocol compliance tests, prefer structural assignment with concrete instances.
+- Do not ignore `ty` errors in `src/` or `tests/`.
+
+## Core Patterns
+
+### Variables, Functions, Optional
 
 ```python
-# Variables
 name: str = "Alice"
-count: int = 42
 items: list[str] = ["a", "b"]
-mapping: dict[str, int] = {"key": 1}
 
-# Function signatures
+
 def greet(name: str, times: int = 1) -> str:
     return f"Hello, {name}!" * times
 
-# None handling
-def find(id: int) -> str | None:
-    return db.get(id)  # May return None
+
+def find(user_id: int) -> User | None:
+    return db.get(user_id)
 ```
 
-## Collections
+### Collections
 
 ```python
-from collections.abc import Sequence, Mapping, Iterable
+from collections.abc import Mapping, Sequence
 
-# Use collection ABCs for flexibility
+
 def process(items: Sequence[str]) -> list[str]:
-    """Accepts list, tuple, or any sequence."""
     return [item.upper() for item in items]
 
+
 def lookup(data: Mapping[str, int], key: str) -> int:
-    """Accepts dict or any mapping."""
     return data.get(key, 0)
-
-# Nested types
-Matrix = list[list[float]]
-Config = dict[str, str | int | bool]
 ```
 
-## Optional and Union
+### TypedDict
 
 ```python
-# Modern syntax (3.10+)
-def find(id: int) -> User | None:
-    pass
+from typing import TypedDict
 
-def parse(value: str | int | float) -> str:
-    pass
-
-# With default None
-def fetch(url: str, timeout: float | None = None) -> bytes:
-    pass
-```
-
-## TypedDict
-
-```python
-from typing import TypedDict, Required, NotRequired
 
 class UserDict(TypedDict):
     id: int
     name: str
     email: str | None
-
-class ConfigDict(TypedDict, total=False):  # All optional
-    debug: bool
-    log_level: str
-
-class APIResponse(TypedDict):
-    data: Required[list[dict]]
-    error: NotRequired[str]
-
-def process_user(user: UserDict) -> str:
-    return user["name"]  # Type-safe key access
 ```
 
-## Callable
+### Protocol and Callable
 
 ```python
 from collections.abc import Callable
-
-# Function type
-Handler = Callable[[str, int], bool]
-
-def register(callback: Callable[[str], None]) -> None:
-    pass
-
-# With keyword args (use Protocol instead)
 from typing import Protocol
 
-class Processor(Protocol):
+
+class Handler(Protocol):
     def __call__(self, data: str, *, verbose: bool = False) -> int:
         ...
+
+
+def register(callback: Callable[[str], None]) -> None:
+    ...
 ```
 
-## Generics
+### TypeVar and Generics
 
 ```python
 from typing import TypeVar
 
 T = TypeVar("T")
 
+
 def first(items: list[T]) -> T | None:
     return items[0] if items else None
-
-# Bounded TypeVar
-from typing import SupportsFloat
-
-N = TypeVar("N", bound=SupportsFloat)
-
-def average(values: list[N]) -> float:
-    return sum(float(v) for v in values) / len(values)
 ```
 
-## Protocol (Structural Typing)
+### Protocol Compliance Test Pattern
 
 ```python
-from typing import Protocol
-
-class Readable(Protocol):
-    def read(self, n: int = -1) -> bytes:
-        ...
-
-def load(source: Readable) -> dict:
-    """Accepts any object with read() method."""
-    data = source.read()
-    return json.loads(data)
-
-# Works with file, BytesIO, custom classes
-load(open("data.json", "rb"))
-load(io.BytesIO(b"{}"))
+def test_example_publisher_implements_protocol() -> None:
+    publisher = ExamplePublisher(...)
+    _: VideoPublisher = publisher
 ```
 
-## Type Guards
+## Anti-Patterns
 
-```python
-from typing import TypeGuard
+- Using `typing.List`, `typing.Dict`, or `typing.Optional` in new code.
+- Returning `dict[str, Any]` across domain boundaries.
+- Adding `@runtime_checkable` to domain protocols.
+- Using `isinstance(x, SomeProtocol)` in runtime business logic.
+- Using `create_autospec` as the primary proof of protocol conformance.
+- Introducing covariance in OAuth result type variables without a concrete need.
 
-def is_string_list(val: list[object]) -> TypeGuard[list[str]]:
-    return all(isinstance(x, str) for x in val)
+## Exit Checks
 
-def process(items: list[object]) -> None:
-    if is_string_list(items):
-        # items is now list[str]
-        print(", ".join(items))
-```
-
-## Literal and Final
-
-```python
-from typing import Literal, Final
-
-Mode = Literal["read", "write", "append"]
-
-def open_file(path: str, mode: Mode) -> None:
-    pass
-
-# Constants
-MAX_SIZE: Final = 1024
-API_VERSION: Final[str] = "v2"
-```
-
-## Quick Reference
-
-| Type | Use Case |
-|------|----------|
-| `X \| None` | Optional value |
-| `list[T]` | Homogeneous list |
-| `dict[K, V]` | Dictionary |
-| `Callable[[Args], Ret]` | Function type |
-| `TypeVar("T")` | Generic parameter |
-| `Protocol` | Structural typing |
-| `TypedDict` | Dict with fixed keys |
-| `Literal["a", "b"]` | Specific values only |
-| `Final` | Cannot be reassigned |
-
-## Type Checker Commands
-
-```bash
-# mypy
-mypy src/ --strict
-
-# pyright
-pyright src/
-
-# In pyproject.toml
-[tool.mypy]
-strict = true
-python_version = "3.11"
-```
-
-## Additional Resources
-
-- `./references/generics-advanced.md` - TypeVar, ParamSpec, TypeVarTuple
-- `./references/protocols-patterns.md` - Structural typing, runtime protocols
-- `./references/type-narrowing.md` - Guards, isinstance, assert
-- `./references/mypy-config.md` - mypy/pyright configuration
-- `./references/runtime-validation.md` - Pydantic v2, typeguard, beartype
-- `./references/overloads.md` - @overload decorator patterns
-
-## Scripts
-
-- `./scripts/check-types.sh` - Run type checkers with common options
-
-## Assets
-
-- `./assets/pyproject-typing.toml` - Recommended mypy/pyright config
-
----
-
-## See Also
-
-This is a **foundation skill** with no prerequisites.
-
-**Related Skills:**
-- `python-pytest-patterns` - Type-safe fixtures and mocking
-
-**Build on this skill:**
-- `python-async-patterns` - Async type annotations
-- `python-fastapi-patterns` - Pydantic models and validation
-- `python-database-patterns` - SQLAlchemy type annotations
+- `uv run ruff format src/ tests/`
+- `uv run ruff check src/ tests/`
+- `uv run ty check src/ tests/`
+- `uv run pytest`

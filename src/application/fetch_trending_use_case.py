@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.models import CanonicalVideo
-    from src.domain.ports import VideoDataSource
+    from src.domain.ports import TrendingVideoFetcher
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class FetchTrendingResult:
 
 
 class FetchTrendingUseCase:
-    def __init__(self, source: VideoDataSource) -> None:
+    def __init__(self, source: TrendingVideoFetcher) -> None:
         self._source = source
 
     async def execute(self, request: FetchTrendingRequest) -> FetchTrendingResult:

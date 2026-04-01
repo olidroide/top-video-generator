@@ -6,7 +6,7 @@
 - test: uv run pytest
 - lint: uv run ruff check src/ tests/
 - format: uv run ruff format src/ tests/
-- typecheck: uv run ty check src/
+- typecheck: uv run ty check src/ tests/
 - quality: make quality
 - run: uv run {script}
 - docker-build: docker buildx build --load -t top-video-generator:local .
@@ -46,5 +46,5 @@ Run these before finishing a change unless the task is documentation-only or exp
 
 - uv run ruff format src/ tests/
 - uv run ruff check --fix src/ tests/
-- uv run ty check src/
+- uv run ty check src/ tests/
 - uv run pytest

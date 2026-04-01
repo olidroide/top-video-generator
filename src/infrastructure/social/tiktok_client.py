@@ -114,12 +114,12 @@ class TikTokClient:
         logger.debug("url", request_code_url=request_code_url)
         return request_code_url
 
-    async def step_2_exchange_code_authentication(self, user_code: str) -> dict[str, object]:
+    async def step_2_exchange_code_authentication(self, authorization_value: str) -> TikTokAuth:
         authorize_url = f"{self._base_url}/v2/oauth/token/"
         data = {
             "client_key": self._tiktok_client_key,
             "client_secret": self._tiktok_client_secret,
-            "code": user_code,
+            "code": authorization_value,
             "grant_type": "authorization_code",
             "redirect_uri": self._tiktok_redirect_uri,
         }
@@ -133,7 +133,12 @@ class TikTokClient:
             response_dict = await response.json()
 
         logger.debug("auth token:", response_dict=response_dict)
-        return response_dict
+        return TikTokAuth(
+            token=response_dict.get("access_token"),
+            refresh_token=response_dict.get("refresh_token"),
+            client_id=response_dict.get("open_id"),
+            scopes=str(response_dict.get("scope") or "").split(","),
+        )
 
     async def fetch_user_info(self) -> dict[str, object]:
         headers = {

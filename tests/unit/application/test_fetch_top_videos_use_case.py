@@ -13,7 +13,7 @@ from src.application.fetch_top_videos_use_case import (
 )
 from src.domain.exceptions import ScoringError
 from src.domain.models import CanonicalVideo, Channel, TimeseriesRange, VideoPoint, VideoScoreStatus
-from src.domain.ports import TimeSeriesPort, VideoMetadataPort
+from src.domain.ports import TimeSeriesReader, VideoMetadataReader
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,12 +68,12 @@ def make_canonical_video(
 def make_repo(
     current_points: list[VideoPoint],
     previous_points: list[VideoPoint] | None = None,
-) -> TimeSeriesPort:
+) -> TimeSeriesReader:
     """
-    Returns a mock TimeSeriesPort that returns current_points for the main query
+    Returns a mock TimeSeriesReader that returns current_points for the main query
     and previous_points (or []) for the baseline.
     """
-    mock = MagicMock(spec=TimeSeriesPort)
+    mock = MagicMock(spec=TimeSeriesReader)
     call_count: list[int] = [0]
 
     def side_effect(start_time: datetime, end_time: datetime) -> list[VideoPoint]:
@@ -87,8 +87,8 @@ def make_repo(
     return mock
 
 
-def make_video_repo(videos: list[CanonicalVideo] | None = None) -> VideoMetadataPort:
-    mock = MagicMock(spec=VideoMetadataPort)
+def make_video_repo(videos: list[CanonicalVideo] | None = None) -> VideoMetadataReader:
+    mock = MagicMock(spec=VideoMetadataReader)
     by_video_id = {video.video_id: video for video in videos or []}
     mock.get.side_effect = lambda video_id: by_video_id.get(video_id)
     return mock

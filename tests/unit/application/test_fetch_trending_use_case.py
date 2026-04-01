@@ -9,7 +9,7 @@ from src.application.fetch_trending_use_case import (
     FetchTrendingUseCase,
 )
 from src.domain.models import CanonicalVideo
-from src.domain.ports import VideoDataSource
+from src.domain.ports import TrendingVideoFetcher
 
 
 def make_video(video_id: str, score: float = 0.0) -> CanonicalVideo:
@@ -22,8 +22,8 @@ def make_video(video_id: str, score: float = 0.0) -> CanonicalVideo:
     )
 
 
-def make_source(videos: list[CanonicalVideo]) -> VideoDataSource:
-    mock = create_autospec(VideoDataSource, instance=True)
+def make_source(videos: list[CanonicalVideo]) -> TrendingVideoFetcher:
+    mock = create_autospec(TrendingVideoFetcher, instance=True)
     mock.fetch_trending_videos = AsyncMock(return_value=videos)
     return mock
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
-    from src.domain.ports import AuthenticationReadPort, SpotifyOAuthProvider, TikTokOAuthProvider, YouTubeOAuthProvider
+    from src.domain.ports import AuthCredentialStore, OAuthProvider
 
 
 @dataclass(frozen=True)
@@ -40,10 +40,10 @@ class GetSetupPageUseCase:
 
     def __init__(
         self,
-        auth_repo: AuthenticationReadPort,
-        yt_provider: YouTubeOAuthProvider,
-        tiktok_provider: TikTokOAuthProvider,
-        spotify_provider: SpotifyOAuthProvider,
+        auth_repo: AuthCredentialStore,
+        yt_provider: OAuthProvider[YtAuth],
+        tiktok_provider: OAuthProvider[TikTokAuth],
+        spotify_provider: OAuthProvider[SpotifyAuth],
     ) -> None:
         self._auth_repo = auth_repo
         self._yt_provider = yt_provider

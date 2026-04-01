@@ -12,7 +12,7 @@ from src.domain.models import ReleasePlatform, TimeseriesRange, Video
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
-    from src.domain.ports import ReleaseReadPort
+    from src.domain.ports import ReleaseDateValidator
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ class GetTopVideosDashboardResult:
 class GetTopVideosDashboardUseCase:
     """Compose the top-videos fetcher with the release status lookup."""
 
-    def __init__(self, fetch_videos: FetchTopVideosUseCase, release_port: ReleaseReadPort) -> None:
+    def __init__(self, fetch_videos: FetchTopVideosUseCase, release_port: ReleaseDateValidator) -> None:
         self._fetch_videos = fetch_videos
         self._release_port = release_port
 

@@ -252,5 +252,5 @@ These snippets are illustrative only. They show the migration shape: keep the do
 |---|---|
 | Clean import | `python -c "import src"` |
 | Lint | `ruff check src/ tests/` |
-| Type check | `ty check src/` |
+| Type check | `ty check src/ tests/` |
 | Tests | Run tests relevant to touched areas |

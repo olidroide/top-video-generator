@@ -10,6 +10,8 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.discovery_cache.base import Cache
 
+from src.domain.models import YtAuth
+
 
 @asynccontextmanager
 async def get_default_client() -> AsyncIterator[aiohttp.ClientSession]:
@@ -74,18 +76,18 @@ class YouTubeAuthManager:
         )
         return authorization_url
 
-    def exchange_code_authentication(self, url_requested: str) -> dict[str, str | list[str] | None]:
+    def exchange_code_authentication(self, url_requested: str) -> YtAuth:
         flow = self._get_flow()
         flow.fetch_token(authorization_response=url_requested)
         credentials: Credentials = flow.credentials
-        return {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes,
-        }
+        return YtAuth(
+            token=credentials.token,
+            refresh_token=credentials.refresh_token,
+            token_uri=credentials.token_uri,
+            client_id=credentials.client_id,
+            client_secret=credentials.client_secret,
+            scopes=credentials.scopes,
+        )
 
     def build_authenticated_service(self, credentials_payload: dict[str, Any]) -> Any:
         credentials = Credentials(**credentials_payload)

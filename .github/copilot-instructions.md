@@ -26,6 +26,8 @@ Target layout:
 
 Historical shims such as src/db_client.py, src/video_processing.py, and src/yt_client.py have already been migrated out of the main tree. Do not reintroduce those modules or their old import paths. The main remaining legacy concentration is in src/web/main.py and a few orchestration flows still pending further decomposition.
 
+Canonical domain port names are TrendingVideoFetcher, TimeSeriesReader, VideoMetadataReader, AuthCredentialStore, ReleaseDateValidator, VideoPublisher, and OAuthProvider[OAuthResultT]. Do not introduce compatibility aliases or infrastructure-flavored port names in new domain code.
+
 ## Layer Rules
 
 These rules are normative for new code and for any code being actively refactored.
@@ -33,11 +35,12 @@ These rules are normative for new code and for any code being actively refactore
 - domain may import only Python stdlib and pydantic.
 - domain/services may import only domain models and domain exceptions.
 - application may import domain and protocols from src.domain.ports.
-- adapters may import domain and one specific infrastructure client.
+- adapters may import domain and only the infrastructure clients strictly needed for that adapter.
 - infrastructure may import domain models and external libraries, but never application.
 - entrypoints should only wire application and config. Do not add new business logic there.
 - web should delegate to application use cases. Do not add scoring, ranking, publishing, or repository orchestration there.
 - Do not add cross-layer imports that bypass these boundaries.
+- Domain protocols are structural only. Do not add @runtime_checkable, runtime isinstance checks, or module-level protocol assertions. For protocol compliance tests, prefer structural assignment checks; use mocks/fakes for behavior tests.
 
 ## Boundary Types
 
@@ -51,6 +54,9 @@ Allowed cross-layer types:
 - FetchTrendingResult
 - PublishVideoRequest
 - PublishVideoResult
+- YtAuth
+- TikTokAuth
+- SpotifyAuth
 
 Adapters must translate external payloads into canonical models before returning.
 Do not leak raw API dictionaries, SDK objects, response models, or transport-specific data outside adapters or infrastructure.
@@ -72,62 +78,8 @@ Do not leak raw API dictionaries, SDK objects, response models, or transport-spe
 - Use asyncio.TaskGroup for concurrent publishing and similar fan-out workflows.
 - Handle per-platform failures explicitly so one publish failure does not abort the full reporting flow, unless the use case explicitly requires fail-fast semantics.
 - Do not introduce blocking I/O inside async flows without isolating it.
-
-Preferred concurrent publishing pattern:
-
-```python
-from collections.abc import Sequence
-
-from src.domain.exceptions import PublishError
-
-
-async def _publish_one(
-    publisher: VideoPublisher,
-    video_list: Sequence[CanonicalVideo],
-    file_path: str,
-    title: str,
-    description: str,
-) -> PublishingResult:
-    try:
-        return await publisher.publish_video(
-            video_list=video_list,
-            file_path=file_path,
-            title=title,
-            description=description,
-        )
-    except PublishError as exc:
-        logger.warning("publish_failed", platform=publisher.platform_name, error=str(exc))
-        return PublishingResult(
-            platform=publisher.platform_name,
-            success=False,
-            error=str(exc),
-        )
-
-
-async with asyncio.TaskGroup() as task_group:
-    tasks = [
-        task_group.create_task(_publish_one(publisher, video_list, file_path, title, description))
-        for publisher in self._publishers
-    ]
-
-results = [task.result() for task in tasks]
-```
-
-Publishing entrypoints must remain idempotent. Use the repository-based release check before any publish flow runs.
-
-```python
-from datetime import date
-
-from src.domain.models import ReleasePlatform
-from src.infrastructure.storage.release_repository import ReleaseRepository
-
-
-async def _already_published_today(repo: ReleaseRepository, day: date) -> bool:
-    return all(
-        repo.is_release_at_date(platform=platform.value, release_date=day)
-        for platform in ReleasePlatform
-    )
-```
+- Publishing flows must check publication state through the domain port, not concrete infrastructure types.
+- Detailed async/task orchestration examples belong in `python-async-patterns` and `hexagonal-architecture-video-publish`.
 
 ## Platform Integration Rules
 
@@ -135,24 +87,10 @@ When adding a new publishing platform:
 
 1. Create src/adapters/{platform}_publisher.py.
 2. Implement the VideoPublisher protocol from src/domain/ports.py.
-3. Add protocol compliance coverage in tests/unit/adapters/test_protocol_compliance.py using create_autospec.
+3. Add protocol compliance coverage in tests/unit/adapters/test_protocol_compliance.py.
 4. Register the adapter in src/infrastructure/publisher_registry.py.
 5. Do not change domain or use-case contracts unless the business capability actually changes.
-
-Preferred protocol compliance pattern:
-
-```python
-from unittest.mock import create_autospec
-
-from src.domain.ports import VideoPublisher
-
-
-def test_example_publisher_implements_protocol() -> None:
-    from src.adapters.example_publisher import ExamplePublisher
-
-    mock = create_autospec(ExamplePublisher, instance=True)
-    assert isinstance(mock, VideoPublisher)
-```
+- Keep detailed platform patterns in `hexagonal-architecture-video-publish`.
 
 ## Python Rules
 
@@ -170,10 +108,7 @@ def test_example_publisher_implements_protocol() -> None:
 - Integration tests live in tests/integration/{layer}/.
 - End-to-end tests live in tests/e2e/.
 - Mock external dependencies in unit tests.
-- Use tmp_path for TinyDB and TinyFlux integration tests.
-- Use respx for mocked HTTP when end-to-end flows need it.
-- Media pipeline integration tests belong in tests/integration/video/.
-- Mark expensive media tests with @pytest.mark.slow.
+- Keep test-tool specifics (e.g. tmp_path, respx, slow markers) in dedicated testing skills.
 - Do not use pytest.mark.skip to hide failing tests; fix or remove them.
 
 ## Delivery and Media Rules

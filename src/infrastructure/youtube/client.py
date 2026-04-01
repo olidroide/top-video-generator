@@ -1,10 +1,11 @@
 # ruff: noqa: E501
+import asyncio
 from pathlib import Path
-from typing import TypeVar
 
 from googleapiclient.errors import HttpError
 
 from src.config.settings import get_app_settings
+from src.domain.models import YtAuth
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.youtube.api_client import YouTubeApiClient
 from src.infrastructure.youtube.auth_manager import MemoryCache, YouTubeAuthManager
@@ -67,11 +68,11 @@ class YTClient:
             )
         return self._authenticated_service
 
-    async def step_1_get_authentication_url(self):
+    async def step_1_get_authentication_url(self) -> str:
         return self._auth_manager.get_authentication_url()
 
-    def step_2_exchange_code_authentication(self, url_requested: str) -> dict:
-        return self._auth_manager.exchange_code_authentication(url_requested=url_requested)
+    async def step_2_exchange_code_authentication(self, authorization_value: str) -> YtAuth:
+        return await asyncio.to_thread(self._auth_manager.exchange_code_authentication, authorization_value)
 
     async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
         return await self._api_client.fetch_popular_videos(max_results=max_results)
@@ -851,9 +852,6 @@ class YTClientFake(YTClient):
         tags: list[str] | None = None,
     ):
         return True
-
-
-YTClientT = TypeVar("YTClientT", bound=YTClient)
 
 
 def get_yt_client() -> YTClient:

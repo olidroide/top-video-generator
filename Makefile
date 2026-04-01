@@ -39,12 +39,12 @@ lint:
 	uv run ruff check src tests
 
 type-check:
-	uv run ty src tests
+	uv run ty check src/ tests/
 
 quality:
 	uv run ruff format --check src/ tests/
 	uv run ruff check src/ tests/
-	uv run ty check src/
+	uv run ty check src/ tests/
 
 test:
 	uv run pytest tests/
