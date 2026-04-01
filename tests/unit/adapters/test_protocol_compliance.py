@@ -22,7 +22,7 @@ from src.domain.ports import (
 
 def test_youtube_source_implements_protocol() -> None:
     from src.adapters.youtube_source import YouTubeSource
-    from src.infrastructure.youtube.client import YTClient
+    from src.infrastructure.youtube.yt_client import YTClient
 
     client: YTClient = create_autospec(YTClient, instance=True)
     source: YouTubeSource = YouTubeSource(client=client)
@@ -51,7 +51,7 @@ def test_tiktok_publisher_implements_protocol() -> None:
 
 
 def test_yt_client_implements_oauth_provider() -> None:
-    from src.infrastructure.youtube.client import YTClient
+    from src.infrastructure.youtube.yt_client import YTClient
 
     client: YTClient = create_autospec(YTClient, instance=True)
     assert_type(client, OAuthProvider[YtAuth])

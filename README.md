@@ -80,7 +80,7 @@ flowchart LR
 - Writes to TinyFlux (timeseries) and TinyDB (metadata)
 
 #### 2. Video Processing Pipeline
-- **Downloader** (`src/infrastructure/youtube/downloader.py`): Uses yt-dlp to fetch source videos
+- **Downloader** (`src/infrastructure/video/downloader.py`): Uses yt-dlp to fetch source videos
 - **Processing** (`src/infrastructure/video/compositor.py`, `src/infrastructure/video/renderer.py`): Composites templates, overlays, and transitions
 - **Workers** (`src/entrypoints/workers/post_processor.py`): ZeroMQ-based parallel processing
 

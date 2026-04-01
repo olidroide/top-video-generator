@@ -1,4 +1,4 @@
-"""YouTubevideo downloader."""
+"""YouTube source video downloader."""
 
 import pathlib
 from collections.abc import Callable
@@ -43,7 +43,7 @@ class VideoDownloader:
                 }
             },
             "http_headers": {
-                "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+                "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X);",
                 "X-YouTube-Client-Name": "5",
                 "X-YouTube-Client-Version": "19.29.1",
             },

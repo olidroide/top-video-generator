@@ -9,7 +9,7 @@ from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.domain.ports import AuthCredentialStore
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.social.tiktok_client import TikTokClient
-from src.infrastructure.youtube.client import YTClient
+from src.infrastructure.youtube.yt_client import YTClient
 
 
 def _build_auth_repo() -> AuthCredentialStore:

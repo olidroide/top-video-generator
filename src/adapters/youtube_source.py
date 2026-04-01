@@ -2,8 +2,8 @@ import re
 from typing import Final
 
 from src.domain.models import CanonicalVideo
-from src.infrastructure.youtube import YTClient
 from src.infrastructure.youtube.schemas import YTVideo
+from src.infrastructure.youtube.yt_client import YTClient
 
 _YT_DURATION_REGEX: Final[re.Pattern[str]] = re.compile(
     r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?$"

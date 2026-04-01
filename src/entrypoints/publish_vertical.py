@@ -28,8 +28,8 @@ from src.infrastructure.storage.timeseries_repository import TimeSeriesRepositor
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
+from src.infrastructure.video.downloader import VideoDownloader
 from src.infrastructure.video.renderer import VideoRenderer
-from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger, setup_logging
 

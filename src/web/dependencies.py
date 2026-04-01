@@ -30,7 +30,13 @@ from src.infrastructure.storage.auth_repository import AuthenticationRepository 
 from src.infrastructure.storage.release_repository import ReleaseRepository as TinyDbReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository as TinyDbTimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository as TinyDbVideoRepository
-from src.infrastructure.youtube import get_yt_client
+from src.infrastructure.youtube.yt_client import YTClient
+from src.infrastructure.youtube.yt_fake_client import YTClientFake
+
+
+def get_yt_client() -> OAuthProvider[YtAuth]:
+    settings = get_app_settings()
+    return YTClient() if settings.is_production_env else YTClientFake()
 
 
 def get_yt_provider() -> OAuthProvider[YtAuth]:

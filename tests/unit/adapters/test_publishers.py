@@ -38,7 +38,7 @@ class TestYouTubePublisher:
         mock_client = MagicMock()
         mock_client.upload_video = AsyncMock(return_value="yt_video_id")
 
-        with patch("src.adapters.youtube_publisher.get_yt_client", return_value=mock_client):
+        with patch("src.adapters.youtube_publisher._build_yt_client", return_value=mock_client):
             publisher = YouTubePublisher()
             result = await publisher.publish_video(
                 video_list=_VIDEO_LIST,
@@ -51,13 +51,34 @@ class TestYouTubePublisher:
         assert result.published_id == "yt_video_id"
         assert result.platform == Platform.YOUTUBE
 
+    async def test_publish_forwards_upload_arguments(self) -> None:
+        from src.adapters.youtube_publisher import YouTubePublisher
+
+        mock_client = MagicMock()
+        mock_client.upload_video = AsyncMock(return_value="yt_video_id")
+
+        with patch("src.adapters.youtube_publisher._build_yt_client", return_value=mock_client):
+            publisher = YouTubePublisher()
+            await publisher.publish_video(
+                video_list=_VIDEO_LIST,
+                file_path="/tmp/video.mp4",
+                title="Top Songs",
+                description="Weekly top",
+            )
+
+        mock_client.upload_video.assert_awaited_once_with(
+            "/tmp/video.mp4",
+            "Top Songs",
+            "Weekly top",
+        )
+
     async def test_publish_failure_returns_error_result(self) -> None:
         from src.adapters.youtube_publisher import YouTubePublisher
 
         mock_client = MagicMock()
         mock_client.upload_video = AsyncMock(side_effect=RuntimeError("upload failed"))
 
-        with patch("src.adapters.youtube_publisher.get_yt_client", return_value=mock_client):
+        with patch("src.adapters.youtube_publisher._build_yt_client", return_value=mock_client):
             publisher = YouTubePublisher()
             result = await publisher.publish_video(
                 video_list=_VIDEO_LIST,

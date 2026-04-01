@@ -1,235 +1,17 @@
 # ruff: noqa: E501
-import asyncio
-from pathlib import Path
+"""Fake YouTube client for local runs and tests."""
 
-from googleapiclient.errors import HttpError
+from typing import cast
 
-from src.config.settings import get_app_settings
-from src.domain.models import YtAuth
-from src.infrastructure.storage.auth_repository import AuthenticationRepository
-from src.infrastructure.youtube.api_client import YouTubeApiClient
-from src.infrastructure.youtube.auth_manager import MemoryCache, YouTubeAuthManager
-from src.infrastructure.youtube.schemas import (
-    YTRoot,
-    YTVideo,
-)
-from src.infrastructure.youtube.uploader import YouTubeUploader
-from src.shared.logging import get_logger
-
-logger = get_logger(__name__)
-
-
-class YTClient:
-    YT_API_SERVICE_NAME = "youtube"
-    YT_API_VERSION = "v3"
-
-    def __init__(self) -> None:
-        super().__init__()
-        settings = get_app_settings()
-        self._yt_client_secret_file_name: str = settings.yt_client_secret_file or ""
-        self._yt_redirect_uri: str = settings.yt_redirect_uri or ""
-        self._yt_search_region_code: str = settings.yt_search_region_code
-        self._yt_search_language_code: str = settings.yt_search_language_code or ""
-        self._yt_search_category_code: str = settings.yt_search_category_code or ""
-        self._yt_auth_user_id: str = settings.yt_auth_user_id or ""
-        tags_raw = settings.yt_tags or ""
-        self._yt_tags: list[str] = [str(tag) for tag in tags_raw.split(",") if tag]
-        self._memory_cache = MemoryCache()
-        self._authenticated_service = None
-
-        self._auth_manager = YouTubeAuthManager(
-            client_secret_file=self._yt_client_secret_file_name,
-            redirect_uri=self._yt_redirect_uri,
-            service_name=self.YT_API_SERVICE_NAME,
-            service_version=self.YT_API_VERSION,
-            cache=self._memory_cache,
-        )
-        self._api_client = YouTubeApiClient(
-            get_authenticated_service=self.get_authenticated_service,
-            search_language_code=self._yt_search_language_code,
-            search_region_code=self._yt_search_region_code,
-            search_category_code=self._yt_search_category_code,
-        )
-        self._uploader = YouTubeUploader(
-            get_authenticated_service=self.get_authenticated_service,
-            search_category_code=self._yt_search_category_code,
-            search_language_code=self._yt_search_language_code,
-            default_tags=self._yt_tags,
-        )
-
-    def get_authenticated_service(self):
-        auth_repo = AuthenticationRepository(Path(get_app_settings().db_data_file))
-        yt_auth = auth_repo.get_yt_auth(self._yt_auth_user_id)
-        if yt_auth is None:
-            raise ValueError("Missing YouTube auth credentials")
-        if not self._authenticated_service:
-            self._authenticated_service = self._auth_manager.build_authenticated_service(
-                credentials_payload=yt_auth.model_dump(),
-            )
-        return self._authenticated_service
-
-    async def step_1_get_authentication_url(self) -> str:
-        return self._auth_manager.get_authentication_url()
-
-    async def step_2_exchange_code_authentication(self, authorization_value: str) -> YtAuth:
-        return await asyncio.to_thread(self._auth_manager.exchange_code_authentication, authorization_value)
-
-    async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
-        return await self._api_client.fetch_popular_videos(max_results=max_results)
-
-    async def _get_uploads_playlist(self) -> str | None:
-        return await self._api_client.get_uploads_playlist()
-
-    async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
-        return await self._api_client.fetch_videos_of_playlist(playlist_id=playlist_id, max_results=max_results)
-
-    # the fake client will override the batch helper as well
-
-    async def _fetch_video_details(self, video_id: str) -> dict:
-        return await self._api_client.fetch_video_details(video_id=video_id)
-
-    async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict:
-        """Internal helper that requests details for multiple videos at once.
-
-        The YouTube API accepts a comma-separated ``id`` parameter, so we
-        join the list before making the call.  The discovery client is
-        blocking, therefore we delegate the ``execute`` call to
-        :pyfunc:`asyncio.to_thread` so the event loop is not blocked.
-        """
-        return await self._api_client.fetch_video_details_batch(video_ids=video_ids)
-
-    async def _fetch_playlist_items(self, playlist_id: str) -> dict:
-        return await self._api_client.fetch_playlist_items(playlist_id=playlist_id)
-
-    async def _delete_playlist_item(
-        self,
-        playlist_item_id: str,
-    ) -> dict:
-        return await self._api_client.delete_playlist_item(playlist_item_id=playlist_item_id)
-
-    async def _add_playlist_item(
-        self,
-        playlist_id: str,
-        video_id: str,
-        position: int,
-    ) -> dict:
-        return await self._api_client.add_playlist_item(
-            playlist_id=playlist_id,
-            video_id=video_id,
-            position=position,
-        )
-
-    async def get_popular_videos(
-        self,
-        max_results: int = 25,
-    ):
-        data = YTRoot.model_validate(await self._fetch_popular_videos(max_results=max_results))
-        return data
-
-    async def get_videos_published(self):
-        playlist_id = await self._get_uploads_playlist()
-        if not playlist_id:
-            return YTRoot.model_validate({"kind": "youtube#playlistItemListResponse", "etag": "", "items": []})
-        data = YTRoot.model_validate(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
-        return data
-
-    async def get_video_details(self, video_id: str):
-        data = YTRoot.model_validate(await self._fetch_video_details(video_id=video_id))
-        return data
-
-    async def get_video_details_batch(self, video_ids: list[str]):
-        """Public wrapper around ``_fetch_video_details_batch``.
-
-        The returned object is validated to ``YTRoot`` just like the
-        single-id helper so callers can treat the result uniformly.
-        """
-        data = YTRoot.model_validate(await self._fetch_video_details_batch(video_ids=video_ids))
-        return data
-
-    async def get_playlist_details(self, playlist_id: str):
-        data = YTRoot.model_validate(await self._fetch_playlist_items(playlist_id=playlist_id))
-        return data
-
-    async def delete_playlist_item(self, playlist_item_id: str):
-        await self._delete_playlist_item(playlist_item_id=playlist_item_id)
-
-    async def add_playlist_item(
-        self,
-        playlist_id: str,
-        video_id: str,
-        position: int,
-    ):
-        data = YTVideo.model_validate(
-            await self._add_playlist_item(
-                playlist_id=playlist_id,
-                video_id=video_id,
-                position=position,
-            )
-        )
-        return data
-
-    async def update_link_original_playlist(
-        self,
-        playlist_id: str | None = None,
-        yt_video_id_list: list[str] | None = None,
-    ) -> bool | None:
-        if not playlist_id:
-            logger.warning("cannot update link original playlist without playlist_id param")
-            return None
-
-        if not yt_video_id_list:
-            logger.warning("cannot update link original playlist without yt video id list param")
-            return None
-
-        playlist_details = await self.get_playlist_details(playlist_id=playlist_id)
-        for playlist_item in playlist_details.items:
-            try:
-                await self.delete_playlist_item(playlist_item_id=playlist_item.id)
-            except HttpError as e:
-                logger.error("fail to remove", playlist_item_id=playlist_item.id, error=e)
-
-        for index, yt_video_id in enumerate(yt_video_id_list):
-            try:
-                await self.add_playlist_item(
-                    playlist_id=playlist_id,
-                    video_id=yt_video_id,
-                    position=index,
-                )
-            except HttpError as e:
-                logger.error(
-                    "fail to add playlist item ",
-                    playlist_id=playlist_id,
-                    video_id=yt_video_id,
-                    position=index,
-                    error=e,
-                )
-
-        return True
-
-    async def upload_video(
-        self,
-        video_path: str,
-        title: str,
-        description: str,
-        thumbnail_path: str | None = None,
-        playlist_id: str | None = None,
-        tags: list[str] | None = None,
-    ) -> str | None:
-        return await self._uploader.upload_video(
-            video_path=video_path,
-            title=title,
-            description=description,
-            thumbnail_path=thumbnail_path,
-            playlist_id=playlist_id,
-            tags=tags,
-        )
+from src.infrastructure.youtube.yt_client import YTClient
 
 
 class YTClientFake(YTClient):
     async def _get_uploads_playlist(self) -> str | None:
         return "U*****_____w"
 
-    async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict:
+    async def _fetch_videos_of_playlist(self, playlist_id: str, max_results: int = 25) -> dict[str, object]:
+        del playlist_id, max_results
         return {
             "kind": "youtube#playlistItemListResponse",
             "etag": "zoTYDdEofF4fSsktxSrXZrSu9OA",
@@ -269,7 +51,8 @@ class YTClientFake(YTClient):
             },
         }
 
-    async def _fetch_popular_videos(self, max_results: int = 25) -> dict:
+    async def _fetch_popular_videos(self, max_results: int = 25) -> dict[str, object]:
+        del max_results
         return {
             "kind": "youtube#videoListResponse",
             "etag": "Wzlg80cIbrCY5QULz2PWF2BEBew",
@@ -629,7 +412,7 @@ class YTClientFake(YTClient):
             "pageInfo": {"totalResults": 30, "resultsPerPage": 25},
         }
 
-    async def _fetch_video_details(self, video_id: str) -> dict:
+    async def _fetch_video_details(self, video_id: str) -> dict[str, object]:
         return {
             "kind": "youtube#videoListResponse",
             "etag": "s0hyMDH1MOAJZVFaNbNDToI8MDw",
@@ -732,12 +515,12 @@ class YTClientFake(YTClient):
             "pageInfo": {"totalResults": 1, "resultsPerPage": 1},
         }
 
-    async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict:
+    async def _fetch_video_details_batch(self, video_ids: list[str]) -> dict[str, object]:
         # fake batch just concatenates the results from the single-id helper
-        items = []
+        items: list[dict[str, object]] = []
         for vid in video_ids:
             res = await self._fetch_video_details(vid)
-            items.extend(res.get("items", []))
+            items.extend(cast("list[dict[str, object]]", res.get("items", [])))
         return {
             "kind": "youtube#videoListResponse",
             "etag": "batch-fake",
@@ -745,7 +528,8 @@ class YTClientFake(YTClient):
             "pageInfo": {"totalResults": len(items), "resultsPerPage": len(items)},
         }
 
-    async def _fetch_playlist_items(self, playlist_id: str) -> dict:
+    async def _fetch_playlist_items(self, playlist_id: str) -> dict[str, object]:
+        del playlist_id
         return {
             "kind": "youtube#playlistItemListResponse",
             "etag": "NQfXmbGsngTrhVitGh2wj1EEH-M",
@@ -844,16 +628,15 @@ class YTClientFake(YTClient):
 
     async def upload_video(
         self,
-        video_path,
-        title,
-        description,
+        video_path: str,
+        title: str,
+        description: str,
         thumbnail_path: str | None = None,
         playlist_id: str | None = None,
         tags: list[str] | None = None,
-    ):
-        return True
+    ) -> str | None:
+        del video_path, title, description, thumbnail_path, playlist_id, tags
+        return "fake-video-id"
 
 
-def get_yt_client() -> YTClient:
-    settings = get_app_settings()
-    return YTClient() if settings.is_production_env else YTClientFake()
+__all__ = ["YTClientFake"]

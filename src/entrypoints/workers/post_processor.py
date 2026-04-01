@@ -10,8 +10,8 @@ from src.config.settings import get_app_settings
 from src.domain.models import Video
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
+from src.infrastructure.video.downloader import VideoDownloader
 from src.infrastructure.video.renderer import VideoRenderer
-from src.infrastructure.youtube.downloader import VideoDownloader
 from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)

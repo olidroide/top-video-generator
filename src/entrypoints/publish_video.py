@@ -16,14 +16,20 @@ from src.infrastructure.storage.timeseries_repository import TimeSeriesRepositor
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.infrastructure.video.asset_manager import VideoAssetManager
 from src.infrastructure.video.compositor import VideoCompositor
+from src.infrastructure.video.downloader import VideoDownloader
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
-from src.infrastructure.youtube import get_yt_client
-from src.infrastructure.youtube.downloader import VideoDownloader
+from src.infrastructure.youtube.yt_client import YTClient
+from src.infrastructure.youtube.yt_fake_client import YTClientFake
 from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
+
+
+def _build_yt_client() -> YTClient:
+    settings = get_app_settings()
+    return YTClient() if settings.is_production_env else YTClientFake()
 
 
 def _build_video_pipeline(video_downloader: VideoDownloader) -> tuple[VideoCompositor, ThumbnailGenerator]:
@@ -141,7 +147,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
     try:
         playlist_id = settings.yt_playlist_id_weekly
 
-        yt_video_id = await get_yt_client().upload_video(
+        yt_video_id = await _build_yt_client().upload_video(
             video_path=file_path,
             title=yt_title,
             description=yt_description,
