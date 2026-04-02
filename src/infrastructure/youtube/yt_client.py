@@ -114,8 +114,6 @@ class YTClient:
             logger.exception("youtube_api.fetch_videos_of_playlist_failed", error=str(exc))
             return {}
 
-    # the fake client will override the batch helper as well
-
     async def _fetch_video_details(self, video_id: str) -> dict[str, object]:
         try:
             youtube = self.get_authenticated_service()

@@ -114,6 +114,7 @@ class TestVideoRenderer:
         created_text_clips: list[_RecordedClip] = []
         created_image_clips: list[_RecordedClip] = []
         qr_code = _RecordedQrCode()
+        font_assets_dir = Path(__file__).resolve().parents[4] / "src" / "resources" / "fonts"
 
         monkeypatch.setattr(
             "src.infrastructure.video.renderer.build_text_clip",
@@ -136,6 +137,7 @@ class TestVideoRenderer:
         assert len(created_text_clips) == 6
         assert len(created_image_clips) == 1
         assert created_text_clips[0].text == "07"
+        assert created_text_clips[1].text == "^"
         assert created_text_clips[2].text == "My Song"
         assert created_text_clips[3].text == "© Test Channel"
         assert created_text_clips[4].text == "1.23M"
@@ -143,12 +145,16 @@ class TestVideoRenderer:
         assert created_text_clips[0].position == (190, 705)
         assert all(clip.duration == 8.0 for clip in created_text_clips)
         assert all(clip.start == 0 for clip in created_text_clips)
+        assert created_text_clips[0].kwargs["font"] == str(font_assets_dir / "droidsans.ttf")
+        assert created_text_clips[1].kwargs["font"] == str(font_assets_dir / "monocraft.otf")
+        assert created_text_clips[2].kwargs["font"] == str(font_assets_dir / "monocraft.otf")
         assert created_image_clips[0].position == (1498, 688)
         assert created_image_clips[0].duration == 8.0
         assert qr_code.saved_paths == [str(tmp_path / "yt" / "abc123_qr.png")]
 
     def test_overlay_texts_vertical_template_builds_expected_vertical_clips(self, tmp_path: Path, monkeypatch) -> None:
         created_text_clips: list[_RecordedClip] = []
+        font_assets_dir = Path(__file__).resolve().parents[4] / "src" / "resources" / "fonts"
 
         monkeypatch.setattr(
             "src.infrastructure.video.renderer.build_text_clip",
@@ -165,6 +171,7 @@ class TestVideoRenderer:
         assert len(clips) == 9
         assert len(created_text_clips) == 9
         assert created_text_clips[0].text == "07"
+        assert created_text_clips[1].text == "^"
         assert created_text_clips[2].text == "9"
         assert created_text_clips[3].text == video.yt_video_title_cleaned[:38]
         assert created_text_clips[5].text == "1.23M"
@@ -173,3 +180,6 @@ class TestVideoRenderer:
         assert created_text_clips[7].position == (400, 1400)
         assert all(clip.duration == 12.5 for clip in created_text_clips)
         assert all(clip.start == 0 for clip in created_text_clips)
+        assert created_text_clips[0].kwargs["font"] == str(font_assets_dir / "droidsans.ttf")
+        assert created_text_clips[1].kwargs["font"] == str(font_assets_dir / "monocraft.otf")
+        assert created_text_clips[3].kwargs["font"] == str(font_assets_dir / "monocraft.otf")

@@ -44,6 +44,22 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _MILLNAMES = ("", "k", "M", "B", "T", "P", "E", "Z", "Y")
+_FONT_RESOURCES_DIR = pathlib.Path(__file__).resolve().parents[2] / "resources" / "fonts"
+
+
+def _resolve_font(font_path: str, *, fallback_font: str, template_name: str, font_label: str) -> str:
+    font_exists = pathlib.Path(font_path).exists()
+    resolved_font = font_path if font_exists else fallback_font
+    logger.debug(
+        "video_renderer.font_resolution",
+        template=template_name,
+        font_label=font_label,
+        font_path=font_path,
+        font_path_exists=font_exists,
+        fallback_font=fallback_font,
+        resolved_font=resolved_font,
+    )
+    return resolved_font
 
 
 def _format_compact_number(value: float | None, *, precision: int = 0) -> str:
@@ -95,9 +111,9 @@ class VideoRenderer:
 
         map_score_growth = {
             VideoScoreStatus.NEW: "~",
-            VideoScoreStatus.UP: "5",
-            VideoScoreStatus.DOWN: "6",
-            VideoScoreStatus.EQUAL: ";",
+            VideoScoreStatus.UP: "^",
+            VideoScoreStatus.DOWN: "v",
+            VideoScoreStatus.EQUAL: "=",
         }
         map_score_growth_color = {
             VideoScoreStatus.NEW: "yellow",
@@ -143,13 +159,29 @@ class VideoRenderer:
             qr_video.save(str(qr_path), dark="pink", light="#323524", scale=8)
 
         # Font path resolution with fallbacks
-        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
-        font_webdings_path = "/usr/share/fonts/webdings.ttf"
-        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
+        font_droid_sans_path = str(_FONT_RESOURCES_DIR / "droidsans.ttf")
+        font_monocraft_path = str(_FONT_RESOURCES_DIR / "monocraft.otf")
 
-        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
-        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
-        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
+        font_droid_sans = _resolve_font(
+            font_droid_sans_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="horizontal",
+            font_label="droid_sans",
+        )
+        font_monocraft = _resolve_font(
+            font_monocraft_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="horizontal",
+            font_label="monocraft",
+        )
+
+        logger.debug(
+            "video_renderer.score_status_symbol",
+            template="horizontal",
+            score_status=score_status.value,
+            symbol=score_growth_status_value,
+            font=font_monocraft,
+        )
 
         score_text_clip = clip_with_start(
             clip_with_duration(
@@ -173,7 +205,7 @@ class VideoRenderer:
                 clip_with_position(
                     build_text_clip(
                         str(score_growth_status_value),
-                        font=font_webdings,
+                        font=font_monocraft,
                         font_size=77,
                         color=score_growth_status_color,
                         stroke_color="white",
@@ -292,9 +324,9 @@ class VideoRenderer:
 
         map_score_growth = {
             VideoScoreStatus.NEW: "~",
-            VideoScoreStatus.UP: "5",
-            VideoScoreStatus.DOWN: "6",
-            VideoScoreStatus.EQUAL: ";",
+            VideoScoreStatus.UP: "^",
+            VideoScoreStatus.DOWN: "v",
+            VideoScoreStatus.EQUAL: "=",
         }
         map_score_growth_color = {
             VideoScoreStatus.NEW: "yellow",
@@ -323,13 +355,29 @@ class VideoRenderer:
         views_growth = _format_compact_number(video.views_growth, precision=2)
 
         # Font path resolution with fallbacks
-        font_droid_sans_path = "/usr/share/fonts/droidsans.ttf"
-        font_webdings_path = "/usr/share/fonts/webdings.ttf"
-        font_monocraft_path = "/usr/share/fonts/monocraft.otf"
+        font_droid_sans_path = str(_FONT_RESOURCES_DIR / "droidsans.ttf")
+        font_monocraft_path = str(_FONT_RESOURCES_DIR / "monocraft.otf")
 
-        font_droid_sans = font_droid_sans_path if pathlib.Path(font_droid_sans_path).exists() else "DejaVu Sans Mono"
-        font_webdings = font_webdings_path if pathlib.Path(font_webdings_path).exists() else "Liberation Sans"
-        font_monocraft = font_monocraft_path if pathlib.Path(font_monocraft_path).exists() else "DejaVu Sans Mono"
+        font_droid_sans = _resolve_font(
+            font_droid_sans_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="vertical",
+            font_label="droid_sans",
+        )
+        font_monocraft = _resolve_font(
+            font_monocraft_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="vertical",
+            font_label="monocraft",
+        )
+
+        logger.debug(
+            "video_renderer.score_status_symbol",
+            template="vertical",
+            score_status=score_status.value,
+            symbol=score_growth_status_value,
+            font=font_monocraft,
+        )
 
         score_text_clip = clip_with_start(
             clip_with_duration(
@@ -353,7 +401,7 @@ class VideoRenderer:
                 clip_with_position(
                     build_text_clip(
                         str(score_growth_status_value),
-                        font=font_webdings,
+                        font=font_monocraft,
                         font_size=77,
                         color=score_growth_status_color,
                         stroke_color="white",
