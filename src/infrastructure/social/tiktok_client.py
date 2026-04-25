@@ -200,6 +200,10 @@ class TikTokClient:
         logger.debug("Query Creator Info", response_publish_query_creator_info=response_publish_query_creator_info)
         return response_publish_query_creator_info
 
+    async def check_connection(self) -> TiktokResponsePublishQueryCreatorInfo | None:
+        await self.refresh_token()
+        return await self.fetch_creator_info_query()
+
     @staticmethod
     def _file_sender(
         file_name: str,

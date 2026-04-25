@@ -22,6 +22,7 @@ services:
     <<: *top-video-generator-common
     environment:
       STEP: web
+      TOP_MUSIC_ADMIN_PASSWORD: ${TOP_MUSIC_ADMIN_PASSWORD:-}
     ports:
       - "${TOP_VIDEO_GENERATOR_PORT:-8080}:8080"
     mem_limit: 768m
@@ -33,7 +34,8 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)",
+          "import urllib.request;
+            urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)",
         ]
       interval: 30s
       timeout: 10s
@@ -48,7 +50,7 @@ services:
     memswap_limit: 2500m
     cpus: 2.0
     healthcheck:
-      test: ["CMD", "python", "-m", "src.entrypoints.scheduler_healthcheck"]
+      test: [ "CMD", "python", "-m", "src.entrypoints.scheduler_healthcheck" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -56,5 +58,5 @@ services:
 
   top-video-generator:
     <<: *top-video-generator-common
-    profiles: ["manual"]
+    profiles: [ "manual" ]
     restart: "no"

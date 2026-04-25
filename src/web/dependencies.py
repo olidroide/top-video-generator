@@ -6,24 +6,17 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 
 from src.application.authorize_use_case import AuthorizeUseCase
+from src.application.check_platform_connection_use_case import CheckPlatformConnectionUseCase
 from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
 from src.application.get_setup_page_use_case import GetSetupPageUseCase
 from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
 from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
-from src.domain.ports import (
-    AuthCredentialStore as AuthenticationRepositoryPort,
-)
-from src.domain.ports import OAuthProvider
-from src.domain.ports import (
-    ReleaseDateValidator as ReleaseRepositoryPort,
-)
-from src.domain.ports import (
-    TimeSeriesReader as TimeSeriesRepositoryPort,
-)
-from src.domain.ports import (
-    VideoMetadataReader as VideoRepositoryPort,
-)
+from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
+from src.domain.ports import IntegrationChecker, OAuthProvider
+from src.domain.ports import ReleaseDateValidator as ReleaseRepositoryPort
+from src.domain.ports import TimeSeriesReader as TimeSeriesRepositoryPort
+from src.domain.ports import VideoMetadataReader as VideoRepositoryPort
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
@@ -116,12 +109,27 @@ def get_setup_page_use_case(
     )
 
 
+def get_integration_checkers() -> list[IntegrationChecker]:
+    from src.infrastructure.integration_checker_registry import build_integration_checkers
+
+    return build_integration_checkers()
+
+
+def get_check_platform_connection_use_case(
+    checkers: Annotated[list[IntegrationChecker], Depends(get_integration_checkers)],
+) -> CheckPlatformConnectionUseCase:
+    return CheckPlatformConnectionUseCase(checkers=checkers)
+
+
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]
 AppSettingsDep = Annotated[AppSettings, Depends(get_settings)]
 AuthenticationRepositoryDep = Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)]
 FetchTopVideosUseCaseDep = Annotated[FetchTopVideosUseCase, Depends(get_fetch_top_videos_use_case)]
 GetTopVideosDashboardUseCaseDep = Annotated[GetTopVideosDashboardUseCase, Depends(get_top_videos_dashboard_use_case)]
 GetSetupPageUseCaseDep = Annotated[GetSetupPageUseCase, Depends(get_setup_page_use_case)]
+CheckPlatformConnectionUseCaseDep = Annotated[
+    CheckPlatformConnectionUseCase, Depends(get_check_platform_connection_use_case)
+]
 ReleaseRepositoryDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
 ReleaseReadPortDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
 SpotifyProviderDep = Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)]

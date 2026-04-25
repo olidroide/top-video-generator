@@ -11,6 +11,7 @@ from unittest.mock import create_autospec
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.domain.ports import (
     AuthCredentialStore,
+    IntegrationChecker,
     OAuthProvider,
     ReleaseDateValidator,
     TimeSeriesReader,
@@ -48,6 +49,34 @@ def test_tiktok_publisher_implements_protocol() -> None:
 
     publisher: TikTokPublisher = create_autospec(TikTokPublisher, instance=True)
     assert_type(publisher, VideoPublisher)
+
+
+def test_youtube_integration_checker_implements_protocol() -> None:
+    from src.adapters.youtube_integration_checker import YouTubeIntegrationChecker
+
+    checker: YouTubeIntegrationChecker = create_autospec(YouTubeIntegrationChecker, instance=True)
+    assert_type(checker, IntegrationChecker)
+
+
+def test_tiktok_integration_checker_implements_protocol() -> None:
+    from src.adapters.tiktok_integration_checker import TikTokIntegrationChecker
+
+    checker: TikTokIntegrationChecker = create_autospec(TikTokIntegrationChecker, instance=True)
+    assert_type(checker, IntegrationChecker)
+
+
+def test_spotify_integration_checker_implements_protocol() -> None:
+    from src.adapters.spotify_integration_checker import SpotifyIntegrationChecker
+
+    checker: SpotifyIntegrationChecker = create_autospec(SpotifyIntegrationChecker, instance=True)
+    assert_type(checker, IntegrationChecker)
+
+
+def test_instagram_integration_checker_implements_protocol() -> None:
+    from src.adapters.instagram_integration_checker import InstagramIntegrationChecker
+
+    checker: InstagramIntegrationChecker = create_autospec(InstagramIntegrationChecker, instance=True)
+    assert_type(checker, IntegrationChecker)
 
 
 def test_yt_client_implements_oauth_provider() -> None:

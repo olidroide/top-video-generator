@@ -1,0 +1,75 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Connections{% endblock %}
+
+{% block page_content %}
+
+  {# ── Section header with HTMX refresh trigger ── #}
+  <div class="section-header">
+    <h2 class="section-title">Platform Connections</h2>
+
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="section-meta">
+        {{ vm.connected_count }}/{{ vm.total_count }} CONNECTED
+      </span>
+
+      {# HTMX: on-demand refresh, replaces #connections-grid outerHTML #}
+      <button
+        class="outline secondary"
+        hx-get="/admin/connections/status"
+        hx-target="#connections-grid"
+        hx-swap="outerHTML"
+        hx-indicator="#refresh-spinner"
+        aria-label="Refresh connection status"
+        style="font-family: var(--n-font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.35rem 0.7rem; margin-bottom: 0;"
+      >
+        <i
+          id="refresh-spinner"
+          class="fas fa-sync-alt htmx-indicator n-spin"
+          aria-hidden="true"
+        ></i>
+        <i
+          class="fas fa-sync-alt"
+          aria-hidden="true"
+          style="font-size: 0.7rem;"
+        ></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  {# ── Connections grid — swapped by HTMX ── #}
+  {% include "admin/_connections_status.html" %}
+
+  {# ── System Health ── #}
+  <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
+    <h2 class="section-title">System Health</h2>
+
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="section-meta">v{{ health_vm.version }} &nbsp;&#183;&nbsp;
+        {% if health_vm.overall == 'healthy' %}
+          <span style="color: var(--n-green);">HEALTHY</span>
+        {% else %}
+          <span style="color: var(--n-accent);">UNHEALTHY</span>
+        {% endif %}
+      </span>
+
+      <button
+        class="outline secondary"
+        hx-get="/admin/health/status"
+        hx-target="#health-checks"
+        hx-swap="outerHTML"
+        hx-indicator="#health-refresh-spinner"
+        aria-label="Refresh system health"
+        style="font-family: var(--n-font-mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.35rem 0.7rem; margin-bottom: 0;"
+      >
+        <i id="health-refresh-spinner" class="fas fa-sync-alt htmx-indicator n-spin" aria-hidden="true"></i>
+        <i class="fas fa-sync-alt" aria-hidden="true" style="font-size: 0.7rem;"></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  {% include "admin/_health_status.html" with context %}
+
+{% endblock %}

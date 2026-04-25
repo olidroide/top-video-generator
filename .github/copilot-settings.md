@@ -40,6 +40,13 @@
 - All repository documentation must be written in English.
 - Do not add or update docs in other languages.
 
+## Response Mode Defaults
+
+- Keep caveman mode active by default for this repository.
+- Default intensity: full.
+- Stay in caveman mode across turns unless the user explicitly says "stop caveman" or "normal mode".
+- If needed, switch intensity with /caveman lite|full|ultra.
+
 ## Finish Checks
 
 Run these before finishing a change unless the task is documentation-only or explicitly exempted:

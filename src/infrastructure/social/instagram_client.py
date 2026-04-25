@@ -86,6 +86,15 @@ def _get_instagram_client() -> Any:
 
 
 class InstagramClient:
+    async def check_connection(self) -> bool:
+        try:
+            await asyncio.to_thread(_get_instagram_client)
+            logger.info("instagram_client.connection_verified")
+            return True
+        except Exception as exc:
+            logger.exception("instagram_client.connection_failed", error=str(exc))
+            return False
+
     async def upload_video(self, video_path: str, caption: str) -> str | None:
         try:
             logger.info("instagram_client.upload_started", video_path=video_path, caption=caption)

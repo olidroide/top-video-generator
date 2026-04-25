@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  {% block head %}
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    {# Anti-FOUC: apply saved theme before first paint #}
+    <script>(function(){var t=localStorage.getItem('admin-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script defer src="https://use.fontawesome.com/releases/v5.13.1/js/all.js"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" crossorigin="anonymous"></script>
+    <link href="{{ url_for('static', path='/admin.css') }}" rel="stylesheet">
+  {% endblock %}
+  <title>{% block title %}Admin{% endblock %} — Top Video Generator</title>
+</head>
+<body>
+
+  <header class="container-fluid">
+    <nav>
+      <ul>
+        <li>
+          <a href="/admin" class="nav-brand">
+            <span class="nav-dot" aria-hidden="true"></span>
+            Top&nbsp;Video&nbsp;<span style="color:var(--pico-muted-color)">/</span>&nbsp;Admin
+          </a>
+        </li>
+      </ul>
+      <ul>
+        <li><a href="/" class="secondary">&#8592; Main</a></li>
+        <li><a href="/setup" class="secondary">Setup</a></li>
+        <li>
+          <button
+            id="theme-toggle"
+            class="outline secondary"
+            onclick="toggleAdminTheme()"
+            aria-label="Toggle light/dark mode"
+          >🌙</button>
+        </li>
+        <li><a href="/admin/logout" class="contrast">Logout</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container" id="main-content">
+    {% block page_content %}{% endblock %}
+  </main>
+
+  <footer class="container admin-footer" role="contentinfo">
+    <small>
+      Top Video Generator &nbsp;&#183;&nbsp; Admin &nbsp;&#183;&nbsp;
+      {% block footer_context %}Connections{% endblock %}
+    </small>
+  </footer>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('theme-toggle');
+      var current = document.documentElement.getAttribute('data-theme') || 'dark';
+      if (btn) btn.textContent = current === 'dark' ? '🌙' : '☀️';
+    })();
+
+    function toggleAdminTheme() {
+      var html = document.documentElement;
+      var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('admin-theme', next);
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,32 @@
+<div
+  id="platform-check-{{ p.slug }}"
+  class="card-body"
+  aria-live="polite"
+>
+  <div class="data-row">
+    <span class="data-key">LIVE</span>
+    <span class="n-status" aria-label="Live check: {{ p.live_check.label }}">
+      {% if p.live_check.state == 'on' %}
+        <span class="n-status__dot n-status__dot--on" aria-hidden="true"></span>
+        <span class="n-status__label--on">{{ p.live_check.label }}</span>
+      {% elif p.live_check.state == 'off' %}
+        <span class="n-status__dot n-status__dot--off" aria-hidden="true"></span>
+        <span class="n-status__label--off">{{ p.live_check.label }}</span>
+      {% elif p.live_check.state == 'na' %}
+        <span class="n-status__dot n-status__dot--na" aria-hidden="true"></span>
+        <span class="n-status__label--na">{{ p.live_check.label }}</span>
+      {% else %}
+        <span class="n-status__dot n-status__dot--na" aria-hidden="true"></span>
+        <span class="n-status__label--na">{{ p.live_check.label }}</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="data-row">
+    <span class="data-key">DETAIL</span>
+    <span class="data-val" title="{{ p.live_check.message }}">{{ p.live_check.message }}</span>
+  </div>
+  <div class="data-row">
+    <span class="data-key">MODE</span>
+    <span class="data-val">{{ 'PUBLISH TARGET' if p.is_publish_target else 'INTEGRATION ONLY' }}</span>
+  </div>
+</div>

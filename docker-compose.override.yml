@@ -7,6 +7,7 @@ services:
     environment:
       TOP_MUSIC_ENV: development
       OAUTHLIB_INSECURE_TRANSPORT: "1"
+      TOP_MUSIC_ADMIN_PASSWORD: ${TOP_MUSIC_ADMIN_PASSWORD:-}
     volumes:
       - ./src:/app/src:ro
       - ./src/resources:/app/resources:ro
@@ -19,7 +20,6 @@ services:
     environment:
       TOP_MUSIC_ENV: development
       OAUTHLIB_INSECURE_TRANSPORT: "1"
-
 
   top-video-generator:
     build:

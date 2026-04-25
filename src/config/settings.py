@@ -35,6 +35,7 @@ class AppSettings(BaseSettings):
     env: Environment = Environment.PRODUCTION
     days_between_top: int = 7
     app_secret_key: str | None = None
+    admin_password: str | None = None
     cpu_workers: int = 0
     threads_workers: int = 1
     log_file_path: str = "logs/top_music.log"

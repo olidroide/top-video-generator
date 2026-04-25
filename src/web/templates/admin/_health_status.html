@@ -1,0 +1,38 @@
+{#
+  HTMX partial — returned by GET /admin/health/status
+  Replaces #health-checks via hx-swap="outerHTML"
+#}
+<div
+  id="health-checks"
+  class="platforms-grid"
+  role="list"
+  aria-label="System health checks"
+>
+  {% for check in health_vm.checks %}
+    {% set dot_key = 'on' if check.status == 'ok' else 'off' %}
+    {% set status_label = 'OK' if check.status == 'ok' else 'ERROR' %}
+
+    <article
+      class="platform-card {% if check.status == 'ok' %}platform-card--connected{% endif %}"
+      role="listitem"
+      aria-label="{{ check.name }} health check"
+    >
+      <div class="card-head">
+        <span class="platform-label">{{ check.name | upper }}</span>
+        <span class="n-status" aria-label="Status: {{ status_label }}">
+          <span class="n-status__dot n-status__dot--{{ dot_key }}" aria-hidden="true"></span>
+          <span class="n-status__label--{{ dot_key }}">{{ status_label }}</span>
+        </span>
+      </div>
+
+      <hr aria-hidden="true">
+
+      <div class="card-body">
+        <div class="data-row">
+          <span class="data-key">MSG</span>
+          <span class="data-val" title="{{ check.message }}">{{ check.message or '—' }}</span>
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+</div>

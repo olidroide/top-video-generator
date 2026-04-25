@@ -14,7 +14,7 @@ from src.web.state import HealthCheck, MetricsResponse, metrics_state
 router = APIRouter()
 
 
-def _check_ffmpeg() -> dict[str, str]:
+def check_ffmpeg() -> dict[str, str]:
     """Check if ffmpeg is available."""
     try:
         ffmpeg_path = shutil.which("ffmpeg")
@@ -36,7 +36,7 @@ def _check_ffmpeg() -> dict[str, str]:
         return {"status": "error", "message": f"ffmpeg not found: {exc}"}
 
 
-def _check_templates(settings: AppSettings) -> dict[str, str]:
+def check_templates(settings: AppSettings) -> dict[str, str]:
     """Check if required template files exist."""
     required_files = [
         settings.video_template_file,
@@ -54,7 +54,7 @@ def _check_templates(settings: AppSettings) -> dict[str, str]:
     }
 
 
-def _check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
+def check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
     """Check database connectivity."""
     try:
         _ = timeseries_repo.get_video_points_by_date_range(datetime.now(UTC) - timedelta(days=1), datetime.now(UTC))
@@ -67,9 +67,9 @@ def _check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
 async def health_check(timeseries_repo: TimeSeriesRepositoryDep, settings: AppSettingsDep) -> HealthCheck:
     """Health check endpoint for monitoring."""
     checks = {
-        "ffmpeg": _check_ffmpeg(),
-        "templates": _check_templates(settings),
-        "database": _check_database(timeseries_repo),
+        "ffmpeg": check_ffmpeg(),
+        "templates": check_templates(settings),
+        "database": check_database(timeseries_repo),
     }
 
     overall_status = "healthy" if all(check["status"] == "ok" for check in checks.values()) else "unhealthy"

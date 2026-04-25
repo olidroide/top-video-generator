@@ -228,6 +228,9 @@ class YTClient:
             return YTRoot.model_validate({"kind": "youtube#playlistItemListResponse", "etag": "", "items": []})
         return YTRoot.model_validate(await self._fetch_videos_of_playlist(playlist_id=playlist_id))
 
+    async def check_connection(self) -> str | None:
+        return await self._get_uploads_playlist()
+
     async def get_video_details(self, video_id: str) -> YTRoot:
         return YTRoot.model_validate(await self._fetch_video_details(video_id=video_id))
 

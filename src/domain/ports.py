@@ -8,7 +8,17 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import date, datetime
 
-    from .models import CanonicalVideo, Platform, PublishingResult, SpotifyAuth, TikTokAuth, VideoPoint, YtAuth
+    from .models import (
+        CanonicalVideo,
+        IntegrationCheckResult,
+        IntegrationPlatform,
+        Platform,
+        PublishingResult,
+        SpotifyAuth,
+        TikTokAuth,
+        VideoPoint,
+        YtAuth,
+    )
 
 OAuthResultT = TypeVar("OAuthResultT", bound=BaseModel)
 
@@ -31,6 +41,19 @@ class VideoPublisher(Protocol):
         title: str,
         description: str,
     ) -> PublishingResult: ...
+
+
+class IntegrationChecker(Protocol):
+    @property
+    def platform_name(self) -> IntegrationPlatform: ...
+
+    @property
+    def is_configured(self) -> bool: ...
+
+    @property
+    def is_publish_target(self) -> bool: ...
+
+    async def check_connection(self) -> IntegrationCheckResult: ...
 
 
 class TimeSeriesReader(Protocol):

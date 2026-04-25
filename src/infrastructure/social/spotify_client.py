@@ -146,6 +146,9 @@ class SpotifyClient:
         logger.debug("response_dict:", response_dict=response_dict)
         return response_dict
 
+    async def check_connection(self) -> dict[str, Any]:
+        return await self.fetch_user_info()
+
     async def search_for_track(
         self,
         title_song: str | None = None,

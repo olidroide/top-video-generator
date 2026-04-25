@@ -24,6 +24,19 @@ class Platform(StrEnum):
     INSTAGRAM = "INSTAGRAM"
 
 
+class IntegrationPlatform(StrEnum):
+    YOUTUBE = "youtube"
+    TIKTOK = "tiktok"
+    INSTAGRAM = "instagram"
+    SPOTIFY = "spotify"
+
+
+class IntegrationCheckStatus(StrEnum):
+    OK = "ok"
+    ERROR = "error"
+    NOT_CONFIGURED = "not_configured"
+
+
 class VideoScoreStatus(StrEnum):
     NEW = "NEW"
     UP = "UP"
@@ -64,6 +77,15 @@ class PublishingResult(BaseModel, frozen=True):
     published_id: str | None = None
     published_at: datetime = datetime.now(UTC)
     error: str | None = None
+
+
+class IntegrationCheckResult(BaseModel, frozen=True):
+    platform: IntegrationPlatform
+    status: IntegrationCheckStatus
+    is_configured: bool
+    is_publish_target: bool
+    message: str | None = None
+    checked_at: datetime = datetime.now(UTC)
 
 
 # ============================================================================
