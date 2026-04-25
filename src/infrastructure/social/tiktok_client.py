@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import aiohttp
 from pydantic import BaseModel
 
-from src.config.settings import get_app_settings
+from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import TikTokAuth
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.shared.logging import get_logger
@@ -71,23 +71,25 @@ async def get_default_client() -> AsyncIterator[aiohttp.ClientSession]:
 class TikTokClient:
     _base_url = "https://open.tiktokapis.com"
 
-    def __init__(self) -> None:
+    def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()
-        self._tiktok_client_key: str = get_app_settings().tiktok_client_key or ""
-        self._tiktok_client_secret: str = get_app_settings().tiktok_client_secret or ""
-        self._tiktok_redirect_uri: str = get_app_settings().tiktok_redirect_uri or ""
-        self._tiktok_app_id: str = get_app_settings().tiktok_app_id or ""
-        self._tiktok_user_openid: str = get_app_settings().tiktok_user_openid or ""
+        resolved_settings = settings if settings is not None else get_app_settings()
+        self._tiktok_client_key: str = resolved_settings.tiktok_client_key or ""
+        self._tiktok_client_secret: str = resolved_settings.tiktok_client_secret or ""
+        self._tiktok_redirect_uri: str = resolved_settings.tiktok_redirect_uri or ""
+        self._tiktok_app_id: str = resolved_settings.tiktok_app_id or ""
+        self._tiktok_user_openid: str = resolved_settings.tiktok_user_openid or ""
+        self._db_data_file: str = resolved_settings.db_data_file
 
     async def _get_user_refresh_token(self, user_openid: str) -> str:
-        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        repo = AuthenticationRepository(pathlib.Path(self._db_data_file))
         tiktok_auth = repo.get_tiktok_auth(user_openid)
         if tiktok_auth is None:
             return ""
         return tiktok_auth.refresh_token or ""
 
     async def _get_user_token_bearer_credentials(self, user_openid: str) -> str:
-        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        repo = AuthenticationRepository(pathlib.Path(self._db_data_file))
         tiktok_auth = repo.get_tiktok_auth(user_openid)
         if tiktok_auth is None:
             return ""
@@ -174,7 +176,7 @@ class TikTokClient:
             response_dict = await response.json()
 
         logger.debug("response_dict:", response_dict=response_dict)
-        repo = AuthenticationRepository(pathlib.Path(get_app_settings().db_data_file))
+        repo = AuthenticationRepository(pathlib.Path(self._db_data_file))
         tiktok_auth = repo.add_or_update_tiktok_auth(
             tiktok_auth=TikTokAuth(
                 token=response_dict.get("access_token"),

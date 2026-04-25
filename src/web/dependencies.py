@@ -45,12 +45,16 @@ def get_yt_provider(
     return get_yt_client(settings)
 
 
-def get_tiktok_provider() -> OAuthProvider[TikTokAuth]:
-    return TikTokClient()
+def get_tiktok_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> OAuthProvider[TikTokAuth]:
+    return TikTokClient(settings)
 
 
-def get_spotify_provider() -> OAuthProvider[SpotifyAuth]:
-    return SpotifyClient()
+def get_spotify_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> OAuthProvider[SpotifyAuth]:
+    return SpotifyClient(settings)
 
 
 def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> AuthenticationRepositoryPort:

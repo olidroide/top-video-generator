@@ -1,12 +1,20 @@
 # Top Video Generator — Architecture Decision Record
 
-## Status: Phase 2 complete; stabilization and incremental refactor in progress (2026-04-01)
+## Status: Phase 2 complete; architecture hardening and boundary cleanup in progress (2026-04-25)
 
 ## Overview
 
 Automated pipeline: fetch YouTube trending music data → score and rank → render videos → publish to YouTube/Instagram/TikTok → update Spotify state.
 
 The active architecture is hexagonal (Ports & Adapters). The migration away from legacy god files is largely complete.
+
+## Implementation Snapshot (2026-04)
+
+- Hexagonal split is operational across `domain`, `application`, `adapters`, `infrastructure`, and web/entrypoint delivery layers.
+- Canonical domain ports are stable and used by adapters (`TrendingVideoFetcher`, `TimeSeriesReader`, `VideoMetadataReader`, `AuthCredentialStore`, `ReleaseDateValidator`, `VideoPublisher`, `OAuthProvider[OAuthResultT]`).
+- Structured logging and centralized settings are consistently applied (`src/shared/logging.py`, `src/config/settings.py`).
+- Concurrent publishing uses `asyncio.TaskGroup` with per-platform failure capture in application orchestration.
+- Remaining boundary debt is concentrated in selected entrypoints where business logic still needs migration into application use cases.
 
 ## Current Layers
 
@@ -63,6 +71,39 @@ flowchart TD
     style Core    fill:#D1FAE5,stroke:#10B981,stroke-width:2px,color:#064E3B
     style Driven  fill:#EDE9FE,stroke:#8B5CF6,stroke-width:2px,color:#3B0764
 ```
+
+## Entrypoint Boundaries (Clarification)
+
+Entrypoints are thin orchestration layers only.
+
+- Allowed: load settings, build use cases/adapters, trigger workflows, report outcomes.
+- Not allowed: business scoring rules, ranking logic, manual cross-layer data shaping, release-window domain decisions.
+- Current migration gap: `src/entrypoints/fetch_data.py` still contains time-window checks and manual `VideoPoint` construction that should move into an application use case.
+
+Target direction:
+
+- Add a dedicated application use case for fetch-data orchestration.
+- Keep entrypoint logic as: parse config -> call use case -> emit operational logs.
+
+## FastAPI Dependency Injection Pattern
+
+The web layer uses `Annotated[...]` + `Depends(...)` factories in `src/web/dependencies.py`.
+
+- Settings resolve through request-scoped app state first (`request.app.state.settings`), then fallback to `get_app_settings()`.
+- Route handlers receive typed use cases/ports through dependency aliases.
+- Unit tests can override factories with `app.dependency_overrides` without mutating process-global environment.
+
+This pattern keeps web routes thin and improves deterministic test setup.
+
+## Async Publishing Pattern
+
+Publishing fan-out is coordinated with `asyncio.TaskGroup` in application/use-case flows.
+
+- One task per platform publisher.
+- Per-task exceptions are captured and converted to `PublishingResult(success=False, error=...)`.
+- Partial failures are reported without aborting the whole batch unless a use case explicitly requires fail-fast behavior.
+
+This behavior is implemented in `src/application/publish_video_use_case.py` and should remain the default for multi-platform publishing.
 
 ## Runtime Topology
 
@@ -135,9 +176,10 @@ flowchart LR
 
 1. **Observability:** `/metrics` is in-memory and not exported to a centralized backend.
 2. **Scheduler resilience:** per-job isolation, retries, and non-fatal partial failures are still incomplete.
-3. **Web contracts:** route-level input/output contracts and template boundaries need tighter tests.
-4. **Storage:** migration readiness toward a multi-writer metadata store should be planned early, with SQLite as the first candidate.
-5. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
+3. **Entrypoint boundary cleanup:** selected entrypoints still contain business logic that should move into application use cases.
+4. **Web contracts:** route-level input/output contracts and template boundaries need tighter tests.
+5. **Storage:** migration readiness toward a multi-writer metadata store should be planned early, with SQLite as the first candidate.
+6. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
 
 ## Improvement Roadmap
 

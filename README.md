@@ -6,6 +6,8 @@ Generate automatically a video resume with the most view growing in a weekly/dai
 
 This application fetches daily/weekly top YouTube music videos for a configured region (currently Bollywood/India), stores timeseries data and metadata, generates videos (horizontal and vertical formats), and publishes to YouTube, Instagram, TikTok, and Spotify playlists.
 
+The diagram below is intentionally high-level. Detailed layer boundaries, migration status, and architecture rules are maintained in `ARCHITECTURE.md`.
+
 ### System Components
 
 ```mermaid
@@ -71,6 +73,8 @@ flowchart LR
     style Platforms fill:#FCE7F3,stroke:#EC4899,stroke-width:2px,color:#831843
 ```
 
+Scoring note: ranking logic is canonically implemented in `src/domain/services/scoring_service.py` and orchestrated by application/use-case flows. Some entrypoint flows are still being migrated to keep business rules out of delivery code.
+
 ### Key Components
 
 #### 1. Data Ingestion (`src/entrypoints/fetch_data.py`)
@@ -89,7 +93,7 @@ flowchart LR
 - **Weekly Horizontal** (`src/entrypoints/publish_video.py`): Top videos, horizontal format for YouTube
 
 #### 4. Platform Clients
-- **YouTube** (`src/infrastructure/youtube/client.py`): OAuth2, video upload, playlist management
+- **YouTube** (`src/infrastructure/youtube/yt_client.py`): OAuth2, video upload, playlist management
 - **TikTok** (`src/infrastructure/social/tiktok_client.py`): OAuth2, video upload with chunked transfer
 - **Spotify** (`src/infrastructure/social/spotify_client.py`): OAuth2, playlist management
 - **Instagram** (`src/infrastructure/social/instagram_client.py`): Session-based auth via instagrapi
@@ -133,15 +137,17 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Current Architecture Issues
 
-1. **Web Delivery Layer Still Dense**: `src/web/main.py` still concentrates routing, dependency wiring, OAuth callbacks, and setup/status endpoints in a single module.
+1. **Entrypoint Boundary Debt**: some job entrypoints still include business shaping/orchestration logic that should be moved into dedicated application use cases.
 
-2. **Monolithic Deployment**: A single container still handles fetch, processing, publishing, and web delivery via the `STEP` environment variable.
+2. **Web Delivery Layer Stabilization**: route modules are split under `src/web/routes/`, but route-level contracts and template boundary tests still need hardening.
 
-3. **Local Storage Limits**: TinyDB and TinyFlux remain a good fit for single-instance deployments, but they still lack native concurrency controls and stronger operational tooling.
+3. **Monolithic Deployment**: A single container still handles fetch, processing, publishing, and web delivery via the `STEP` environment variable.
 
-4. **Process-Local Observability**: `/health` and `/metrics` exist, but metrics are in-memory and local to a single process, not centralized or Prometheus-compatible.
+4. **Local Storage Limits**: TinyDB and TinyFlux remain a good fit for single-instance deployments, but they still lack native concurrency controls and stronger operational tooling.
 
-5. **Scoring Logic Duplication**: Ranking behavior exists in the domain scoring service and is still duplicated in some application/entrypoint flows.
+5. **Process-Local Observability**: `/health` and `/metrics` exist, but metrics are in-memory and local to a single process, not centralized or Prometheus-compatible.
+
+6. **Scoring Consistency**: Domain scoring service is canonical, but consistency hardening and regression coverage should continue for ranking semantics.
 
 ### Improvements Implemented
 
