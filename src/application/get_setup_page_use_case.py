@@ -51,13 +51,18 @@ class GetSetupPageUseCase:
         self._spotify_provider = spotify_provider
 
     async def execute(self, request: GetSetupPageRequest) -> GetSetupPageResult:
-        # Try session client_id first; fall back to persistent user_id from settings.
-        yt_credentials = self._get_yt_credentials(request.yt_session_client_id or request.yt_auth_user_id)
-        tiktok_credentials = self._get_tiktok_credentials(
-            request.tiktok_session_client_id or request.tiktok_user_openid
+        # Setup page shows session credentials when present, but completion requires
+        # persisted credentials from configured user identifiers.
+        yt_persisted_credentials = self._get_yt_credentials(request.yt_auth_user_id)
+        tiktok_persisted_credentials = self._get_tiktok_credentials(request.tiktok_user_openid)
+        spotify_persisted_credentials = self._get_spotify_credentials(request.spotify_user_id)
+
+        yt_credentials = self._get_yt_credentials(request.yt_session_client_id) or yt_persisted_credentials
+        tiktok_credentials = (
+            self._get_tiktok_credentials(request.tiktok_session_client_id) or tiktok_persisted_credentials
         )
-        spotify_credentials = self._get_spotify_credentials(
-            request.spotify_session_client_id or request.spotify_user_id
+        spotify_credentials = (
+            self._get_spotify_credentials(request.spotify_session_client_id) or spotify_persisted_credentials
         )
 
         yt_authentication_url = None if yt_credentials else await self._yt_provider.step_1_get_authentication_url()
@@ -68,7 +73,7 @@ class GetSetupPageUseCase:
             None if spotify_credentials else await self._spotify_provider.step_1_get_authentication_url()
         )
 
-        is_completed = bool(yt_credentials and tiktok_credentials and spotify_credentials)
+        is_completed = bool(yt_persisted_credentials and tiktok_persisted_credentials and spotify_persisted_credentials)
 
         return GetSetupPageResult(
             yt_authentication_url=yt_authentication_url,
