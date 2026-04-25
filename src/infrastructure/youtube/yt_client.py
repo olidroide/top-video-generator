@@ -8,7 +8,7 @@ from typing import Any
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-from src.config.settings import get_app_settings
+from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import YtAuth
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.youtube.auth_manager import MemoryCache, YouTubeAuthManager
@@ -25,16 +25,17 @@ class YTClient:
     YT_API_SERVICE_NAME = "youtube"
     YT_API_VERSION = "v3"
 
-    def __init__(self) -> None:
+    def __init__(self, settings: AppSettings | None = None) -> None:
         super().__init__()
-        settings = get_app_settings()
-        self._yt_client_secret_file_name: str = settings.yt_client_secret_file or ""
-        self._yt_redirect_uri: str = settings.yt_redirect_uri or ""
-        self._yt_search_region_code: str = settings.yt_search_region_code
-        self._yt_search_language_code: str = settings.yt_search_language_code or ""
-        self._yt_search_category_code: str = settings.yt_search_category_code or ""
-        self._yt_auth_user_id: str = settings.yt_auth_user_id or ""
-        tags_raw = settings.yt_tags or ""
+        resolved_settings = settings if settings is not None else get_app_settings()
+        self._yt_client_secret_file_name: str = resolved_settings.yt_client_secret_file or ""
+        self._yt_redirect_uri: str = resolved_settings.yt_redirect_uri or ""
+        self._yt_search_region_code: str = resolved_settings.yt_search_region_code
+        self._yt_search_language_code: str = resolved_settings.yt_search_language_code or ""
+        self._yt_search_category_code: str = resolved_settings.yt_search_category_code or ""
+        self._yt_auth_user_id: str = resolved_settings.yt_auth_user_id or ""
+        self._db_data_file: str = resolved_settings.db_data_file
+        tags_raw = resolved_settings.yt_tags or ""
         self._yt_tags: list[str] = [str(tag) for tag in tags_raw.split(",") if tag]
         self._memory_cache = MemoryCache()
         self._authenticated_service: Any | None = None
@@ -48,7 +49,7 @@ class YTClient:
         )
 
     def get_authenticated_service(self) -> Any:
-        auth_repo = AuthenticationRepository(Path(get_app_settings().db_data_file))
+        auth_repo = AuthenticationRepository(Path(self._db_data_file))
         yt_auth = auth_repo.get_yt_auth(self._yt_auth_user_id)
         if yt_auth is None:
             raise ValueError("Missing YouTube auth credentials")

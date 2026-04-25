@@ -29,7 +29,7 @@ from src.infrastructure.youtube.yt_fake_client import YTClientFake
 
 def get_yt_client(settings: AppSettings | None = None) -> OAuthProvider[YtAuth]:
     resolved_settings = settings if settings is not None else get_app_settings()
-    return YTClient() if resolved_settings.is_production_env else YTClientFake()
+    return YTClient(resolved_settings) if resolved_settings.is_production_env else YTClientFake(resolved_settings)
 
 
 def get_settings(request: Request) -> AppSettings:
