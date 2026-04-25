@@ -3,7 +3,7 @@
 from datetime import UTC, date, datetime
 
 import flag
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import Response
 
@@ -16,6 +16,7 @@ from src.web.viewmodels import build_index_page_view_model
 router = APIRouter()
 
 _ISO_ALPHA2_LENGTH = 2
+_MIN_DAILY_DATE = date(2020, 1, 1)
 
 
 def _title_flag(region_code: str | None) -> str:
@@ -43,6 +44,10 @@ async def index(
 ) -> Response:
     timeseries_range = TimeseriesRange.WEEKLY if weekly else TimeseriesRange.DAILY
     today = datetime.now(UTC).date()
+
+    if daily is not None and daily < _MIN_DAILY_DATE:
+        raise HTTPException(status_code=400, detail="Daily date out of range")
+
     current_date = weekly or daily or today
 
     logger.debug(
@@ -67,6 +72,7 @@ async def index(
         videos=result.videos,
         today=today,
         current_date=current_date,
+        min_daily_date=_MIN_DAILY_DATE,
         is_weekly=weekly is not None,
         yt_video_published=result.yt_video_published,
         credentials_owner=credentials_owner,

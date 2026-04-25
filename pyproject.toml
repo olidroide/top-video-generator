@@ -45,6 +45,7 @@ Tracker = "https://github.com/olidroide/top-video-generator/issues"
 [project.scripts]
 api-server = "src.entrypoints.api_server:main"
 fetch-data = "src.entrypoints.fetch_data:main"
+migrate-legacy-data = "src.entrypoints.migrate_legacy_data:main"
 publish-vertical = "src.entrypoints.publish_vertical:main"
 publish-video = "src.entrypoints.publish_video:main"
 scheduler-healthcheck = "src.entrypoints.scheduler_healthcheck:main"

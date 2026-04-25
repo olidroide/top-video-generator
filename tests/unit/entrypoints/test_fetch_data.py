@@ -27,6 +27,7 @@ async def test_main_async_delegates_to_fetch_data_use_case(monkeypatch: pytest.M
     settings = AppSettings(
         env=Environment.DEVELOPMENT,
         yt_search_region_code="ES",
+        db_video_file="db/db_video.json.test",
         db_data_file="db/db_data.json.test",
         db_timeseries_file="db/db_timeseries.csv.test",
     )

@@ -11,6 +11,7 @@ from src.config.settings import AppSettings
 from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
 from src.web.dependencies import get_check_platform_connection_use_case, get_setup_page_use_case
 from src.web.main import create_app
+from src.web.state import get_app_version
 
 
 @dataclass
@@ -98,6 +99,7 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
     assert login_response.headers["location"] == "/admin"
     assert dashboard_response.status_code == 200
     assert "Platform Connections" in dashboard_response.text
+    assert f"v{get_app_version()}" in dashboard_response.text
 
 
 def test_admin_status_requires_authenticated_session() -> None:
@@ -157,3 +159,21 @@ def test_admin_connection_check_returns_single_card_partial(monkeypatch) -> None
     assert "Spotify account access verified." in check_response.text
     rendered_label = next(label for label in ("Check publish", "Check connection") if label in check_response.text)
     assert check_response.text.rindex(rendered_label) < check_response.text.index("platform-card__check-spinner")
+
+
+def test_admin_health_status_returns_partial(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        health_response = client.get("/admin/health/status")
+
+    assert login_response.status_code == 303
+    assert health_response.status_code == 200
+    assert "health-checks" in health_response.text
+    assert "Database accessible" in health_response.text

@@ -14,11 +14,13 @@
         <div class="card-content">
             <div class="columns  is-mobile is-vcentered">
                 <div class="column is-narrow">
-                    <a class="button is-light" href="{{ vm.timeseries_previous_href }}">
-                    <span class="icon">
-                        <i class="fa fa-caret-left"></i>
-                    </span>
-                    </a>
+                    {% if vm.timeseries_previous_href %}
+                        <a class="button is-light" href="{{ vm.timeseries_previous_href }}">
+                        <span class="icon">
+                            <i class="fa fa-caret-left"></i>
+                        </span>
+                        </a>
+                    {% endif %}
                 </div>
                 <div class="column">
                     <div class="columns is-multiline is-centered">

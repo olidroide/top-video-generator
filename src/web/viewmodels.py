@@ -67,16 +67,18 @@ def build_index_page_view_model(
     videos: Sequence[Video],
     current_date: date,
     today: date,
+    min_daily_date: date,
     is_weekly: bool,
     yt_video_published: bool,
     credentials_owner: bool,
 ) -> IndexPageViewModel:
     """Build the page model for the top-videos index SSR template."""
+    previous_day = current_date - timedelta(days=1)
     return IndexPageViewModel(
         title_page=f"{title_flag} \U0001f51d VIDEO GENERATOR",
         video_list=tuple(VideoCardViewModel.from_domain(video) for video in videos),
         timeseries_daily_date=current_date,
-        timeseries_previous_href=f"?daily={(current_date - timedelta(days=1)):%Y-%m-%d}",
+        timeseries_previous_href=f"?daily={previous_day:%Y-%m-%d}" if previous_day >= min_daily_date else "",
         timeseries_next_href=f"?daily={(current_date + timedelta(days=1)):%Y-%m-%d}" if current_date < today else None,
         timeseries_daily_href=f"?daily={current_date:%Y-%m-%d}",
         timeseries_weekly_href=f"?weekly={current_date:%Y-%m-%d}",
@@ -102,7 +104,7 @@ class SetupPageViewModel:
 def build_setup_page_view_model(result: GetSetupPageResult) -> SetupPageViewModel:
     """Build the page model for the auth setup SSR template."""
     return SetupPageViewModel(
-        page_title="Item Details",
+        page_title="Setup Platform Connections",
         yt_authentication_url=result.yt_authentication_url,
         yt_credentials=result.yt_credentials,
         tiktok_authentication_url=result.tiktok_authentication_url,

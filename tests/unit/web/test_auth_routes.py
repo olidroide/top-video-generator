@@ -90,6 +90,7 @@ def test_setup_page_renders_viewmodel() -> None:
 
     assert response.status_code == 200
     assert "Top Video Generator" in response.text
+    assert "Setup Platform Connections" in response.text
     assert "https://yt.example/auth" in response.text
     assert "https://tt.example/auth" in response.text
     assert "https://sp.example/auth" in response.text

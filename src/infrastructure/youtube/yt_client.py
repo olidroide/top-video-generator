@@ -34,7 +34,7 @@ class YTClient:
         self._yt_search_language_code: str = resolved_settings.yt_search_language_code or ""
         self._yt_search_category_code: str = resolved_settings.yt_search_category_code or ""
         self._yt_auth_user_id: str = resolved_settings.yt_auth_user_id or ""
-        self._db_data_file: str = resolved_settings.db_data_file
+        self._db_auth_file: str = resolved_settings.db_auth_file
         tags_raw = resolved_settings.yt_tags or ""
         self._yt_tags: list[str] = [str(tag) for tag in tags_raw.split(",") if tag]
         self._memory_cache = MemoryCache()
@@ -49,7 +49,7 @@ class YTClient:
         )
 
     def get_authenticated_service(self) -> Any:
-        auth_repo = AuthenticationRepository(Path(self._db_data_file))
+        auth_repo = AuthenticationRepository(Path(self._db_auth_file))
         yt_auth = auth_repo.get_yt_auth(self._yt_auth_user_id)
         if yt_auth is None:
             raise ValueError("Missing YouTube auth credentials")

@@ -35,13 +35,14 @@ async def main_async() -> None:
 
 async def _run_vertical_publish_job(settings: AppSettings) -> None:
     day = datetime.datetime.now(UTC).date()
-    db_data_file = settings.db_data_file
+    db_video_file = settings.db_video_file
+    db_release_file = settings.db_release_file
     db_timeseries_file = settings.db_timeseries_file
 
     # Initialize repositories
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-    video_repo = VideoRepository(Path(db_data_file))
-    release_repo = ReleaseRepository(db_data_file)
+    video_repo = VideoRepository(Path(db_video_file))
+    release_repo = ReleaseRepository(db_release_file)
     publishers = build_publishers()
     publish_vertical_use_case = PublishVerticalUseCase()
     spotify_playlist_updater = SpotifyPlaylistUpdaterAdapter(SpotifyClient())

@@ -41,12 +41,12 @@ class FetchDataUseCase:
             List of VideoPoint objects that were added to timeseries.
         """
         settings = self.settings or self._get_settings()
-        db_data_file = settings.db_data_file
+        db_video_file = settings.db_video_file
         db_timeseries_file = settings.db_timeseries_file
 
         # Repositories are already injected, but we need to ensure they use correct paths
         # This maintains backward compatibility with existing repository constructors
-        video_repo = VideoRepository(Path(db_data_file))
+        video_repo = VideoRepository(Path(db_video_file))
         timeseries_repo = TimeSeriesRepository(db_timeseries_file)
 
         if not await self._is_passed_enough_time_from_last_fetch(timeseries_repo):

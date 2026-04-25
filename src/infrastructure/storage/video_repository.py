@@ -83,10 +83,7 @@ class VideoRepository:
             video: Domain entity to persist.
         """
         record = VideoRecord.from_canonical(video).model_dump()
-        if self._table.search(Query().video_id == video.video_id):
-            self._table.update(record, Query().video_id == video.video_id)
-        else:
-            self._table.insert(record)
+        self._table.upsert(record, Query().video_id == video.video_id)
 
     def get(self, video_id: str) -> CanonicalVideo | None:
         """

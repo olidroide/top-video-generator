@@ -58,11 +58,11 @@ def get_spotify_provider(
 
 
 def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> AuthenticationRepositoryPort:
-    return TinyDbAuthenticationRepository(Path(settings.db_data_file))
+    return TinyDbAuthenticationRepository(Path(settings.db_auth_file))
 
 
 def get_release_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> ReleaseRepositoryPort:
-    return TinyDbReleaseRepository(settings.db_data_file)
+    return TinyDbReleaseRepository(settings.db_release_file)
 
 
 def get_timeseries_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> TimeSeriesRepositoryPort:
@@ -70,7 +70,7 @@ def get_timeseries_repo(settings: Annotated[AppSettings, Depends(get_settings)])
 
 
 def get_video_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> VideoRepositoryPort:
-    return TinyDbVideoRepository(Path(settings.db_data_file))
+    return TinyDbVideoRepository(Path(settings.db_video_file))
 
 
 def get_authorize_use_case(

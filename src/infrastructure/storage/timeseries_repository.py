@@ -23,6 +23,7 @@ class TimeSeriesRepository:
     """
 
     _MEASUREMENT = "Video visualizations"
+    _MIN_TIME = datetime(1970, 1, 1, tzinfo=UTC)
 
     def __init__(self, db_path: str) -> None:
         """Initialize repository with TinyFlux backend."""
@@ -91,12 +92,10 @@ class TimeSeriesRepository:
         Returns:
             datetime of the last recorded point, or None if empty.
         """
-        # TinyFlux queries by time range; get all points and find max time
-        all_points = self._db.all()
-        if not all_points:
+        points = self._db.search(TimeQuery() >= self._MIN_TIME, sorted=True)
+        if not points:
             return None
-        # Points are ordered by time; get the latest
-        return all_points[-1].time if all_points else None
+        return points[-1].time.astimezone(UTC)
 
     def get_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[Point]:
         """

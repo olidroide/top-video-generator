@@ -35,6 +35,7 @@ def mock_timeseries_repo() -> TimeSeriesRepository:
 def mock_settings() -> AppSettings:
     settings = create_autospec(AppSettings, instance=True)
     settings.db_data_file = "test_db.json"
+    settings.db_video_file = "test_video_db.json"
     settings.db_timeseries_file = "test_ts.csv"
     settings.yt_search_region_code = "IN"
     settings.scheduler_lock_file = "/tmp/test.lock"

@@ -66,3 +66,6 @@ vertical-publish-run:
 
 scheduler-run:
 	uv run scheduler-run
+
+migrate-legacy-data-run:
+	uv run migrate-legacy-data $(ARGS)

@@ -197,6 +197,12 @@ uv run publish-vertical
 # Run weekly publish
 uv run publish-video
 
+# Dry-run legacy db migration (no writes)
+uv run migrate-legacy-data
+
+# Apply legacy db migration (creates source backup)
+uv run migrate-legacy-data --apply
+
 # Run quality checks
 make quality
 

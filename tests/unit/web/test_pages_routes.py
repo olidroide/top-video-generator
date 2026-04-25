@@ -81,3 +81,29 @@ def test_index_uses_requested_daily_query_param() -> None:
     assert "?daily=2026-03-31" in response.text
     assert use_case_stub.last_request is not None
     assert getattr(use_case_stub.last_request, "day", None).isoformat() == "2026-03-31"
+
+
+def test_index_rejects_daily_query_before_minimum_date() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
+
+    with TestClient(app) as client:
+        response = client.get("/?daily=2019-12-31")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Daily date out of range"
+
+
+def test_index_hides_previous_navigation_at_minimum_daily_date() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
+
+    with TestClient(app) as client:
+        response = client.get("/?daily=2020-01-01")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "?daily=2019-12-31" not in response.text

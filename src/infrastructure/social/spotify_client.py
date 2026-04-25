@@ -38,10 +38,10 @@ class SpotifyClient:
         self._client_secret: str = resolved_settings.spotify_client_secret or ""
         self._redirect_uri: str = resolved_settings.spotify_redirect_uri or ""
         self._user_id: str = resolved_settings.spotify_user_id or ""
-        self._db_data_file: str = resolved_settings.db_data_file
+        self._db_auth_file: str = resolved_settings.db_auth_file
 
     async def _get_user_refresh_token(self) -> str:
-        repo = AuthenticationRepository(Path(self._db_data_file))
+        repo = AuthenticationRepository(Path(self._db_auth_file))
         spotify_auth = repo.get_spotify_auth(self._user_id)
         if spotify_auth is None:
             return ""
@@ -122,7 +122,7 @@ class SpotifyClient:
             response_dict = await response.json()
 
         logger.debug("response_dict:", response_dict=response_dict)
-        repo = AuthenticationRepository(Path(self._db_data_file))
+        repo = AuthenticationRepository(Path(self._db_auth_file))
         spotify_auth = repo.add_or_update_spotify_auth(
             spotify_auth=SpotifyAuth(
                 token=response_dict.get("access_token"),

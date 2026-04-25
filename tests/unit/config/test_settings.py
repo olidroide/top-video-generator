@@ -71,6 +71,9 @@ def test_settings_load_env_files_in_order_with_local_override(tmp_path: Path, mo
     assert settings.log_file_path == "logs/override.log"
     assert Path(settings.yt_client_secret_file or "") == Path("secrets/yt_client_secret.json")
     assert Path(settings.db_data_file) == Path("db/db_data.json")
+    assert Path(settings.db_video_file) == Path("db/db_video.json")
+    assert Path(settings.db_auth_file) == Path("db/db_auth.json")
+    assert Path(settings.db_release_file) == Path("db/db_release.json")
 
 
 def test_settings_tolerate_missing_optional_local_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

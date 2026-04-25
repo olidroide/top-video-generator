@@ -21,7 +21,7 @@ from src.web.dependencies import (
     get_setup_page_use_case,
 )
 from src.web.routes import ops as ops_routes
-from src.web.state import logger, templates
+from src.web.state import get_app_version, logger, templates
 from src.web.viewmodels import (
     AdminConnectionsViewModel,
     build_admin_connections_view_model,
@@ -156,7 +156,7 @@ async def admin_connections(
         "database": ops_routes.check_database(timeseries_repo),
     }
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
-    health: dict[str, Any] = {"status": overall_status, "version": "1.0.0", "checks": checks}
+    health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
     ctx["health_vm"] = build_admin_health_view_model(health)
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
@@ -229,7 +229,7 @@ async def admin_health_status(
         "database": ops_routes.check_database(timeseries_repo),
     }
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
-    health: dict[str, Any] = {"status": overall_status, "version": "1.0.0", "checks": checks}
+    health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
     return templates.TemplateResponse(
         request=request,
         name="admin/_health_status.html",

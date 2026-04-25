@@ -102,14 +102,16 @@ async def main_async() -> None:
 
 async def _run_weekly_publish_job(settings: AppSettings) -> None:
     day = datetime.datetime.now(UTC).date()
-    db_data_file = settings.db_data_file
+    db_video_file = settings.db_video_file
+    db_release_file = settings.db_release_file
     db_timeseries_file = settings.db_timeseries_file
 
     if not settings.is_production_env:
-        db_data_file += ".test"
+        db_video_file += ".test"
+        db_release_file += ".test"
         db_timeseries_file += ".test"
 
-    release_repo = ReleaseRepository(db_data_file)
+    release_repo = ReleaseRepository(db_release_file)
     if release_repo.is_release_at_date(
         platform=Platform.YOUTUBE.value,
         release_date=day,
@@ -119,7 +121,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
         return
 
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-    video_repo = VideoRepository(Path(db_data_file))
+    video_repo = VideoRepository(Path(db_video_file))
     fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
 
     # Fetch top videos for the week

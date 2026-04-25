@@ -82,6 +82,10 @@ class AppSettings(BaseSettings):
     instagram_client_session_file: str | None = None
 
     db_timeseries_file: str = "db/db_timeseries.csv"
+    db_video_file: str = "db/db_video.json"
+    db_auth_file: str = "db/db_auth.json"
+    db_release_file: str = "db/db_release.json"
+    # Deprecated legacy shared store path. Keep for backward compatibility only.
     db_data_file: str = "db/db_data.json"
 
     video_template_end_screen_file: str | None = None
