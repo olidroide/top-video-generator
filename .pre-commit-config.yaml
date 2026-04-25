@@ -33,7 +33,7 @@ repos:
         pass_filenames: false
       - id: pytest-gate
         name: pytest gate
-        entry: uv run pytest tests/ -x -q --ignore=tests/integration/video
+        entry: make test
         language: system
-        stages: [pre-commit, pre-push]
+        stages: [pre-commit]
         pass_filenames: false

@@ -1,6 +1,7 @@
 import re
 from typing import Final
 
+from src.config.settings import AppSettings
 from src.domain.models import CanonicalVideo
 from src.infrastructure.youtube.schemas import YTVideo
 from src.infrastructure.youtube.yt_client import YTClient
@@ -28,8 +29,8 @@ def _parse_yt_duration_seconds(duration: str) -> float:
 
 
 class YouTubeSource:
-    def __init__(self, client: YTClient | None = None) -> None:
-        self.client = client if client is not None else YTClient()
+    def __init__(self, client: YTClient | None = None, settings: AppSettings | None = None) -> None:
+        self.client = client if client is not None else YTClient(settings=settings)
 
     async def fetch_trending_videos(
         self,

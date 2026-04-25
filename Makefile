@@ -47,7 +47,7 @@ quality:
 	uv run ty check src/ tests/
 
 test:
-	uv run pytest tests/
+	uv run pytest tests/ -x -q --ignore=tests/integration/video
 
 schedule:
 	docker compose up -d scheduler

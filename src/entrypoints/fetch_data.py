@@ -27,7 +27,7 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     db_data_file = settings.db_data_file
     db_timeseries_file = settings.db_timeseries_file
 
-    youtube_source = YouTubeSource()
+    youtube_source = YouTubeSource(settings=settings)
     video_repo = VideoRepository(Path(db_data_file))
     timeseries_repo = TimeSeriesRepository(db_timeseries_file)
 
