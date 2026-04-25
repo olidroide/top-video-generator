@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from src.domain.models import Release, ReleaseKind, ReleasePlatform
+from src.domain.models import Platform, Release, ReleaseKind
 from src.infrastructure.storage.release_repository import ReleaseRepository
 
 
@@ -13,7 +13,7 @@ def test_add_or_update_release_keeps_daily_and_weekly_records_separate(tmp_path)
     try:
         repo.add_or_update_release(
             Release(
-                platform=ReleasePlatform.YOUTUBE.value,
+                platform=Platform.YOUTUBE.value,
                 client_id="creator",
                 release_kind=ReleaseKind.DAILY_VERTICAL.value,
                 release_id="daily-id",
@@ -22,7 +22,7 @@ def test_add_or_update_release_keeps_daily_and_weekly_records_separate(tmp_path)
         )
         repo.add_or_update_release(
             Release(
-                platform=ReleasePlatform.YOUTUBE.value,
+                platform=Platform.YOUTUBE.value,
                 client_id="creator",
                 release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
                 release_id="weekly-id",
@@ -31,12 +31,12 @@ def test_add_or_update_release_keeps_daily_and_weekly_records_separate(tmp_path)
         )
 
         daily_release = repo.get_release(
-            platform=ReleasePlatform.YOUTUBE.value,
+            platform=Platform.YOUTUBE.value,
             client_id="creator",
             release_kind=ReleaseKind.DAILY_VERTICAL.value,
         )
         weekly_release = repo.get_release(
-            platform=ReleasePlatform.YOUTUBE.value,
+            platform=Platform.YOUTUBE.value,
             client_id="creator",
             release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
         )
@@ -56,7 +56,7 @@ def test_is_release_at_date_accepts_legacy_unscoped_release_for_transition(tmp_p
     try:
         repo.add_or_update_release(
             Release(
-                platform=ReleasePlatform.YOUTUBE.value,
+                platform=Platform.YOUTUBE.value,
                 client_id="creator",
                 release_id="legacy-id",
                 published_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC).timestamp(),
@@ -64,7 +64,7 @@ def test_is_release_at_date_accepts_legacy_unscoped_release_for_transition(tmp_p
         )
 
         assert repo.is_release_at_date(
-            platform=ReleasePlatform.YOUTUBE.value,
+            platform=Platform.YOUTUBE.value,
             release_date=release_date,
             release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
         )

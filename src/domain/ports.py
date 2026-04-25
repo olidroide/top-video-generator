@@ -14,8 +14,10 @@ if TYPE_CHECKING:
         IntegrationPlatform,
         Platform,
         PublishingResult,
+        Release,
         SpotifyAuth,
         TikTokAuth,
+        Video,
         VideoPoint,
         YtAuth,
     )
@@ -80,6 +82,31 @@ class AuthCredentialStore(Protocol):
 
 class ReleaseDateValidator(Protocol):
     def is_release_at_date(self, platform: str, release_date: date) -> bool: ...
+
+
+class ReleaseStore(Protocol):
+    def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool: ...
+
+    def add_or_update_release(self, release: Release) -> Release: ...
+
+
+class SpotifyPlaylistUpdater(Protocol):
+    async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool: ...
+
+
+class VerticalVideoPipeline(Protocol):
+    async def build_vertical_video(self, video_list: Sequence[Video]) -> str: ...
+
+
+class VideoPublishExecutor(Protocol):
+    async def publish(
+        self,
+        publisher: VideoPublisher,
+        video_list: Sequence[CanonicalVideo],
+        file_path: str,
+        title: str,
+        description: str,
+    ) -> PublishingResult: ...
 
 
 class OAuthProvider(Protocol[OAuthResultT]):

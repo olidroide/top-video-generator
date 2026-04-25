@@ -96,32 +96,43 @@ def score_and_rank_video_points(
     current: list[VideoPoint],
     previous: list[VideoPoint],
 ) -> list[VideoPoint]:
-    """Rank VideoPoint items by growth and assign score/status metadata."""
+    """Rank VideoPoint items by growth and assign score/status metadata.
+
+    Pure function: does not mutate input arguments, returns new list.
+    """
     if not current:
         raise ScoringError("current video list is empty")
 
     previous_by_id: dict[str, VideoPoint] = {video.video_id: video for video in previous}
 
+    # Enrich with views_growth (pure)
+    enriched = []
     for video_point in current:
         prev = previous_by_id.get(video_point.video_id)
-        if prev:
-            video_point.views_growth = abs(video_point.views - prev.views)
-        else:
-            video_point.views_growth = video_point.views_growth or video_point.views
+        views_growth = abs(video_point.views - prev.views) if prev else (video_point.views_growth or video_point.views)
+        enriched.append(video_point.model_copy(update={"views_growth": views_growth}))
 
-    current.sort(key=lambda item: item.views_growth or 0, reverse=True)
+    # Rank by views_growth DESC (most growth = rank #1)
+    ranked = sorted(enriched, key=lambda item: item.views_growth or 0, reverse=True)
 
-    for rank, video_point in enumerate(current, start=1):
+    # Assign scores and compute status (pure)
+    result: list[VideoPoint] = []
+    for rank, video_point in enumerate(ranked, start=1):
         prev = previous_by_id.get(video_point.video_id)
         prev_score = prev.score if prev and prev.score is not None else None
-        video_point.score = rank
-        video_point.score_previous = prev_score
-        video_point.score_status = calculate_score_status(
-            float(rank),
-            float(prev_score) if prev_score is not None else None,
+        result.append(
+            video_point.model_copy(
+                update={
+                    "score": rank,
+                    "score_previous": prev_score,
+                    "score_status": calculate_score_status(
+                        float(rank),
+                        prev_score,
+                    ),
+                }
+            )
         )
-
-    return current
+    return result
 
 
 def datetime_range_start(

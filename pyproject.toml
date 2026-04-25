@@ -83,7 +83,7 @@ markers = [
 cache-dir = ".ruff_cache"
 line-length = 120
 target-version = "py313"
-exclude = [".github/skills"]
+exclude = [".agents", ".github/skills"]
 
 [tool.ruff.format]
 quote-style = "double"

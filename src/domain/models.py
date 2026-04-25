@@ -22,6 +22,7 @@ class Platform(StrEnum):
     YOUTUBE = "YOUTUBE"
     TIKTOK = "TIKTOK"
     INSTAGRAM = "INSTAGRAM"
+    SPOTIFY = "SPOTIFY"
 
 
 class IntegrationPlatform(StrEnum):
@@ -65,10 +66,14 @@ class CanonicalVideo(BaseModel, frozen=True):
     @computed_field
     @property
     def title_cleaned(self) -> str:
-        title = self.title.strip()
-        for token in _NOISE_TOKENS:
-            title = title.replace(token, "")
-        return " ".join(title.split())
+        """Clean title by removing common noise tokens."""
+        return _clean_title(self.title)
+
+    @computed_field
+    @property
+    def yt_video_title_cleaned(self) -> str:
+        """Compatibility alias for existing call sites."""
+        return self.title_cleaned
 
 
 class PublishingResult(BaseModel, frozen=True):
@@ -88,49 +93,11 @@ class IntegrationCheckResult(BaseModel, frozen=True):
     checked_at: datetime = datetime.now(UTC)
 
 
-# ============================================================================
-# Persistence Layer Models (Infrastructure)
-# ============================================================================
-
-
 class Channel(BaseModel):
-    """Represents a YouTube channel."""
+    """YouTube channel metadata."""
 
-    channel_id: str | None = None
     name: str | None = None
-
-
-class TimeseriesRange(StrEnum):
-    """Time range for fetching timeseries data."""
-
-    DAILY = "daily"
-    WEEKLY = "weekly"
-
-
-class ReleasePlatform(StrEnum):
-    """Platforms where videos can be released."""
-
-    YOUTUBE = "YOUTUBE"
-    TIKTOK = "TIKTOK"
-    INSTAGRAM = "INSTAGRAM"
-    SPOTIFY = "SPOTIFY"
-
-
-class ReleaseKind(StrEnum):
-    """Release categories used for idempotency."""
-
-    DAILY_VERTICAL = "DAILY_VERTICAL"
-    WEEKLY_HORIZONTAL = "WEEKLY_HORIZONTAL"
-
-
-class Release(BaseModel):
-    """Represents a published release on a platform."""
-
-    platform: str | None = None
-    client_id: str | None = None
-    release_kind: str | None = None
-    release_id: str | None = None
-    published_at: float | None = None
+    channel_id: str | None = None
 
 
 class SpotifyAuth(BaseModel):
@@ -162,6 +129,30 @@ class YtAuth(BaseModel):
     scopes: list[str] | None = None
 
 
+class TimeseriesRange(StrEnum):
+    """Time range for fetching timeseries data."""
+
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+class ReleaseKind(StrEnum):
+    """Release categories used for idempotency."""
+
+    DAILY_VERTICAL = "DAILY_VERTICAL"
+    WEEKLY_HORIZONTAL = "WEEKLY_HORIZONTAL"
+
+
+class Release(BaseModel):
+    """Represents a published release on a platform."""
+
+    platform: str | None = None
+    client_id: str | None = None
+    release_kind: str | None = None
+    release_id: str | None = None
+    published_at: float | None = None
+
+
 class Video(BaseModel):
     """Video metadata (persisted in TinyDB)."""
 
@@ -182,9 +173,13 @@ class Video(BaseModel):
         """Extract hashtags from description."""
         if not self.description:
             return []
-        regex = r"#(\w+)"
-        hashtag_list = re.findall(regex, self.description)
+        hashtag_list = re.findall(r"#(\w+)", self.description)
         return [f"#{hashtag}" for hashtag in hashtag_list]
+
+    @property
+    def title_cleaned(self) -> str:
+        """Clean title by removing common noise tokens."""
+        return _clean_title(self.title)
 
     @property
     def yt_video_thumbnail_url(self) -> str:
@@ -196,33 +191,37 @@ class Video(BaseModel):
         """YouTube video URL."""
         return f"https://www.youtube.com/watch?v={self.video_id}"
 
-    @property
-    def yt_video_title_cleaned(self) -> str:
-        """Clean title by removing common noise tokens."""
-        if not self.title:
-            return ""
-        title = self.title
-        title = title.replace("(Video)", "")
-        title = title.replace("(Music Video)", "")
-        title = title.replace("Official Video", "")
-        title = title.replace("#Video", "")
-        title = title.replace("Full Video", "")
-        title = title.replace("(video)", "")
-        title = title.replace("Full Song", "")
-        title = title.replace(" - ", " ")
-        title = title.replace("()", "")
-        title = title.replace("( )", "")
-        title = title.replace("(Full )", "")
-        title = title.replace(": ", " ")
-        title = title.replace("  ", " ")
-        return title.strip()
 
-
-class TimePoint(BaseModel):
-    """Base class for time-series data points."""
+class VideoPoint(BaseModel):
+    """Video metadata point for timeseries tracking."""
 
     time: datetime
+    video_id: str
+    title: str | None = None
+    description: str | None = None
+    channel: Channel | None = None
+    views: int = 0
+    likes: int = 0
+    views_growth: int | None = None
+    score: int | None = None
+    score_previous: int | None = None
+    score_status: VideoScoreStatus | None = None
+    duration: int | None = None
 
 
-class VideoPoint(Video, TimePoint):
-    """Video data with timestamp (timeseries point in TinyFlux)."""
+def _clean_title(raw_title: str | None) -> str:
+    """Shared title cleaner used by canonical and legacy video models."""
+    if not raw_title:
+        return ""
+
+    title = raw_title.strip()
+    for token in _NOISE_TOKENS:
+        title = title.replace(token, "")
+
+    title = title.replace("Full Song", "")
+    title = title.replace(" - ", " ")
+    title = title.replace("()", "")
+    title = title.replace("( )", "")
+    title = title.replace("(Full )", "")
+    title = title.replace(": ", " ")
+    return " ".join(title.split())

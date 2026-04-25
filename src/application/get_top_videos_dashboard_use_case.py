@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.domain.exceptions import ScoringError
-from src.domain.models import ReleasePlatform, TimeseriesRange, Video
+from src.domain.models import Platform, TimeseriesRange, Video
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ class GetTopVideosDashboardUseCase:
             return GetTopVideosDashboardResult(videos=(), yt_video_published=False, error_message=str(exc))
 
         yt_video_published = self._release_port.is_release_at_date(
-            platform=ReleasePlatform.YOUTUBE.value,
+            platform=Platform.YOUTUBE.value,
             release_date=day,
         )
 

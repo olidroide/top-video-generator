@@ -222,3 +222,37 @@ class TestScoreAndRankVideoPoints:
         assert ranked[1].video_id == "v1"
         assert ranked[1].score_previous == 1
         assert ranked[1].score_status == VideoScoreStatus.DOWN
+
+    def test_does_not_mutate_input_video_points(self) -> None:
+        previous = [
+            VideoPoint(
+                time=datetime(2026, 3, 30, 0, 0, tzinfo=UTC),
+                video_id="v1",
+                views=1000,
+                likes=10,
+                score=3,
+            )
+        ]
+        current = [
+            VideoPoint(
+                time=datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+                video_id="v1",
+                views=1500,
+                likes=20,
+            ),
+            VideoPoint(
+                time=datetime(2026, 3, 31, 0, 0, tzinfo=UTC),
+                video_id="v2",
+                views=3000,
+                likes=30,
+            ),
+        ]
+
+        original_current = [item.model_copy(deep=True) for item in current]
+
+        ranked = score_and_rank_video_points(current, previous)
+
+        assert current == original_current
+        assert ranked is not current
+        assert ranked[0] is not current[0]
+        assert ranked[1] is not current[1]

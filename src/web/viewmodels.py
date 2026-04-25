@@ -34,7 +34,7 @@ class VideoCardViewModel:
             score=video.score,
             score_previous=video.score_previous,
             score_status=video.score_status.value if video.score_status else None,
-            yt_video_title_cleaned=video.yt_video_title_cleaned,
+            yt_video_title_cleaned=video.title_cleaned,
             channel_name=video.channel.name if video.channel and video.channel.name else "",
             yt_video_url=video.yt_video_url,
             yt_video_thumbnail_url=video.yt_video_thumbnail_url,

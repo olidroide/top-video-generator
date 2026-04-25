@@ -14,10 +14,14 @@ from src.domain.ports import (
     IntegrationChecker,
     OAuthProvider,
     ReleaseDateValidator,
+    ReleaseStore,
+    SpotifyPlaylistUpdater,
     TimeSeriesReader,
     TrendingVideoFetcher,
+    VerticalVideoPipeline,
     VideoMetadataReader,
     VideoPublisher,
+    VideoPublishExecutor,
 )
 
 
@@ -112,6 +116,28 @@ def test_release_repository_implements_protocol() -> None:
 
     release_repo: TinyDbReleaseRepository = create_autospec(TinyDbReleaseRepository, instance=True)
     assert_type(release_repo, ReleaseDateValidator)
+    assert_type(release_repo, ReleaseStore)
+
+
+def test_spotify_playlist_updater_adapter_implements_protocol() -> None:
+    from src.adapters.spotify_playlist_updater import SpotifyPlaylistUpdaterAdapter
+
+    adapter: SpotifyPlaylistUpdaterAdapter = create_autospec(SpotifyPlaylistUpdaterAdapter, instance=True)
+    assert_type(adapter, SpotifyPlaylistUpdater)
+
+
+def test_vertical_video_pipeline_adapter_implements_protocol() -> None:
+    from src.adapters.vertical_video_pipeline import VerticalVideoPipelineAdapter
+
+    adapter: VerticalVideoPipelineAdapter = create_autospec(VerticalVideoPipelineAdapter, instance=True)
+    assert_type(adapter, VerticalVideoPipeline)
+
+
+def test_video_publish_executor_adapter_implements_protocol() -> None:
+    from src.adapters.video_publish_executor import VideoPublishExecutorAdapter
+
+    adapter: VideoPublishExecutorAdapter = create_autospec(VideoPublishExecutorAdapter, instance=True)
+    assert_type(adapter, VideoPublishExecutor)
 
 
 def test_timeseries_repository_implements_protocol() -> None:

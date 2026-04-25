@@ -9,7 +9,7 @@ from pathlib import Path
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import AppSettings, get_app_settings
-from src.domain.models import Release, ReleaseKind, ReleasePlatform, TimeseriesRange, Video
+from src.domain.models import Platform, Release, ReleaseKind, TimeseriesRange, Video
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
@@ -80,7 +80,7 @@ def generate_yt_description(video_list: Sequence[Video]) -> str:
 
     video_list_names = ""
     for video in video_list:
-        video_list_names += f"{video.score}.- {video.yt_video_title_cleaned} {video.yt_video_url} \n"
+        video_list_names += f"{video.score}.- {video.title_cleaned} {video.yt_video_url} \n"
         if video.channel and video.channel.name:
             video_list_names += f"© {video.channel.name}\n\n"
 
@@ -111,7 +111,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
 
     release_repo = ReleaseRepository(db_data_file)
     if release_repo.is_release_at_date(
-        platform=ReleasePlatform.YOUTUBE.value,
+        platform=Platform.YOUTUBE.value,
         release_date=day,
         release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
     ):
@@ -163,7 +163,7 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
         if yt_video_id:
             release_repo.add_or_update_release(
                 Release(
-                    platform=ReleasePlatform.YOUTUBE.value,
+                    platform=Platform.YOUTUBE.value,
                     client_id=settings.yt_auth_user_id,
                     release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
                     release_id=yt_video_id,

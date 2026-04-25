@@ -173,7 +173,7 @@ class TestVideoRenderer:
         assert created_text_clips[0].text == "07"
         assert created_text_clips[1].text == "^"
         assert created_text_clips[2].text == "9"
-        assert created_text_clips[3].text == video.yt_video_title_cleaned[:38]
+        assert created_text_clips[3].text == video.title_cleaned[:38]
         assert created_text_clips[5].text == "1.23M"
         assert created_text_clips[7].text == "98.77k"
         assert created_text_clips[5].position == (83, 1400)

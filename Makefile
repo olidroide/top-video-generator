@@ -33,7 +33,7 @@ run-compose-daily:
 	docker compose run --rm -e "STEP=vertical_publish" top-video-generator
 
 format:
-	uv run ruff format .
+	uv run ruff format src tests
 
 lint:
 	uv run ruff check src tests

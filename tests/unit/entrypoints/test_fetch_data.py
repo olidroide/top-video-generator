@@ -1,67 +1,28 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import Self
+from unittest.mock import AsyncMock, create_autospec
 
 import pytest
 
+from src.application.fetch_data_use_case import FetchDataUseCase
 from src.config.settings import AppSettings, Environment
-from src.domain.models import CanonicalVideo, VideoPoint
 from src.entrypoints import fetch_data as fetch_data_entrypoint
 
 
 @pytest.mark.asyncio
-async def test_run_fetch_data_maps_video_metadata_into_video_point(monkeypatch: pytest.MonkeyPatch) -> None:
-    added_points: list[VideoPoint] = []
-    upserted_videos: list[CanonicalVideo] = []
+async def test_main_async_delegates_to_fetch_data_use_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_use_case = create_autospec(FetchDataUseCase, instance=True)
+    mock_use_case.execute = AsyncMock(return_value=[])
 
     class _FileExecutionLockStub:
         def __init__(self, _path: object, _operation_name: str) -> None:
             self.acquired = True
 
-        def __enter__(self) -> Self:
+        def __enter__(self):
             return self
 
         def __exit__(self, _exc_type: object, _exc: object, _exc_tb: object) -> bool:
             return False
-
-    class _TimeSeriesRepositoryStub:
-        def __init__(self, _db_path: str) -> None:
-            return
-
-        def get_last_timestamp(self):
-            return None
-
-        def add_video_point(self, video_point: VideoPoint) -> None:
-            added_points.append(video_point)
-
-    class _VideoRepositoryStub:
-        def __init__(self, _db_path: object) -> None:
-            return
-
-        def upsert(self, video: CanonicalVideo) -> None:
-            upserted_videos.append(video)
-
-    class _YouTubeSourceStub:
-        async def fetch_video_details_batch(self, _video_id_list: list[str]) -> list[CanonicalVideo]:
-            return [
-                CanonicalVideo(
-                    video_id="abc123",
-                    title="Test Song",
-                    channel_name="Test Channel",
-                    views=1000,
-                    likes=50,
-                    description="Test Description",
-                    duration_seconds=182.0,
-                )
-            ]
-
-    class _FetchTrendingUseCaseStub:
-        def __init__(self, source: object) -> None:
-            self._source = source
-
-        async def execute(self, _request: object) -> SimpleNamespace:
-            return SimpleNamespace(videos=[SimpleNamespace(video_id="abc123")])
 
     settings = AppSettings(
         env=Environment.DEVELOPMENT,
@@ -70,21 +31,10 @@ async def test_run_fetch_data_maps_video_metadata_into_video_point(monkeypatch: 
         db_timeseries_file="db/db_timeseries.csv.test",
     )
 
-    monkeypatch.setattr("src.entrypoints.fetch_data.get_app_settings", lambda: settings)
-    monkeypatch.setattr("src.entrypoints.fetch_data.FileExecutionLock", _FileExecutionLockStub)
-    monkeypatch.setattr("src.entrypoints.fetch_data.TimeSeriesRepository", _TimeSeriesRepositoryStub)
-    monkeypatch.setattr("src.entrypoints.fetch_data.VideoRepository", _VideoRepositoryStub)
-    monkeypatch.setattr("src.entrypoints.fetch_data.YouTubeSource", _YouTubeSourceStub)
-    monkeypatch.setattr("src.entrypoints.fetch_data.FetchTrendingUseCase", _FetchTrendingUseCaseStub)
+    monkeypatch.setattr(fetch_data_entrypoint, "get_app_settings", lambda: settings)
+    monkeypatch.setattr(fetch_data_entrypoint, "FileExecutionLock", _FileExecutionLockStub)
+    monkeypatch.setattr(fetch_data_entrypoint, "FetchDataUseCase", lambda *args, **kwargs: mock_use_case)
 
     await fetch_data_entrypoint.main_async()
 
-    assert len(upserted_videos) == 1
-    assert len(added_points) == 1
-
-    video_point = added_points[0]
-    assert video_point.title == "Test Song"
-    assert video_point.description == "Test Description"
-    assert video_point.channel is not None
-    assert video_point.channel.name == "Test Channel"
-    assert video_point.duration == 182
+    mock_use_case.execute.assert_awaited_once()

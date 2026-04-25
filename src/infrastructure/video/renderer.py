@@ -349,7 +349,7 @@ class VideoRenderer:
         channel_name = video.channel.name if video.channel else "Unknown channel"
 
         max_length = 38
-        title = video.yt_video_title_cleaned[:max_length]
+        title = video.title_cleaned[:max_length]
 
         views = _format_compact_number(video.views, precision=2)
         views_growth = _format_compact_number(video.views_growth, precision=2)
