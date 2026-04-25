@@ -72,7 +72,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
-[tool.pytest.ini_options]
+[tool.pytest]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [

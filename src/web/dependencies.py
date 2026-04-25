@@ -27,13 +27,22 @@ from src.infrastructure.youtube.yt_client import YTClient
 from src.infrastructure.youtube.yt_fake_client import YTClientFake
 
 
-def get_yt_client() -> OAuthProvider[YtAuth]:
-    settings = get_app_settings()
-    return YTClient() if settings.is_production_env else YTClientFake()
+def get_yt_client(settings: AppSettings | None = None) -> OAuthProvider[YtAuth]:
+    resolved_settings = settings if settings is not None else get_app_settings()
+    return YTClient() if resolved_settings.is_production_env else YTClientFake()
 
 
-def get_yt_provider() -> OAuthProvider[YtAuth]:
-    return get_yt_client()
+def get_settings(request: Request) -> AppSettings:
+    app_settings = getattr(request.app.state, "settings", None)
+    if app_settings is not None:
+        return cast("AppSettings", app_settings)
+    return get_app_settings()
+
+
+def get_yt_provider(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> OAuthProvider[YtAuth]:
+    return get_yt_client(settings)
 
 
 def get_tiktok_provider() -> OAuthProvider[TikTokAuth]:
@@ -42,13 +51,6 @@ def get_tiktok_provider() -> OAuthProvider[TikTokAuth]:
 
 def get_spotify_provider() -> OAuthProvider[SpotifyAuth]:
     return SpotifyClient()
-
-
-def get_settings(request: Request) -> AppSettings:
-    app_settings = getattr(request.app.state, "settings", None)
-    if app_settings is not None:
-        return cast("AppSettings", app_settings)
-    return get_app_settings()
 
 
 def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> AuthenticationRepositoryPort:

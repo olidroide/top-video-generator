@@ -35,5 +35,5 @@ repos:
         name: pytest gate
         entry: uv run pytest tests/ -x -q --ignore=tests/integration/video
         language: system
-        stages: [pre-push]
+        stages: [pre-commit, pre-push]
         pass_filenames: false
