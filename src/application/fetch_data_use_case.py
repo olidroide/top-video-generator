@@ -111,7 +111,6 @@ class FetchDataUseCase:
         if not (last_timeseries_datetime := timeseries_repo.get_last_timestamp()):
             logger.debug("No timeseries found")
             return True
-        last_timeseries_datetime = last_timeseries_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
         current_datetime = datetime.now(UTC)
         delta_from_last_recollection = current_datetime - last_timeseries_datetime
 

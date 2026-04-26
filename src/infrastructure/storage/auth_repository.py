@@ -54,10 +54,8 @@ class AuthenticationRepository:
     def add_or_update_spotify_auth(self, spotify_auth: SpotifyAuth) -> SpotifyAuth:
         """Insert or update Spotify auth (upsert)."""
         client_id = spotify_auth.client_id or ""
-        if self.get_spotify_auth(client_id):
-            return self.update_spotify_auth(spotify_auth)
         table = self._db.table(self._TABLE_SPOTIFY)
-        table.insert(spotify_auth.model_dump())
+        table.upsert(spotify_auth.model_dump(), Query().client_id == client_id)
         return spotify_auth
 
     # ========================================================================
@@ -82,10 +80,8 @@ class AuthenticationRepository:
     def add_or_update_tiktok_auth(self, tiktok_auth: TikTokAuth) -> TikTokAuth:
         """Insert or update TikTok auth (upsert)."""
         client_id = tiktok_auth.client_id or ""
-        if self.get_tiktok_auth(client_id):
-            return self.update_tiktok_auth(tiktok_auth)
         table = self._db.table(self._TABLE_TIKTOK)
-        table.insert(tiktok_auth.model_dump())
+        table.upsert(tiktok_auth.model_dump(), Query().client_id == client_id)
         return tiktok_auth
 
     # ========================================================================
@@ -110,10 +106,8 @@ class AuthenticationRepository:
     def add_or_update_yt_auth(self, yt_auth: YtAuth) -> YtAuth:
         """Insert or update YouTube auth (upsert)."""
         client_id = yt_auth.client_id or ""
-        if self.get_yt_auth(client_id):
-            return self.update_yt_auth(yt_auth)
         table = self._db.table(self._TABLE_YT)
-        table.insert(yt_auth.model_dump())
+        table.upsert(yt_auth.model_dump(), Query().client_id == client_id)
         return yt_auth
 
     def close(self) -> None:

@@ -9,8 +9,13 @@
     {# Anti-FOUC: apply saved theme before first paint #}
     <script>(function(){var t=localStorage.getItem('admin-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-    <script defer src="https://use.fontawesome.com/releases/v5.13.1/js/all.js"></script>
-    <script src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js" crossorigin="anonymous"></script>
+    <script defer
+            src="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.1/js/all.min.js"
+            integrity="sha256-HkXXtFRaflZ7gjmpjGQBENGnq8NIno4SDNq/3DbkMgo="
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"
+            integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V"
+            crossorigin="anonymous"></script>
     <link href="{{ url_for('static', path='/admin.css') }}" rel="stylesheet">
   {% endblock %}
   <title>{% block title %}Admin{% endblock %} — Top Video Generator</title>

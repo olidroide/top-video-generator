@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
 
-from pydantic import StringConstraints, field_validator, model_validator
+from pydantic import SecretStr, StringConstraints, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.shared.logging import get_logger
@@ -78,8 +78,9 @@ class AppSettings(BaseSettings):
     spotify_playlist_original: str | None = None
 
     instagram_client_username: str | None = None
-    instagram_client_password: str | None = None
+    instagram_client_password: SecretStr | None = None
     instagram_client_session_file: str | None = None
+    instagram_dev_use_certifi: bool = False
 
     db_timeseries_file: str = "db/db_timeseries.csv"
     db_video_file: str = "db/db_video.json"

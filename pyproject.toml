@@ -395,5 +395,5 @@ error-on-warning = true
 [tool.uv]
 package = true
 override-dependencies = [
-  "moviepy==2.1.1",
+  "moviepy==2.2.1",
 ]

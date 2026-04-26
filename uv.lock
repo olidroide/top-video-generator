@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [manifest]
-overrides = [{ name = "moviepy", specifier = "==2.1.1" }]
+overrides = [{ name = "moviepy", specifier = "==2.2.1" }]
 
 [[package]]
 name = "aiodns"
@@ -884,7 +884,7 @@ wheels = [
 
 [[package]]
 name = "moviepy"
-version = "2.1.1"
+version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "decorator" },
@@ -895,9 +895,9 @@ dependencies = [
     { name = "proglog" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1c/98/0ed6566a9d297dc41850d4bd5a2af4619f28abbfd9bdae76f5961410e2e2/moviepy-2.1.1.tar.gz", hash = "sha256:0210336944fcc88a1841fe7ca3701f8f449eead222f9d1665d11d3b8fa753454", size = 58421147, upload-time = "2024-11-25T04:33:23.059Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/61/15f9476e270f64c78a834e7459ca045d669f869cec24eed26807b8cd479d/moviepy-2.2.1.tar.gz", hash = "sha256:c80cb56815ece94e5e3e2d361aa40070eeb30a09d23a24c4e684d03e16deacb1", size = 58431438, upload-time = "2025-05-21T19:31:52.601Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/7b/edcb99095b403906becbeb61539123e391b22ec418eb0954a34d39a0bc83/moviepy-2.1.1-py3-none-any.whl", hash = "sha256:b236a794c1bc00162613f08b5b5a862531ac39666b6943161c1f46a4dc8d3064", size = 123485, upload-time = "2024-11-25T04:33:19.745Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/73/7d3b2010baa0b5eb1e4dfa9e4385e89b6716be76f2fa21a6c0fe34b68e5a/moviepy-2.2.1-py3-none-any.whl", hash = "sha256:6b56803fec2ac54b557404126ac1160e65448e03798fa282bd23e8fab3795060", size = 129871, upload-time = "2025-05-21T19:31:50.11Z" },
 ]
 
 [[package]]

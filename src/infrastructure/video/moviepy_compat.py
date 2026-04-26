@@ -18,7 +18,7 @@ try:
     CrossFadeIn = import_module("moviepy.video.fx.CrossFadeIn").CrossFadeIn
     MaskColor = import_module("moviepy.video.fx.MaskColor").MaskColor
     _is_moviepy_v2 = True
-except ImportError:
+except (ImportError, AttributeError):
     ColorClip = import_module("moviepy.video.VideoClip").ColorClip
     CompositeVideoClip = import_module("moviepy.video.compositing.CompositeVideoClip").CompositeVideoClip
     ImageClip = import_module("moviepy.video.VideoClip").ImageClip

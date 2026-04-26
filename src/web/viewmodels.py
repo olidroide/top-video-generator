@@ -210,20 +210,27 @@ def _build_platform_connection_view_model(
     auth_type: str,
     check_result: IntegrationCheckResult | None,
 ) -> PlatformConnectionViewModel:
+    effective_is_configured = (
+        False
+        if check_result is not None and check_result.status == IntegrationCheckStatus.NOT_CONFIGURED
+        else is_configured
+    )
+    effective_is_connected = is_connected and effective_is_configured
+
     return PlatformConnectionViewModel(
         slug=slug,
         name=name,
         icon_class=icon_class,
-        is_connected=is_connected,
-        is_configured=is_configured,
+        is_connected=effective_is_connected,
+        is_configured=effective_is_configured,
         is_publish_target=is_publish_target,
         auth_url=auth_url,
         connected_id=connected_id,
         auth_type=auth_type,
-        can_run_check=is_configured,
+        can_run_check=effective_is_configured,
         check_action_label="Check publish" if is_publish_target else "Check connection",
         live_check=_build_live_check_view_model(
-            is_configured=is_configured,
+            is_configured=effective_is_configured,
             is_publish_target=is_publish_target,
             check_result=check_result,
         ),

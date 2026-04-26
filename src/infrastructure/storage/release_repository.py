@@ -85,10 +85,11 @@ class ReleaseRepository:
         """
         platform = release.platform or ""
         client_id = release.client_id or ""
-        if self.get_release(platform, client_id, release.release_kind):
-            return self.update_release(release)
+        release_kind = release.release_kind
         table = self._db.table(self._TABLE)
-        table.insert(release.model_dump())
+        base_cond = (Query().platform == platform) & (Query().client_id == client_id)
+        kind_cond = Query().release_kind == release_kind
+        table.upsert(release.model_dump(), base_cond & kind_cond)
         return release
 
     def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool:

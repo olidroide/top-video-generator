@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, create_autospec
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 
@@ -34,6 +34,8 @@ async def test_main_async_delegates_to_fetch_data_use_case(monkeypatch: pytest.M
 
     monkeypatch.setattr(fetch_data_entrypoint, "get_app_settings", lambda: settings)
     monkeypatch.setattr(fetch_data_entrypoint, "FileExecutionLock", _FileExecutionLockStub)
+    monkeypatch.setattr(fetch_data_entrypoint, "VideoRepository", lambda _path: MagicMock())
+    monkeypatch.setattr(fetch_data_entrypoint, "TimeSeriesRepository", lambda _path: MagicMock())
     monkeypatch.setattr(fetch_data_entrypoint, "FetchDataUseCase", lambda *args, **kwargs: mock_use_case)
 
     await fetch_data_entrypoint.main_async()
