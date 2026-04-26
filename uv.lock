@@ -1570,6 +1570,15 @@ wheels = [
 ]
 
 [[package]]
+name = "redis"
+version = "7.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7b/7f/3759b1d0d72b7c92f0d70ffd9dc962b7b7b5ee74e135f9d7d8ab06b8a318/redis-7.4.0.tar.gz", hash = "sha256:64a6ea7bf567ad43c964d2c30d82853f8df927c5c9017766c55a1d1ed95d18ad", size = 4943913, upload-time = "2026-03-24T09:14:37.53Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/3a/95deec7db1eb53979973ebd156f3369a72732208d1391cd2e5d127062a32/redis-7.4.0-py3-none-any.whl", hash = "sha256:a9c74a5c893a5ef8455a5adb793a31bb70feb821c86eccb62eebef5a19c429ec", size = 409772, upload-time = "2026-03-24T09:14:35.968Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.32.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1644,6 +1653,20 @@ wheels = [
 ]
 
 [[package]]
+name = "spotipy"
+version = "2.26.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "redis" },
+    { name = "requests" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/00/2de6f99c9b8e5fd519fd55b11ec94b8e97a51e8a9fdf546edfe6aaf8727b/spotipy-2.26.0.tar.gz", hash = "sha256:df6a25d8209072efa8cea165608ee644884e3804f8762b6d8e06ca1a5c7f8a63", size = 45292, upload-time = "2026-03-03T16:37:39.367Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/ff/594b82c19b3291eb3f9454beba7f74f19753035fb9b3e54eebd5ae5013a6/spotipy-2.26.0-py3-none-any.whl", hash = "sha256:2726854ddfa0e5624aada592e737832ec75bdc00ae12c102779f8bd995329d49", size = 31985, upload-time = "2026-03-03T16:37:38.225Z" },
+]
+
+[[package]]
 name = "starlette"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1715,6 +1738,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyzmq" },
     { name = "segno" },
+    { name = "spotipy" },
     { name = "structlog" },
     { name = "tenacity" },
     { name = "tinydb" },
@@ -1760,6 +1784,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2,<2.0.0" },
     { name = "pyzmq", specifier = ">=27.1.0,<28.0.0" },
     { name = "segno", specifier = ">=1.6.6,<2.0.0" },
+    { name = "spotipy", specifier = ">=2.26.0,<3.0.0" },
     { name = "structlog", specifier = ">=25.5.0,<26.0.0" },
     { name = "tenacity", specifier = ">=9.1.4,<10.0.0" },
     { name = "tinydb", specifier = ">=4.8.2,<5.0.0" },

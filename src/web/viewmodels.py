@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from src.domain.models import SpotifyAuth, TikTokAuth, Video, YtAuth
 
 
+_SPOTIFY_REAUTH_PREFIX = "Spotify authorization is invalid or expired."
+
+
 @dataclass(frozen=True)
 class VideoCardViewModel:
     """Presentation model for a video row."""
@@ -188,6 +191,13 @@ def _build_live_check_view_model(
             state="na",
             label="NOT CONFIGURED",
             message=check_result.message or "Missing local configuration.",
+        )
+
+    if isinstance(check_result.message, str) and check_result.message.startswith(_SPOTIFY_REAUTH_PREFIX):
+        return PlatformLiveCheckViewModel(
+            state="off",
+            label="REAUTH REQUIRED",
+            message=check_result.message,
         )
 
     return PlatformLiveCheckViewModel(

@@ -91,6 +91,8 @@ class ReleaseStore(Protocol):
 
 
 class SpotifyPlaylistUpdater(Protocol):
+    async def is_authorized(self) -> bool: ...
+
     async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool: ...
 
 

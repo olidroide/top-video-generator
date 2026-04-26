@@ -62,6 +62,16 @@ def _build_instagram_not_configured_check_result() -> IntegrationCheckResult:
     )
 
 
+def _build_spotify_reauth_check_result() -> IntegrationCheckResult:
+    return IntegrationCheckResult(
+        platform=IntegrationPlatform.SPOTIFY,
+        status=IntegrationCheckStatus.ERROR,
+        is_configured=True,
+        is_publish_target=False,
+        message="Spotify authorization is invalid or expired. Reconnect Spotify from Setup.",
+    )
+
+
 def test_admin_index_redirects_to_login_when_session_missing(monkeypatch) -> None:
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
@@ -223,3 +233,28 @@ def test_admin_connection_check_instagram_not_configured_aligns_card_state(monke
     assert "Check publish" in check_response.text
     assert 'hx-post="/admin/connections/instagram/check"' in check_response.text
     assert '<button\n      disabled\n      class="secondary outline"' in check_response.text
+
+
+def test_admin_connection_check_spotify_reauth_required(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+    app.dependency_overrides[get_check_platform_connection_use_case] = lambda: _CheckPlatformConnectionUseCaseStub(
+        _build_spotify_reauth_check_result()
+    )
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        check_response = client.post("/admin/connections/spotify/check")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert check_response.status_code == 200
+    assert "platform-card-spotify" in check_response.text
+    assert "REAUTH REQUIRED" in check_response.text
+    assert "Reconnect Spotify from Setup." in check_response.text

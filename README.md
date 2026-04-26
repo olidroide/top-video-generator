@@ -210,6 +210,23 @@ make quality
 make pre-push-check
 ```
 
+### Spotify OAuth Troubleshooting
+
+If the admin live check shows Spotify errors such as:
+
+- `refresh_token must be supplied`
+- `Only valid bearer authentication supported`
+
+your stored Spotify authorization is usually expired or revoked.
+
+What to do:
+
+1. Open the Setup page in the web app and reconnect Spotify.
+2. Run the Spotify live connection check again from Admin.
+3. Re-run the daily publish job after the check is `VERIFIED`.
+
+Runtime behavior: the vertical publish flow now skips Spotify playlist updates when authorization is invalid, so YouTube/TikTok/Instagram publishing continues.
+
 ### Git Hooks
 
 This repository uses pre-commit as the single hook runner for both commit and push checks.

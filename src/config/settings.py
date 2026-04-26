@@ -36,6 +36,8 @@ class AppSettings(BaseSettings):
     days_between_top: int = 7
     app_secret_key: str | None = None
     admin_password: str | None = None
+    use_certifi: bool = False
+    ca_bundle_file: str | None = None
     cpu_workers: int = 0
     threads_workers: int = 1
     log_file_path: str = "logs/top_music.log"
@@ -80,7 +82,6 @@ class AppSettings(BaseSettings):
     instagram_client_username: str | None = None
     instagram_client_password: SecretStr | None = None
     instagram_client_session_file: str | None = None
-    instagram_dev_use_certifi: bool = False
 
     db_timeseries_file: str = "db/db_timeseries.csv"
     db_video_file: str = "db/db_video.json"

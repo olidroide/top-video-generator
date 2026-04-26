@@ -469,6 +469,9 @@ class TestPublishVerticalUseCase:
             def __init__(self) -> None:
                 self.called = False
 
+            async def is_authorized(self) -> bool:
+                return True
+
             async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool:
                 del song_title_list
                 self.called = playlist_id == "playlist_1"
@@ -510,6 +513,9 @@ class TestPublishVerticalUseCase:
             def __init__(self) -> None:
                 self.called = False
 
+            async def is_authorized(self) -> bool:
+                return True
+
             async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool:
                 del playlist_id, song_title_list
                 self.called = True
@@ -528,3 +534,50 @@ class TestPublishVerticalUseCase:
         )
 
         assert not updater.called
+
+    @pytest.mark.asyncio
+    async def test_maybe_update_spotify_original_playlist_skips_when_not_authorized(self) -> None:
+        class _ReleaseStoreFake:
+            def __init__(self) -> None:
+                self.saved: list[Release] = []
+
+            def is_release_at_date(
+                self,
+                platform: str,
+                release_date: datetime.date,
+                release_kind: str | None = None,
+            ) -> bool:
+                del platform, release_date, release_kind
+                return False
+
+            def add_or_update_release(self, release: Release) -> Release:
+                self.saved.append(release)
+                return release
+
+        class _SpotifyUpdaterFake:
+            def __init__(self) -> None:
+                self.called = False
+
+            async def is_authorized(self) -> bool:
+                return False
+
+            async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool:
+                del playlist_id, song_title_list
+                self.called = True
+                return True
+
+        use_case = PublishVerticalUseCase()
+        release_store = _ReleaseStoreFake()
+        updater = _SpotifyUpdaterFake()
+
+        await use_case.maybe_update_spotify_original_playlist(
+            release_store=release_store,
+            spotify_playlist_updater=updater,
+            spotify_release_pending=True,
+            spotify_playlist_original="playlist_1",
+            spotify_user_id="sp-owner",
+            video_list=(make_video("v1", title="Song A"),),
+        )
+
+        assert not updater.called
+        assert release_store.saved == []

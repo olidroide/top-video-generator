@@ -91,6 +91,14 @@ class PublishVerticalUseCase:
             return
 
         try:
+            is_authorized = await spotify_playlist_updater.is_authorized()
+            if not is_authorized:
+                logger.warning(
+                    "publish_vertical.spotify_playlist_update_skipped_not_authorized",
+                    playlist_id=playlist_id,
+                )
+                return
+
             yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list if video.title]
             await spotify_playlist_updater.update_original_playlist(
                 playlist_id=playlist_id,

@@ -115,7 +115,12 @@ async def spotify_auth(
         logger.warning("Not CODE received in callback Spotify Auth", request=request.url)
         return RedirectResponse("/")
 
-    spotify_auth_response = await use_case.execute_spotify(AuthorizeSpotifyRequest(code=code))
+    try:
+        spotify_auth_response = await use_case.execute_spotify(AuthorizeSpotifyRequest(code=code))
+    except RuntimeError as exc:
+        logger.exception("spotify_auth.callback_failed", error=str(exc))
+        return RedirectResponse("/setup")
+
     request.session["spotify_credentials"] = spotify_auth_response.client_id
 
     return RedirectResponse("/")

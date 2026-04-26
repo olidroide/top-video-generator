@@ -8,6 +8,8 @@ from src.domain.ports import SpotifyPlaylistUpdater
 
 
 class _SpotifyPlaylistClient(Protocol):
+    async def is_authorized(self) -> bool: ...
+
     async def update_link_original_playlist(
         self,
         playlist_id: str | None = None,
@@ -20,6 +22,9 @@ class SpotifyPlaylistUpdaterAdapter(SpotifyPlaylistUpdater):
 
     def __init__(self, client: _SpotifyPlaylistClient) -> None:
         self._client = client
+
+    async def is_authorized(self) -> bool:
+        return await self._client.is_authorized()
 
     async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool:
         return await self._client.update_link_original_playlist(

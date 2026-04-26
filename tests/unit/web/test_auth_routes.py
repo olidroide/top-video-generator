@@ -37,6 +37,12 @@ class _AuthorizeUseCaseStub:
         return _AuthResponse(client_id="sp-client")
 
 
+class _AuthorizeUseCaseSpotifyFailureStub(_AuthorizeUseCaseStub):
+    async def execute_spotify(self, request: object) -> _AuthResponse:
+        self.last_payload = request
+        raise RuntimeError("spotify oauth exchange failed")
+
+
 def test_retry_without_credentials_returns_403() -> None:
     with TestClient(app) as client:
         response = client.post("/retry/?method=fetch")
@@ -69,6 +75,33 @@ def test_yt_auth_without_code_redirects_to_root() -> None:
 
     assert response.status_code == 307
     assert response.headers["location"] == "/"
+
+
+def test_spotify_auth_with_code_redirects_to_root() -> None:
+    use_case_stub = _AuthorizeUseCaseStub()
+    app.dependency_overrides[get_authorize_use_case] = lambda: use_case_stub
+
+    with TestClient(app) as client:
+        response = client.get("/spotify_auth/?code=abc", follow_redirects=False)
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/"
+    assert use_case_stub.last_payload is not None
+
+
+def test_spotify_auth_with_exchange_failure_redirects_to_setup() -> None:
+    use_case_stub = _AuthorizeUseCaseSpotifyFailureStub()
+    app.dependency_overrides[get_authorize_use_case] = lambda: use_case_stub
+
+    with TestClient(app) as client:
+        response = client.get("/spotify_auth/?code=abc", follow_redirects=False)
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/setup"
 
 
 def test_setup_page_renders_viewmodel() -> None:

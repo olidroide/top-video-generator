@@ -39,7 +39,8 @@ def test_configure_optional_certifi_for_development_sets_env(monkeypatch) -> Non
 
     settings = SimpleNamespace(
         env=Environment.DEVELOPMENT,
-        instagram_dev_use_certifi=True,
+        use_certifi=True,
+        ca_bundle_file=None,
     )
 
     _configure_optional_certifi_for_development(settings)
@@ -51,7 +52,8 @@ def test_configure_optional_certifi_for_development_sets_env(monkeypatch) -> Non
 def test_configure_optional_ssl_bypass_for_development_disables_verification() -> None:
     settings = SimpleNamespace(
         env=Environment.DEVELOPMENT,
-        instagram_dev_use_certifi=True,
+        use_certifi=True,
+        ca_bundle_file=None,
     )
     client = _FakeInstagramClient()
 
@@ -64,7 +66,8 @@ def test_configure_optional_ssl_bypass_for_development_disables_verification() -
 def test_configure_optional_ssl_bypass_skips_in_production() -> None:
     settings = SimpleNamespace(
         env=Environment.PRODUCTION,
-        instagram_dev_use_certifi=True,
+        use_certifi=True,
+        ca_bundle_file=None,
     )
     client = _FakeInstagramClient()
 
@@ -77,7 +80,8 @@ def test_configure_optional_ssl_bypass_skips_in_production() -> None:
 def test_should_skip_session_timeline_probe_in_development_flag_on() -> None:
     settings = SimpleNamespace(
         env=Environment.DEVELOPMENT,
-        instagram_dev_use_certifi=True,
+        use_certifi=True,
+        ca_bundle_file=None,
     )
 
     assert _should_skip_session_timeline_probe(settings) is True
@@ -86,7 +90,8 @@ def test_should_skip_session_timeline_probe_in_development_flag_on() -> None:
 def test_should_not_skip_session_timeline_probe_in_production() -> None:
     settings = SimpleNamespace(
         env=Environment.PRODUCTION,
-        instagram_dev_use_certifi=True,
+        use_certifi=True,
+        ca_bundle_file=None,
     )
 
     assert _should_skip_session_timeline_probe(settings) is False

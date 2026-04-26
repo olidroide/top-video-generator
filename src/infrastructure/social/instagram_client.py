@@ -2,11 +2,11 @@ import asyncio
 import importlib
 import importlib.util
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 from src.config.settings import AppSettings, Environment, get_app_settings
+from src.infrastructure.social.ssl_context_factory import configure_process_wide_certifi_bundle
 from src.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -21,7 +21,7 @@ class InstagramDependencyError(RuntimeError):
 
 
 def _development_ssl_mode(settings: AppSettings) -> str:
-    if settings.env == Environment.DEVELOPMENT and settings.instagram_dev_use_certifi:
+    if settings.env == Environment.DEVELOPMENT and settings.use_certifi:
         return "development_certifi_and_bypass"
     return "default"
 
@@ -43,32 +43,27 @@ def _import_instagram_client_types() -> tuple[type[Any], type[Exception]]:
 
 
 def _configure_optional_certifi_for_development(settings: AppSettings) -> None:
-    if settings.env != Environment.DEVELOPMENT or not settings.instagram_dev_use_certifi:
+    if settings.env != Environment.DEVELOPMENT or not settings.use_certifi:
         logger.debug(
             "instagram_client.certifi_not_enabled",
             env=settings.env,
-            instagram_dev_use_certifi=settings.instagram_dev_use_certifi,
+            use_certifi=settings.use_certifi,
         )
         return
 
-    try:
-        certifi = importlib.import_module("certifi")
-        cert_bundle = certifi.where()
-    except Exception as exc:  # noqa: BLE001
-        logger.info("instagram_client.certifi_unavailable", error=str(exc))
+    cert_bundle = configure_process_wide_certifi_bundle(settings)
+    if cert_bundle is None:
         return
 
-    os.environ["SSL_CERT_FILE"] = cert_bundle
-    os.environ["REQUESTS_CA_BUNDLE"] = cert_bundle
     logger.info("instagram_client.certifi_enabled_for_development", cert_bundle=cert_bundle)
 
 
 def _configure_optional_ssl_bypass_for_development(instagram_client_instance: Any, settings: AppSettings) -> None:
-    if settings.env != Environment.DEVELOPMENT or not settings.instagram_dev_use_certifi:
+    if settings.env != Environment.DEVELOPMENT or not settings.use_certifi:
         logger.debug(
             "instagram_client.ssl_bypass_not_enabled",
             env=settings.env,
-            instagram_dev_use_certifi=settings.instagram_dev_use_certifi,
+            use_certifi=settings.use_certifi,
         )
         return
 
@@ -81,7 +76,7 @@ def _configure_optional_ssl_bypass_for_development(instagram_client_instance: An
 
 
 def _should_skip_session_timeline_probe(settings: AppSettings) -> bool:
-    return settings.env == Environment.DEVELOPMENT and settings.instagram_dev_use_certifi
+    return settings.env == Environment.DEVELOPMENT and settings.use_certifi
 
 
 def _configure_http_noise_reduction_for_development(settings: AppSettings) -> None:

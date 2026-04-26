@@ -92,23 +92,25 @@ def test_settings_tolerate_missing_optional_local_env(tmp_path: Path, monkeypatc
     for env_var in (
         "TOP_MUSIC_YT_SEARCH_REGION_CODE",
         "TOP_MUSIC_INSTAGRAM_CLIENT_SESSION_FILE",
-        "TOP_MUSIC_INSTAGRAM_DEV_USE_CERTIFI",
+        "TOP_MUSIC_USE_CERTIFI",
+        "TOP_MUSIC_CA_BUNDLE_FILE",
     ):
         monkeypatch.delenv(env_var, raising=False)
 
     settings = _load_settings_from_env_files(base_env, tmp_path / ".env.local")
 
     assert Path(settings.instagram_client_session_file or "") == Path("secrets/instagram_session.json")
-    assert settings.instagram_dev_use_certifi is False
+    assert settings.use_certifi is False
+    assert settings.ca_bundle_file is None
 
 
-def test_settings_load_instagram_dev_use_certifi_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_settings_load_use_certifi_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_env = tmp_path / ".env"
     base_env.write_text(
         "\n".join(
             [
                 "TOP_MUSIC_YT_SEARCH_REGION_CODE=ES",
-                "TOP_MUSIC_INSTAGRAM_DEV_USE_CERTIFI=true",
+                "TOP_MUSIC_USE_CERTIFI=true",
             ]
         )
         + "\n",
@@ -117,13 +119,37 @@ def test_settings_load_instagram_dev_use_certifi_flag(tmp_path: Path, monkeypatc
 
     for env_var in (
         "TOP_MUSIC_YT_SEARCH_REGION_CODE",
-        "TOP_MUSIC_INSTAGRAM_DEV_USE_CERTIFI",
+        "TOP_MUSIC_USE_CERTIFI",
     ):
         monkeypatch.delenv(env_var, raising=False)
 
     settings = _load_settings_from_env_files(base_env, tmp_path / ".env.local")
 
-    assert settings.instagram_dev_use_certifi is True
+    assert settings.use_certifi is True
+
+
+def test_settings_load_custom_ca_bundle_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base_env = tmp_path / ".env"
+    base_env.write_text(
+        "\n".join(
+            [
+                "TOP_MUSIC_YT_SEARCH_REGION_CODE=ES",
+                "TOP_MUSIC_CA_BUNDLE_FILE=/tmp/custom-ca.pem",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    for env_var in (
+        "TOP_MUSIC_YT_SEARCH_REGION_CODE",
+        "TOP_MUSIC_CA_BUNDLE_FILE",
+    ):
+        monkeypatch.delenv(env_var, raising=False)
+
+    settings = _load_settings_from_env_files(base_env, tmp_path / ".env.local")
+
+    assert settings.ca_bundle_file == "/tmp/custom-ca.pem"
 
 
 def test_settings_require_youtube_region_code_and_log_error(
