@@ -24,7 +24,7 @@ from src.infrastructure.social.ssl_context_factory import (
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
-    from SpotipyFree import Spotify as SpotipyFreeSpotify
+    SpotipyFreeSpotify = Any
 
 logger = get_logger(__name__)
 HTTP_ERROR_STATUS_CODE = 400
