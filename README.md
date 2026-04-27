@@ -210,6 +210,24 @@ make quality
 make pre-push-check
 ```
 
+### Optional Spotify Support
+
+Spotify support is now packaged as an optional extra instead of a mandatory base dependency.
+
+Use the default install if you do not need Spotify features:
+
+```bash
+uv sync --all-groups
+```
+
+Install the Spotify extra only when you want Spotify integration enabled:
+
+```bash
+uv sync --all-groups --extra spotify
+```
+
+If the Spotify extra is not installed, the application still starts normally, but Spotify-specific flows will fail with a clear installation hint when invoked.
+
 ### Spotify OAuth Troubleshooting
 
 If the admin live check shows Spotify errors such as:
@@ -226,6 +244,28 @@ What to do:
 3. Re-run the daily publish job after the check is `VERIFIED`.
 
 Runtime behavior: the vertical publish flow now skips Spotify playlist updates when authorization is invalid, so YouTube/TikTok/Instagram publishing continues.
+
+### Optional TikTok Support
+
+TikTok publishing now depends on the optional `tiktok` extra.
+
+Use the default install if you do not need TikTok publishing:
+
+```bash
+uv sync --all-groups
+```
+
+Install the TikTok extra only when you want TikTok integration enabled:
+
+```bash
+uv sync --all-groups --extra tiktok
+```
+
+TikTok uploader runtime also requires Playwright browser binaries:
+
+```bash
+uv run playwright install
+```
 
 ### Git Hooks
 

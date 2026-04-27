@@ -11,14 +11,13 @@ from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
 from src.application.get_setup_page_use_case import GetSetupPageUseCase
 from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
 from src.config.settings import AppSettings, get_app_settings
-from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
+from src.domain.models import SpotifyAuth, YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
 from src.domain.ports import IntegrationChecker, OAuthProvider
 from src.domain.ports import ReleaseDateValidator as ReleaseRepositoryPort
 from src.domain.ports import TimeSeriesReader as TimeSeriesRepositoryPort
 from src.domain.ports import VideoMetadataReader as VideoRepositoryPort
 from src.infrastructure.social.spotify_client import SpotifyClient
-from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository as TinyDbReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository as TinyDbTimeSeriesRepository
@@ -43,12 +42,6 @@ def get_yt_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> OAuthProvider[YtAuth]:
     return get_yt_client(settings)
-
-
-def get_tiktok_provider(
-    settings: Annotated[AppSettings, Depends(get_settings)],
-) -> OAuthProvider[TikTokAuth]:
-    return TikTokClient(settings)
 
 
 def get_spotify_provider(
@@ -76,13 +69,11 @@ def get_video_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> V
 def get_authorize_use_case(
     auth_repo: Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)],
     yt_provider: Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)],
-    tiktok_provider: Annotated[OAuthProvider[TikTokAuth], Depends(get_tiktok_provider)],
     spotify_provider: Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)],
 ) -> AuthorizeUseCase:
     return AuthorizeUseCase(
         auth_repo=auth_repo,
         yt_provider=yt_provider,
-        tiktok_provider=tiktok_provider,
         spotify_provider=spotify_provider,
     )
 
@@ -104,13 +95,11 @@ def get_top_videos_dashboard_use_case(
 def get_setup_page_use_case(
     auth_repo: Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)],
     yt_provider: Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)],
-    tiktok_provider: Annotated[OAuthProvider[TikTokAuth], Depends(get_tiktok_provider)],
     spotify_provider: Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)],
 ) -> GetSetupPageUseCase:
     return GetSetupPageUseCase(
         auth_repo=auth_repo,
         yt_provider=yt_provider,
-        tiktok_provider=tiktok_provider,
         spotify_provider=spotify_provider,
     )
 
@@ -139,7 +128,6 @@ CheckPlatformConnectionUseCaseDep = Annotated[
 ReleaseRepositoryDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
 ReleaseReadPortDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
 SpotifyProviderDep = Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)]
-TikTokProviderDep = Annotated[OAuthProvider[TikTokAuth], Depends(get_tiktok_provider)]
 YouTubeProviderDep = Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)]
 TimeSeriesRepositoryDep = Annotated[TimeSeriesRepositoryPort, Depends(get_timeseries_repo)]
 VideoRepositoryDep = Annotated[VideoRepositoryPort, Depends(get_video_repo)]

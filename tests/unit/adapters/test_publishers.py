@@ -108,9 +108,9 @@ class TestTikTokPublisher:
         from src.adapters.tiktok_publisher import TikTokPublisher
 
         mock_client = MagicMock()
-        mock_client.upload_video = AsyncMock(return_value="tt_video_id")
+        mock_client.upload_video = MagicMock(return_value="tt_video_id")
 
-        with patch("src.adapters.tiktok_publisher.TikTokClient", return_value=mock_client):
+        with patch("src.adapters.tiktok_publisher.TikTokUploaderClient", return_value=mock_client):
             publisher = TikTokPublisher()
             result = await publisher.publish_video(
                 video_list=_VIDEO_LIST,
@@ -127,9 +127,9 @@ class TestTikTokPublisher:
         from src.adapters.tiktok_publisher import TikTokPublisher
 
         mock_client = MagicMock()
-        mock_client.upload_video = AsyncMock(side_effect=RuntimeError("tiktok error"))
+        mock_client.upload_video = MagicMock(side_effect=RuntimeError("tiktok error"))
 
-        with patch("src.adapters.tiktok_publisher.TikTokClient", return_value=mock_client):
+        with patch("src.adapters.tiktok_publisher.TikTokUploaderClient", return_value=mock_client):
             publisher = TikTokPublisher()
             result = await publisher.publish_video(
                 video_list=_VIDEO_LIST,

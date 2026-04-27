@@ -28,16 +28,25 @@
                     <form>
                         <div class="field">
                             <div class="control">
-                                {% if vm.tiktok_authentication_url %}
-                                    <a class="button is-block is-primary is-fullwidth is-medium is-success"
-                                       href="{{ vm.tiktok_authentication_url }}">
-                                        <i class="fab fa-tiktok"></i> TikTok
-                                    </a>
-                                {% elif vm.tiktok_credentials %}
+                                {% if vm.tiktok_credentials %}
                                     <a class="button is-block is-primary is-fullwidth is-medium is-outlined" disabled>
                                         <i class="fab fa-tiktok"></i> TikTok
                                     </a>
                                     <p class="detail-button"><i class="fas fa-check"></i> is connected</p>
+                                {% else %}
+                                    <label class="label has-text-left">TikTok cookies</label>
+                                    <form action="/tiktok_credentials/" method="post">
+                                        <textarea
+                                            class="textarea"
+                                            name="tiktok_cookies"
+                                            placeholder="Paste TikTok cookies payload"
+                                            rows="4"
+                                            required
+                                        ></textarea>
+                                        <button class="button is-block is-primary is-fullwidth is-medium mt-2" type="submit">
+                                            <i class="fab fa-tiktok"></i> Save TikTok Cookies
+                                        </button>
+                                    </form>
                                 {% endif %}
                             </div>
                         </div>

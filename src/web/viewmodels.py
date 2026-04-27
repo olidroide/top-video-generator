@@ -278,11 +278,11 @@ def build_admin_connections_view_model(
         name="TikTok",
         icon_class="fab fa-tiktok",
         is_connected=result.tiktok_credentials is not None,
-        is_configured=bool(settings.tiktok_client_key and settings.tiktok_client_secret),
+        is_configured=bool(settings.tiktok_cookies_file or settings.tiktok_user_openid),
         is_publish_target=True,
-        auth_url=result.tiktok_authentication_url,
+        auth_url=None,
         connected_id=settings.tiktok_user_openid,
-        auth_type="OAUTH 2.0",
+        auth_type="COOKIE",
         check_result=checks.get("tiktok"),
     )
     spotify = _build_platform_connection_view_model(

@@ -8,7 +8,6 @@ from src.application.get_setup_page_use_case import GetSetupPageRequest, GetSetu
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.domain.ports import AuthCredentialStore
 from src.infrastructure.social.spotify_client import SpotifyClient
-from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.youtube.yt_client import YTClient
 
 
@@ -44,12 +43,6 @@ def _build_youtube_provider() -> YTClient:
     return provider
 
 
-def _build_tiktok_provider() -> TikTokClient:
-    provider: TikTokClient = create_autospec(TikTokClient, instance=True)
-    provider.step_1_get_authentication_url.return_value = "https://tt.example/auth"
-    return provider
-
-
 def _build_spotify_provider() -> SpotifyClient:
     provider: SpotifyClient = create_autospec(SpotifyClient, instance=True)
     provider.step_1_get_authentication_url.return_value = "https://sp.example/auth"
@@ -61,7 +54,6 @@ class TestGetSetupPageUseCase:
         use_case = GetSetupPageUseCase(
             _build_auth_repo(),
             _build_youtube_provider(),
-            _build_tiktok_provider(),
             _build_spotify_provider(),
         )
 
@@ -96,7 +88,6 @@ class TestGetSetupPageUseCase:
         use_case = GetSetupPageUseCase(
             auth_repo,
             _build_youtube_provider(),
-            _build_tiktok_provider(),
             _build_spotify_provider(),
         )
 
@@ -128,7 +119,6 @@ class TestGetSetupPageUseCase:
         use_case = GetSetupPageUseCase(
             auth_repo,
             _build_youtube_provider(),
-            _build_tiktok_provider(),
             _build_spotify_provider(),
         )
 
@@ -145,5 +135,5 @@ class TestGetSetupPageUseCase:
 
         assert result.is_completed is False
         assert result.yt_authentication_url == "https://yt.example/auth"
-        assert result.tiktok_authentication_url == "https://tt.example/auth"
+        assert result.tiktok_authentication_url is None
         assert result.spotify_authentication_url == "https://sp.example/auth"

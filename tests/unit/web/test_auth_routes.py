@@ -28,7 +28,7 @@ class _AuthorizeUseCaseStub:
         self.last_payload = request
         return _AuthResponse(client_id="yt-client")
 
-    async def execute_tiktok(self, request: object) -> _AuthResponse:
+    async def execute_tiktok_cookies(self, request: object) -> _AuthResponse:
         self.last_payload = request
         return _AuthResponse(client_id="tt-client")
 
@@ -108,7 +108,7 @@ def test_setup_page_renders_viewmodel() -> None:
     setup_result = GetSetupPageResult(
         yt_authentication_url="https://yt.example/auth",
         yt_credentials=None,
-        tiktok_authentication_url="https://tt.example/auth",
+        tiktok_authentication_url=None,
         tiktok_credentials=None,
         spotify_authentication_url="https://sp.example/auth",
         spotify_credentials=None,
@@ -125,8 +125,26 @@ def test_setup_page_renders_viewmodel() -> None:
     assert "Top Video Generator" in response.text
     assert "Setup Platform Connections" in response.text
     assert "https://yt.example/auth" in response.text
-    assert "https://tt.example/auth" in response.text
     assert "https://sp.example/auth" in response.text
+    assert "/tiktok_credentials/" in response.text
+
+
+def test_tiktok_cookie_submission_redirects_to_setup() -> None:
+    use_case_stub = _AuthorizeUseCaseStub()
+    app.dependency_overrides[get_authorize_use_case] = lambda: use_case_stub
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/tiktok_credentials/",
+            data={"tiktok_cookies": "cookie_payload"},
+            follow_redirects=False,
+        )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/setup"
+    assert use_case_stub.last_payload is not None
 
 
 def test_setup_page_redirects_when_completed() -> None:

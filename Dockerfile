@@ -37,11 +37,11 @@ RUN apt-get update && \
 
 COPY pyproject.toml uv.lock README.md LICENSE /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen --extra instagram --no-install-project
+    uv sync --no-dev --frozen --extra instagram --extra tiktok --no-install-project
 
 COPY ./src /app/src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen --extra instagram
+    uv sync --no-dev --frozen --extra instagram --extra tiktok
 
 FROM python:3.13.9-slim-bookworm
 LABEL MAINTAINER="top-video-generator@olidroide.es"
@@ -51,6 +51,7 @@ LABEL org.opencontainers.image.description="Automated trending music video pipel
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
     IMAGEIO_FFMPEG_EXE="/usr/bin/ffmpeg" \
+    PLAYWRIGHT_BROWSERS_PATH="/ms-playwright" \
     MAGICK_HOME="/usr" \
     MAGICK_CONFIGURE_PATH="/etc/ImageMagick-6" \
     FONTCONFIG_PATH="/etc/fonts"
@@ -84,6 +85,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
+# Install Playwright browser binaries required by tiktok-uploader.
+RUN /app/.venv/bin/playwright install --with-deps chromium
+
 # Install project-provided fonts in standard locations and expose predictable paths
 COPY ./src/resources/fonts/* /usr/local/share/fonts/truetype/custom/
 COPY ./src/resources/fonts/* /usr/share/fonts/truetype/custom/
@@ -115,7 +119,7 @@ ARG GID=1000
 RUN groupadd -g "${GID}" app && \
     useradd --create-home --no-log-init -u "${UID}" -g "${GID}" app && \
     mkdir -p /app/run && \
-    chown app:app /app/run
+    chown app:app /app/run /ms-playwright
 
 # Copy application files
 COPY ./src /app/src

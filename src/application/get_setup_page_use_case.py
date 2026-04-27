@@ -42,12 +42,10 @@ class GetSetupPageUseCase:
         self,
         auth_repo: AuthCredentialStore,
         yt_provider: OAuthProvider[YtAuth],
-        tiktok_provider: OAuthProvider[TikTokAuth],
         spotify_provider: OAuthProvider[SpotifyAuth],
     ) -> None:
         self._auth_repo = auth_repo
         self._yt_provider = yt_provider
-        self._tiktok_provider = tiktok_provider
         self._spotify_provider = spotify_provider
 
     async def execute(self, request: GetSetupPageRequest) -> GetSetupPageResult:
@@ -66,9 +64,7 @@ class GetSetupPageUseCase:
         )
 
         yt_authentication_url = None if yt_credentials else await self._yt_provider.step_1_get_authentication_url()
-        tiktok_authentication_url = (
-            None if tiktok_credentials else await self._tiktok_provider.step_1_get_authentication_url()
-        )
+        tiktok_authentication_url = None
         spotify_authentication_url = (
             None if spotify_credentials else await self._spotify_provider.step_1_get_authentication_url()
         )

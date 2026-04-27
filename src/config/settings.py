@@ -72,6 +72,8 @@ class AppSettings(BaseSettings):
     tiktok_redirect_uri: str | None = None
     tiktok_app_id: str | None = None
     tiktok_user_openid: str | None = None
+    tiktok_cookies_file: str | None = None
+    tiktok_browser: str = "chrome"
 
     spotify_client_id: str | None = None
     spotify_client_secret: str | None = None

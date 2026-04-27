@@ -1,15 +1,15 @@
 """Authentication, setup, and retry routes."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.responses import RedirectResponse, Response
-from starlette.status import HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
+from starlette.status import HTTP_303_SEE_OTHER, HTTP_307_TEMPORARY_REDIRECT, HTTP_403_FORBIDDEN
 
 from src.application.authorize_use_case import (
     AuthorizeSpotifyRequest,
-    AuthorizeTikTokRequest,
+    AuthorizeTikTokCookiesRequest,
     AuthorizeYtRequest,
 )
 from src.application.get_setup_page_use_case import GetSetupPageRequest
@@ -80,21 +80,39 @@ async def yt_auth(
 )
 async def tiktok_auth(
     request: Request,
-    use_case: AuthorizeUseCaseDep,
-    code: str | None = None,
+    _use_case: AuthorizeUseCaseDep,
+    _code: str | None = None,
     _scopes: str | None = None,
     _state: str | None = None,
     _error: str | None = None,
     _error_description: str | None = None,
 ) -> Response:
-    if not code:
-        logger.warning("Not CODE received in callback TikTok Auth", request=request.url)
-        return RedirectResponse("/")
+    logger.warning("tiktok.oauth_callback_deprecated", request=request.url)
+    return RedirectResponse("/setup")
 
-    tiktok_auth_response = await use_case.execute_tiktok(AuthorizeTikTokRequest(code=code))
+
+@router.post(
+    "/tiktok_credentials/",
+    response_class=RedirectResponse,
+    status_code=HTTP_303_SEE_OTHER,
+)
+async def save_tiktok_credentials(
+    request: Request,
+    use_case: AuthorizeUseCaseDep,
+    settings: AppSettingsDep,
+    tiktok_cookies: Annotated[str, Form()],
+) -> Response:
+    cookies = tiktok_cookies.strip()
+    if not cookies:
+        logger.warning("tiktok.cookies_empty", request=request.url)
+        return RedirectResponse("/setup", status_code=HTTP_303_SEE_OTHER)
+
+    client_id = settings.tiktok_user_openid or "default"
+    tiktok_auth_response = await use_case.execute_tiktok_cookies(
+        AuthorizeTikTokCookiesRequest(cookies=cookies, client_id=client_id)
+    )
     request.session["tiktok_credentials"] = tiktok_auth_response.client_id
-
-    return RedirectResponse("/")
+    return RedirectResponse("/setup", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.get(

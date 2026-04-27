@@ -7,14 +7,13 @@ from unittest.mock import create_autospec
 
 from src.application.authorize_use_case import (
     AuthorizeSpotifyRequest,
-    AuthorizeTikTokRequest,
+    AuthorizeTikTokCookiesRequest,
     AuthorizeUseCase,
     AuthorizeYtRequest,
 )
 from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
 from src.domain.ports import AuthCredentialStore
 from src.infrastructure.social.spotify_client import SpotifyClient
-from src.infrastructure.social.tiktok_client import TikTokClient
 from src.infrastructure.youtube.yt_client import YTClient
 
 # ---------------------------------------------------------------------------
@@ -31,17 +30,6 @@ def make_yt_provider(credentials: YtAuth | None = None) -> YTClient:
         client_id="yt_client_id",
         client_secret="yt_secret",
         scopes=["https://www.googleapis.com/auth/youtube"],
-    )
-    return mock
-
-
-def make_tiktok_provider(credentials: TikTokAuth | None = None) -> TikTokClient:
-    mock: TikTokClient = create_autospec(TikTokClient, instance=True)
-    mock.step_2_exchange_code_authentication.return_value = credentials or TikTokAuth(
-        token="tt_token",
-        refresh_token="tt_refresh",
-        client_id="tt_open_id",
-        scopes=["user.info.basic", "video.upload"],
     )
     return mock
 
@@ -65,7 +53,6 @@ def make_use_case(_tmp_path: Path) -> AuthorizeUseCase:
     return AuthorizeUseCase(
         auth_repo=auth_repo,
         yt_provider=make_yt_provider(),
-        tiktok_provider=make_tiktok_provider(),
         spotify_provider=make_spotify_provider(),
     )
 
@@ -94,7 +81,6 @@ class TestAuthorizeUseCaseYouTube:
         use_case = AuthorizeUseCase(
             auth_repo=auth_repo,
             yt_provider=yt_provider,
-            tiktok_provider=make_tiktok_provider(),
             spotify_provider=make_spotify_provider(),
         )
         url = "https://example.com/?code=abc"
@@ -105,48 +91,33 @@ class TestAuthorizeUseCaseYouTube:
 
 
 class TestAuthorizeUseCaseTikTok:
-    async def test_execute_tiktok_persists_and_returns_tiktok_auth(self, tmp_path: Path) -> None:
+    async def test_execute_tiktok_cookies_persists_and_returns_tiktok_auth(self, tmp_path: Path) -> None:
         use_case = make_use_case(tmp_path)
 
-        result = await use_case.execute_tiktok(AuthorizeTikTokRequest(code="tt_code"))
+        result = await use_case.execute_tiktok_cookies(
+            AuthorizeTikTokCookiesRequest(cookies="cookie_payload", client_id="tt-open-id")
+        )
 
         assert isinstance(result, TikTokAuth)
-        assert result.token == "tt_token"
-        assert result.client_id == "tt_open_id"
+        assert result.token == "cookie_payload"
+        assert result.client_id == "tt-open-id"
+        assert result.scopes == ["cookies"]
 
-    async def test_execute_tiktok_calls_provider_with_code(self, tmp_path: Path) -> None:
+    async def test_execute_tiktok_cookies_calls_auth_repo(self, tmp_path: Path) -> None:
         _ = tmp_path
-        provider = make_tiktok_provider()
         auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
         auth_repo.add_or_update_tiktok_auth.side_effect = lambda tiktok_auth: tiktok_auth
         use_case = AuthorizeUseCase(
             auth_repo=auth_repo,
             yt_provider=make_yt_provider(),
-            tiktok_provider=provider,
             spotify_provider=make_spotify_provider(),
         )
 
-        await use_case.execute_tiktok(AuthorizeTikTokRequest(code="tt_code"))
-
-        provider.step_2_exchange_code_authentication.assert_awaited_once_with("tt_code")
-
-    async def test_execute_tiktok_scopes_parsed_from_comma_separated(self, tmp_path: Path) -> None:
-        _ = tmp_path
-        provider = make_tiktok_provider(
-            TikTokAuth(token="t", refresh_token="r", client_id="oid", scopes=["a", "b", "c"])
-        )
-        auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
-        auth_repo.add_or_update_tiktok_auth.side_effect = lambda tiktok_auth: tiktok_auth
-        use_case = AuthorizeUseCase(
-            auth_repo=auth_repo,
-            yt_provider=make_yt_provider(),
-            tiktok_provider=provider,
-            spotify_provider=make_spotify_provider(),
+        await use_case.execute_tiktok_cookies(
+            AuthorizeTikTokCookiesRequest(cookies="cookie_payload", client_id="tt-open-id")
         )
 
-        result = await use_case.execute_tiktok(AuthorizeTikTokRequest(code="c"))
-
-        assert result.scopes == ["a", "b", "c"]
+        auth_repo.add_or_update_tiktok_auth.assert_called_once()
 
 
 class TestAuthorizeUseCaseSpotify:
@@ -167,7 +138,6 @@ class TestAuthorizeUseCaseSpotify:
         use_case = AuthorizeUseCase(
             auth_repo=auth_repo,
             yt_provider=make_yt_provider(),
-            tiktok_provider=make_tiktok_provider(),
             spotify_provider=provider,
         )
 
@@ -190,7 +160,6 @@ class TestAuthorizeUseCaseSpotify:
         use_case = AuthorizeUseCase(
             auth_repo=auth_repo,
             yt_provider=make_yt_provider(),
-            tiktok_provider=make_tiktok_provider(),
             spotify_provider=provider,
         )
 

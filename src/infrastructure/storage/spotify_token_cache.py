@@ -5,14 +5,13 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any
 
-from spotipy.cache_handler import CacheHandler
 from tinydb import TinyDB
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-class TinyDBCacheHandler(CacheHandler):
+class TinyDBCacheHandler:
     """Persist Spotipy token info in TinyDB with thread-safe access."""
 
     def __init__(self, db_path: Path, table: str = "spotify_oauth") -> None:
