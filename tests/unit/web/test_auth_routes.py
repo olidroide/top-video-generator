@@ -43,14 +43,6 @@ class _AuthorizeUseCaseSpotifyFailureStub(_AuthorizeUseCaseStub):
         raise RuntimeError("spotify oauth exchange failed")
 
 
-def test_retry_without_credentials_returns_403() -> None:
-    with TestClient(app) as client:
-        response = client.post("/retry/?method=fetch")
-
-    assert response.status_code == 403
-    assert response.json()["message"] == "Method fetch forbidden"
-
-
 def test_yt_auth_with_code_redirects_to_root() -> None:
     use_case_stub = _AuthorizeUseCaseStub()
     app.dependency_overrides[get_authorize_use_case] = lambda: use_case_stub

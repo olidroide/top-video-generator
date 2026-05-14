@@ -54,24 +54,6 @@
                         </div>
 
                         {% if vm.credentials_owner %}
-                            <div class="column is-flex is-justify-content-center">
-                                {% if not vm.video_list %}
-                                    <form action="/retry?method=fetch" method="post">
-                                        <input type="submit" value="Force Fetch Data">
-                                    </form>
-                                {% endif %}
-
-                                {% if not vm.yt_video_published and not vm.is_weekly %}
-                                    <form action="/retry?method=daily" method="post">
-                                        <input type="submit" value="Force Generate & Publish Daily Video">
-                                    </form>
-                                {% endif %}
-                                {% if not vm.yt_video_published and vm.is_weekly %}
-                                    <form action="/retry?method=weekly" method="post">
-                                        <input type="submit" value="Force Generate & Publish Weekly Video">
-                                    </form>
-                                {% endif %}
-                            </div>
                         {% endif %}
 
                     </div>

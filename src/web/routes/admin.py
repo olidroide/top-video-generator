@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import hmac
-from typing import Annotated, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import RedirectResponse, Response
 from starlette.status import HTTP_303_SEE_OTHER
 
 from src.application.check_platform_connection_use_case import CheckPlatformConnectionRequest
 from src.application.get_setup_page_use_case import GetSetupPageRequest
+from src.application.trigger_admin_task_use_case import TriggerAdminTaskRequest
 from src.domain.models import IntegrationCheckResult, IntegrationPlatform
 from src.web.dependencies import (
     CheckPlatformConnectionUseCaseDep,
     TimeSeriesRepositoryDep,
+    TriggerAdminTaskUseCaseDep,
+    get_release_repo,
     get_settings,
     get_setup_page_use_case,
 )
@@ -28,6 +31,11 @@ from src.web.viewmodels import (
     build_admin_health_view_model,
     get_platform_connection_view_model,
 )
+
+if TYPE_CHECKING:
+    from src.config.settings import AppSettings
+else:
+    AppSettings = Any
 
 router = APIRouter(prefix="/admin")
 
@@ -142,8 +150,9 @@ async def admin_logout(request: Request) -> Response:
 async def admin_connections(
     request: Request,
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
-    settings: Annotated[Any, Depends(get_settings)],
+    settings: Annotated[AppSettings, Depends(get_settings)],
     timeseries_repo: TimeSeriesRepositoryDep,
+    release_repo: Annotated[Any, Depends(get_release_repo)],
 ) -> Response:
     if not settings.admin_password:
         return HTMLResponse(status_code=503, content="Admin password not configured")
@@ -158,6 +167,13 @@ async def admin_connections(
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
     health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
     ctx["health_vm"] = build_admin_health_view_model(health)
+
+    # Build tasks panel view model
+    from src.web.viewmodels import build_admin_tasks_view_model
+
+    tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
+    ctx["tasks"] = tasks_vm
+
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
 
@@ -234,4 +250,77 @@ async def admin_health_status(
         request=request,
         name="admin/_health_status.html",
         context={"request": request, "health_vm": build_admin_health_view_model(health)},
+    )
+
+
+@router.get("/tasks/status", response_class=HTMLResponse)
+async def admin_tasks_status(
+    request: Request,
+    timeseries_repo: TimeSeriesRepositoryDep,
+    release_repo: Annotated[Any, Depends(get_release_repo)],
+) -> Response:
+    """HTMX partial — returns the #tasks-grid fragment with task status cards."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+
+    # Build view model from repos
+    from src.web.viewmodels import build_admin_tasks_view_model
+
+    tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_tasks_status.html",
+        context={"request": request, "tasks": tasks_vm},
+    )
+
+
+@router.post("/tasks/{method}/trigger", response_class=HTMLResponse)
+async def trigger_admin_task(
+    request: Request,
+    method: str,
+    background_tasks: BackgroundTasks,
+    trigger_use_case: TriggerAdminTaskUseCaseDep,
+) -> Response:
+    """HTMX endpoint — validates and triggers a background task (fetch/daily/weekly)."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+
+    # Validate and authorize
+    trigger_result = trigger_use_case.execute(
+        TriggerAdminTaskRequest(
+            task_method=method,
+            user_ip=request.client.host if request.client else "unknown",
+        )
+    )
+
+    if not trigger_result.queued:
+        # Validation failed
+        from starlette.responses import PlainTextResponse
+
+        return PlainTextResponse(content=f"Error: {trigger_result.message}", status_code=400)
+
+    # Dispatch background task
+    if method == "fetch":
+        from src.entrypoints.fetch_data import main_async as fetch_main_async
+
+        background_tasks.add_task(fetch_main_async)
+    elif method == "daily":
+        from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
+
+        background_tasks.add_task(publish_vertical_main_async)
+    elif method == "weekly":
+        from src.entrypoints.publish_video import main_async as publish_weekly_main_async
+
+        background_tasks.add_task(publish_weekly_main_async)
+
+    # Return feedback to HTMX
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_task_feedback.html",
+        context={
+            "request": request,
+            "message": trigger_result.message,
+            "task_method": method,
+        },
     )

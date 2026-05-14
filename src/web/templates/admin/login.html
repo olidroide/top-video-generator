@@ -62,10 +62,8 @@
           placeholder="&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;"
           autocomplete="current-password"
           aria-required="true"
-          aria-describedby="password-hint"
           {% if not password_configured %}disabled{% endif %}
         >
-        <small id="password-hint">VALIDATED AGAINST ADMIN_PASSWORD ENV VAR</small>
 
         <button
           type="submit"

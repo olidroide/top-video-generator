@@ -199,6 +199,63 @@ def test_admin_health_status_returns_partial(monkeypatch) -> None:
     assert "Database accessible" in health_response.text
 
 
+def test_admin_task_trigger_requires_authenticated_session() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        response = client.post("/admin/tasks/fetch/trigger")
+
+    assert response.status_code == 403
+
+
+def test_admin_task_trigger_returns_400_for_invalid_method(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/not-a-method/trigger")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 400
+    assert "Invalid task method" in response.text
+
+
+def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeypatch) -> None:
+    from src.entrypoints import fetch_data
+
+    async def _fake_fetch_main_async() -> None:
+        return None
+
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    monkeypatch.setattr(fetch_data, "main_async", _fake_fetch_main_async)
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/fetch/trigger")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert 'id="tasks-feedback"' in response.text
+    assert "Accepted:" in response.text
+    assert "Task &#39;fetch&#39; ready for execution." in response.text
+
+
 def test_admin_connection_check_instagram_not_configured_aligns_card_state(monkeypatch) -> None:
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     app = create_app(

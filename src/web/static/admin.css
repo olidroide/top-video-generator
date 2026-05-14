@@ -106,6 +106,70 @@ header nav button.secondary {
   white-space: nowrap;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.n-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  margin-bottom: 0;
+  border-radius: 0;
+  border: 1px solid var(--n-accent);
+  background: var(--n-accent);
+  color: #fff;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.38rem 0.75rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.n-btn:hover,
+.n-btn:focus-visible {
+  background: var(--pico-primary-hover);
+  border-color: var(--pico-primary-hover);
+  color: #fff;
+}
+
+.n-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.n-btn .htmx-indicator {
+  margin-left: 0.1rem;
+}
+
+.n-btn--outline {
+  border: 1px dashed var(--pico-muted-border-color);
+  background: transparent;
+  color: var(--pico-muted-color);
+  font-weight: 400;
+}
+
+.n-btn--outline:hover,
+.n-btn--outline:focus-visible {
+  border-color: var(--n-accent);
+  color: var(--n-accent);
+  background: transparent;
+}
+
+.n-btn--compact {
+  padding: 0.35rem 0.7rem;
+}
+
+.refresh-action__icon {
+  font-size: 0.7rem;
+}
+
 /* ── Platform cards grid ────────────────────────────── */
 /* Pico's .grid doesn't support minmax; use own grid     */
 .platforms-grid {
@@ -328,6 +392,26 @@ article.platform-card--unconfigured {
   margin-bottom: var(--pico-spacing);
 }
 
+.n-task-feedback {
+  padding: var(--pico-spacing);
+  margin: var(--pico-spacing) 0;
+  border-radius: var(--pico-border-radius);
+  font-family: var(--n-font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+}
+
+.n-task-feedback-placeholder {
+  display: none;
+  margin-top: var(--pico-spacing);
+}
+
+.n-task-feedback--accepted {
+  color: var(--pico-muted-color);
+  background-color: rgba(148, 163, 184, 0.09);
+  border: 1px dashed var(--pico-muted-border-color);
+}
+
 /* ── Theme toggle (floating on login page) ──────────── */
 .theme-toggle-float {
   position: fixed;
@@ -365,6 +449,11 @@ article.platform-card--unconfigured {
 .htmx-request.htmx-indicator {
   display: inline-block;
   opacity: 1;
+}
+
+button.htmx-request .refresh-action__icon {
+  animation: n-spin 0.65s linear infinite;
+  display: inline-block;
 }
 
 @keyframes n-spin {

@@ -8,8 +8,10 @@ from fastapi import Depends, Request
 from src.application.authorize_use_case import AuthorizeUseCase
 from src.application.check_platform_connection_use_case import CheckPlatformConnectionUseCase
 from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
+from src.application.get_admin_task_status_use_case import GetAdminTaskStatusUseCase
 from src.application.get_setup_page_use_case import GetSetupPageUseCase
 from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
+from src.application.trigger_admin_task_use_case import TriggerAdminTaskUseCase
 from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import SpotifyAuth, YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
@@ -116,6 +118,17 @@ def get_check_platform_connection_use_case(
     return CheckPlatformConnectionUseCase(checkers=checkers)
 
 
+def get_admin_task_status_use_case(
+    timeseries_repo: Annotated[TimeSeriesRepositoryPort, Depends(get_timeseries_repo)],
+    release_repo: Annotated[ReleaseRepositoryPort, Depends(get_release_repo)],
+) -> GetAdminTaskStatusUseCase:
+    return GetAdminTaskStatusUseCase(timeseries_repo, release_repo)
+
+
+def get_trigger_admin_task_use_case() -> TriggerAdminTaskUseCase:
+    return TriggerAdminTaskUseCase()
+
+
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]
 AppSettingsDep = Annotated[AppSettings, Depends(get_settings)]
 AuthenticationRepositoryDep = Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)]
@@ -131,3 +144,5 @@ SpotifyProviderDep = Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_p
 YouTubeProviderDep = Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)]
 TimeSeriesRepositoryDep = Annotated[TimeSeriesRepositoryPort, Depends(get_timeseries_repo)]
 VideoRepositoryDep = Annotated[VideoRepositoryPort, Depends(get_video_repo)]
+GetAdminTaskStatusUseCaseDep = Annotated[GetAdminTaskStatusUseCase, Depends(get_admin_task_status_use_case)]
+TriggerAdminTaskUseCaseDep = Annotated[TriggerAdminTaskUseCase, Depends(get_trigger_admin_task_use_case)]

@@ -1,5 +1,66 @@
 # GitHub Copilot Instructions
 
+## Context-Mode Mandatory Routing
+
+context-mode MCP tools are mandatory for context protection. Follow these rules to avoid flooding the context window.
+
+### Think In Code (Mandatory)
+
+When you need to analyze, count, filter, compare, search, parse, or transform data:
+
+- Use `ctx_execute(language, code)` or `ctx_execute_file(path, language, code)`.
+- Program the analysis and print only the final answer.
+- Prefer pure JavaScript with Node.js built-ins (`fs`, `path`, `child_process`) for data processing.
+- Use `try/catch` and null-safe handling.
+
+### Blocked Flows
+
+Do not retry blocked routes. Use the approved alternatives.
+
+- Terminal `curl`/`wget` -> use `ctx_fetch_and_index(url, source)` or `ctx_execute(...)` with sandboxed fetch.
+- Inline HTTP (`fetch('http`, `requests.get(`, `requests.post(`, `http.get(`, `http.request(`) -> use `ctx_execute(...)`.
+- WebFetch/fetch tools for web research -> use `ctx_fetch_and_index(...)` then `ctx_search(...)`.
+
+### Redirected Flows
+
+- Terminal commands that may produce large output (>20 lines): use `ctx_batch_execute(...)` or `ctx_execute(language: "shell", code: "...")`.
+- Keep terminal for operational commands such as `git`, `mkdir`, `rm`, `mv`, `cd`, `ls`, `npm install`, `pip install`.
+- `read_file` for analysis is disallowed. Use `ctx_execute_file(...)`.
+- `read_file` is allowed when reading files you will edit.
+
+### Tool Selection Order
+
+1. Memory resume: `ctx_search(sort: "timeline")`.
+2. Gather: `ctx_batch_execute(commands, queries)`.
+3. Follow-up: `ctx_search(queries: [...])`.
+4. Processing: `ctx_execute(...)` or `ctx_execute_file(...)`.
+5. Web: `ctx_fetch_and_index(...)` then `ctx_search(...)`.
+6. Indexing docs: `ctx_index(content|path, source)`.
+
+### Parallel I/O Rule
+
+- Use `concurrency: 4-8` for I/O-bound multi-request batches.
+- Use `concurrency: 1` for CPU-bound tasks (tests/build/lint) or stateful operations.
+
+### Output Policy
+
+- Write artifacts to files, never inline long artifacts.
+- Return artifact path plus one-line description.
+
+### Session Continuity
+
+- Keep active skills, roles, and decisions for the full session unless explicitly changed.
+- On resume, search memory first before asking what was in progress.
+
+### Context Commands
+
+- `ctx stats` -> call stats tool and show full output verbatim.
+- `ctx doctor` -> call doctor tool, run returned command, show checklist output.
+- `ctx upgrade` -> call upgrade tool, run returned command, show checklist output.
+- `ctx purge` -> call purge with `confirm: true` and warn it is irreversible.
+
+After `/clear` or `/compact`, context-mode knowledge base is preserved. Use `ctx purge` to start fresh.
+
 ## Project Scope
 
 Repo automate trending music video pipeline: fetch trending YouTube music data, score candidates, generate horizontal+vertical videos, publish, update Spotify state.
@@ -164,6 +225,26 @@ Change not complete unless all true:
 - Tests added or updated when behavior changed.
 - Formatting, lint, type checking, relevant tests run or reason stated explicitly.
 - No secrets or generated auth artifacts introduced.
+
+## Proof of Work (Mandatory)
+
+For every code change, always provide a concise Proof of Work block in the final response.
+
+Required PoW contents:
+
+- Commands executed.
+- Tests executed.
+- Pass/fail counts.
+- Validated user-facing flows.
+- Non-validated flows (if any), with explicit reason.
+
+Minimum validation by change type:
+
+- Backend/API route changes: success path test, validation/error path test, auth/permission test, and relevant unit test file run.
+- Web/HTMX visual changes: fragment rendering assertions (target id/expected labels/status text), plus relevant web unit test file run.
+- Cross-layer behavior changes: run all relevant unit tests for impacted layers and state any remaining gaps.
+
+Do not mark work as complete without PoW unless blocked by environment constraints; if blocked, state the blocker and provide a nearest viable alternative check.
 
 ## Skill Routing
 
