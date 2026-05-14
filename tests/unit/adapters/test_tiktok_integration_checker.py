@@ -11,6 +11,10 @@ async def test_tiktok_checker_not_configured_when_dependency_missing(monkeypatch
     checker = TikTokIntegrationChecker()
 
     monkeypatch.setattr("src.adapters.tiktok_integration_checker.is_tiktok_uploader_available", lambda: False)
+    monkeypatch.setattr(
+        "src.adapters.tiktok_integration_checker.get_app_settings",
+        lambda: pytest.fail("settings should not be loaded when dependency is missing"),
+    )
 
     result = await checker.check_connection()
 

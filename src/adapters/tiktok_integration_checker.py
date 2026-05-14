@@ -15,8 +15,11 @@ class TikTokIntegrationChecker:
 
     @property
     def is_configured(self) -> bool:
+        if not is_tiktok_uploader_available():
+            return False
+
         settings = get_app_settings()
-        return is_tiktok_uploader_available() and bool(settings.tiktok_cookies_file or settings.tiktok_user_openid)
+        return bool(settings.tiktok_cookies_file or settings.tiktok_user_openid)
 
     @property
     def is_publish_target(self) -> bool:
