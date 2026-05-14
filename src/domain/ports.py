@@ -59,6 +59,8 @@ class IntegrationChecker(Protocol):
 
 
 class TimeSeriesReader(Protocol):
+    def get_last_timestamp(self) -> datetime | None: ...
+
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]: ...
 
 
@@ -85,6 +87,8 @@ class ReleaseDateValidator(Protocol):
 
 
 class ReleaseStore(Protocol):
+    def get_release(self, platform: str, client_id: str, release_kind: str | None = None) -> Release | None: ...
+
     def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool: ...
 
     def add_or_update_release(self, release: Release) -> Release: ...
