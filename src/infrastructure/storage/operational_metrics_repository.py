@@ -21,9 +21,10 @@ class OperationalMetricsRepository:
     _SUPPORTED_STAGES = frozenset({"fetch", "processing", "upload"})
 
     def __init__(self, db_path: str, *, retention_days: int | None = None) -> None:
+        db_file = Path(db_path)
+        db_file.parent.mkdir(parents=True, exist_ok=True)
         self._db = TinyFlux(db_path)
         self._retention_days = retention_days
-        db_file = Path(db_path)
         self._lock_path = db_file.with_suffix(f"{db_file.suffix}.lock")
 
     def record_metric_event(

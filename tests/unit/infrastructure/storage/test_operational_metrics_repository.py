@@ -48,3 +48,13 @@ def test_retention_prunes_old_metric_events(tmp_path) -> None:
     assert counts["fetch"]["count"] == 1
     assert counts["fetch"]["errors"] == 0
     repo.close()
+
+
+def test_repository_creates_missing_parent_directory(tmp_path) -> None:
+    db_path = tmp_path / "missing" / "nested" / "timeseries.csv"
+
+    repo = OperationalMetricsRepository(str(db_path))
+    repo.record_metric_event(stage="fetch", is_error=False)
+
+    assert db_path.exists()
+    repo.close()
