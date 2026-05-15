@@ -11,10 +11,10 @@ from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from src.application.get_admin_task_status_use_case import TaskStatusResult
     from src.application.get_setup_page_use_case import GetSetupPageResult
     from src.config.settings import AppSettings
     from src.domain.models import SpotifyAuth, TikTokAuth, Video, YtAuth
-    from src.domain.ports import ReleaseStore, TimeSeriesReader
 
 
 _SPOTIFY_REAUTH_PREFIX = "Spotify authorization is invalid or expired."
@@ -448,61 +448,54 @@ def build_time_label(timestamp: float | None) -> str:
 
 
 def build_admin_tasks_view_model(
-    timeseries_repo: TimeSeriesReader,
-    release_repo: ReleaseStore,
+    task_status: TaskStatusResult,
 ) -> AdminTasksPanelViewModel:
     """
-    Build admin tasks panel by reading current status from repositories.
+    Build admin tasks panel from persisted task execution status.
 
     Args:
-        timeseries_repo: TimeSeriesReader port for fetch status
-        release_repo: ReleaseStore port for daily/weekly release status
+        task_status: Result from GetAdminTaskStatusUseCase
 
     Returns:
         AdminTasksPanelViewModel with task statuses
     """
     from datetime import UTC, datetime
 
-    from src.config.settings import get_app_settings
-    from src.domain.models import Platform, ReleaseKind
+    from src.domain.models import Platform
 
     now = datetime.now(UTC)
 
-    # Fetch timeseries last timestamp
-    fetch_last_timestamp = timeseries_repo.get_last_timestamp()
-    fetch_last_float = fetch_last_timestamp.timestamp() if fetch_last_timestamp else None
+    fetch_last_float = task_status.fetch_last_timestamp
     fetch_hours = (now.timestamp() - fetch_last_float) / _SECONDS_PER_HOUR if fetch_last_float else None
     fetch_older_than_24h = fetch_hours is not None and fetch_hours >= _HOURS_PER_DAY
 
     # Daily vertical releases
     daily_task_vm = AdminTaskViewModel(
-        name="Daily Vertical Videos",
+        name="Fetch Data",
         last_run_label=build_time_label(fetch_last_float),
         hours_since=int(fetch_hours) if fetch_hours else None,
         older_than_24h=fetch_older_than_24h,
-        source="timeseries" if fetch_last_float else "never",
+        source="task_run_state" if fetch_last_float else "never",
         applicable=True,
         warning_message="No videos fetched in 24+ hours" if fetch_older_than_24h else None,
     )
 
-    # Weekly horizontal YouTube
-    settings = get_app_settings()
-    weekly_client_id = settings.yt_auth_user_id or "default"
-    weekly_yt_release = release_repo.get_release(
-        platform=Platform.YOUTUBE.value,
-        client_id=weekly_client_id,
-        release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
+    daily_timestamp = task_status.daily_last_timestamp
+    daily_hours = (now.timestamp() - daily_timestamp) / _SECONDS_PER_HOUR if daily_timestamp else None
+    daily_older_than_24h = daily_hours is not None and daily_hours >= _HOURS_PER_DAY
+
+    daily_publish_task_vm = AdminTaskViewModel(
+        name="Daily Vertical Videos",
+        last_run_label=build_time_label(daily_timestamp),
+        hours_since=int(daily_hours) if daily_hours else None,
+        older_than_24h=daily_older_than_24h,
+        source="task_run_state" if daily_timestamp else "never",
+        applicable=True,
+        warning_message="No daily publish in 24+ hours" if daily_older_than_24h else None,
     )
 
-    # Backward-compatible fallback for existing releases persisted under legacy default client id.
-    if weekly_yt_release is None and weekly_client_id != "default":
-        weekly_yt_release = release_repo.get_release(
-            platform=Platform.YOUTUBE.value,
-            client_id="default",
-            release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
-        )
-
-    weekly_yt_timestamp = weekly_yt_release.published_at if weekly_yt_release else None
+    # Weekly horizontal YouTube
+    weekly_yt_timestamp = task_status.weekly_last_timestamp
     weekly_yt_hours = (now.timestamp() - weekly_yt_timestamp) / _SECONDS_PER_HOUR if weekly_yt_timestamp else None
     weekly_yt_older_than_24h = weekly_yt_hours is not None and weekly_yt_hours >= _HOURS_PER_WEEK
 
@@ -511,12 +504,12 @@ def build_admin_tasks_view_model(
         last_run_label=build_time_label(weekly_yt_timestamp),
         hours_since=int(weekly_yt_hours) if weekly_yt_hours else None,
         older_than_24h=weekly_yt_older_than_24h,
-        source="release" if weekly_yt_timestamp else "never",
+        source="task_run_state" if weekly_yt_timestamp else "never",
         applicable=True,
         warning_message="No weekly publish in 7+ days" if weekly_yt_older_than_24h else None,
     )
 
-    tasks: list[AdminTaskViewModel] = [daily_task_vm, weekly_yt_task_vm]
+    tasks: list[AdminTaskViewModel] = [daily_task_vm, daily_publish_task_vm, weekly_yt_task_vm]
 
     # Weekly horizontal for non-YouTube platforms (not applicable)
     for platform in [Platform.TIKTOK, Platform.INSTAGRAM, Platform.SPOTIFY]:

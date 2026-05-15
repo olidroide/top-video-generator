@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from src.domain.models import TaskMethod, TaskRunStatus
 from src.shared.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.domain.ports import TaskRunStateWriter
 
 logger = get_logger(__name__)
 
@@ -40,8 +45,9 @@ class TriggerAdminTaskUseCase:
     scheduling execution.
     """
 
-    def __init__(self) -> None:
-        """Initialize use case."""
+    def __init__(self, task_run_state_writer: TaskRunStateWriter) -> None:
+        """Initialize use case with task-run persistence writer."""
+        self._task_run_state_writer = task_run_state_writer
 
     def execute(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
         """
@@ -72,7 +78,27 @@ class TriggerAdminTaskUseCase:
             user_ip=request.user_ip,
         )
 
+        self._task_run_state_writer.record_task_event(
+            task_method=TaskMethod(request.task_method),
+            status=TaskRunStatus.QUEUED,
+        )
+
         return TriggerAdminTaskResult(
             queued=True,
-            message=f"Task '{request.task_method}' ready for execution.",
+            message=f"Task '{request.task_method}' scheduled. Background execution will begin shortly.",
+        )
+
+    def mark_completed(self, *, task_method: str) -> None:
+        """Persist successful completion for a task method."""
+        self._task_run_state_writer.record_task_event(
+            task_method=TaskMethod(task_method),
+            status=TaskRunStatus.SUCCESS,
+        )
+
+    def mark_failed(self, *, task_method: str, error_message: str) -> None:
+        """Persist failed completion for a task method."""
+        self._task_run_state_writer.record_task_event(
+            task_method=TaskMethod(task_method),
+            status=TaskRunStatus.FAILED,
+            error_message=error_message,
         )

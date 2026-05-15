@@ -159,24 +159,24 @@ async def main_async() -> None:
             )
             try:
                 await job.runner()
-            except Exception as exc:
+                last_successful_job_name = job.name
+                logger.info("scheduler.job_finished", job=job.name)
                 await _write_heartbeat(
                     heartbeat_file,
-                    status="error",
+                    status="idle",
                     last_job_name=job.name,
                     last_successful_job_name=last_successful_job_name,
-                    error=str(exc),
                 )
+            except Exception as exc:
                 logger.exception("scheduler.job_failed", job=job.name, error=str(exc))
-                raise
-            last_successful_job_name = job.name
-            logger.info("scheduler.job_finished", job=job.name)
-            await _write_heartbeat(
-                heartbeat_file,
-                status="idle",
-                last_job_name=job.name,
-                last_successful_job_name=last_successful_job_name,
-            )
+                await _write_heartbeat(
+                    heartbeat_file,
+                    status="idle",
+                    last_job_name=job.name,
+                    last_successful_job_name=last_successful_job_name,
+                    error=f"{job.name} failed: {exc!s}",
+                )
+                # Do NOT raise: allow other jobs in cycle to continue
 
         await asyncio.sleep(settings.scheduler_poll_interval_seconds)
 

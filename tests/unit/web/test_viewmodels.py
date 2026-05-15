@@ -2,124 +2,75 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from src.domain.models import Platform, Release, ReleaseKind
+from src.application.get_admin_task_status_use_case import TaskStatusResult
 from src.web.viewmodels import build_admin_tasks_view_model
 
 
-@dataclass
-class _TimeSeriesReaderStub:
-    last_timestamp: datetime | None = None
-
-    def get_last_timestamp(self) -> datetime | None:
-        return self.last_timestamp
+def _task(name: str, tasks_vm):
+    return next(task for task in tasks_vm.tasks if task.name == name)
 
 
-@dataclass
-class _ReleaseStoreStub:
-    releases_by_client: dict[str, Release | None]
-    requested_client_ids: list[str] = field(default_factory=list)
+def test_build_admin_tasks_view_model_fetch_stale_after_24_hours() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=(now - timedelta(hours=25)).timestamp(),
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        latest_status_by_method={"fetch": "success"},
+    )
 
-    def get_release(self, platform: str, client_id: str, release_kind: str | None = None) -> Release | None:
-        assert platform == Platform.YOUTUBE.value
-        assert release_kind == ReleaseKind.WEEKLY_HORIZONTAL.value
-        self.requested_client_ids.append(client_id)
-        return self.releases_by_client.get(client_id)
+    tasks_vm = build_admin_tasks_view_model(result)
+    fetch_task = _task("Fetch Data", tasks_vm)
 
-
-def _weekly_task(tasks_vm):
-    return next(task for task in tasks_vm.tasks if task.name == "Weekly Horizontal (YouTube)")
-
-
-def test_build_admin_tasks_view_model_falls_back_to_default_client_id(monkeypatch) -> None:
-    monkeypatch.setenv("TOP_MUSIC_YT_SEARCH_REGION_CODE", "ES")
-    monkeypatch.setenv("TOP_MUSIC_YT_AUTH_USER_ID", "configured-client")
-
-    from src.config.settings import get_app_settings
-
-    get_app_settings.cache_clear()
-
-    try:
-        release_repo = _ReleaseStoreStub(
-            releases_by_client={
-                "configured-client": None,
-                "default": Release(
-                    platform=Platform.YOUTUBE.value,
-                    client_id="default",
-                    release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
-                    release_id="yt-123",
-                    published_at=(datetime.now(UTC) - timedelta(hours=2)).timestamp(),
-                ),
-            }
-        )
-
-        tasks_vm = build_admin_tasks_view_model(_TimeSeriesReaderStub(), release_repo)
-        weekly_task = _weekly_task(tasks_vm)
-
-        assert release_repo.requested_client_ids == ["configured-client", "default"]
-        assert weekly_task.source == "release"
-        assert weekly_task.last_run_label != "Never"
-    finally:
-        get_app_settings.cache_clear()
+    assert fetch_task.older_than_24h is True
+    assert fetch_task.warning_message == "No videos fetched in 24+ hours"
 
 
-def test_build_admin_tasks_view_model_weekly_not_stale_before_7_days(monkeypatch) -> None:
-    monkeypatch.setenv("TOP_MUSIC_YT_SEARCH_REGION_CODE", "ES")
-    monkeypatch.setenv("TOP_MUSIC_YT_AUTH_USER_ID", "configured-client")
+def test_build_admin_tasks_view_model_daily_stale_after_24_hours() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=(now - timedelta(hours=26)).timestamp(),
+        weekly_last_timestamp=None,
+        latest_status_by_method={"daily": "success"},
+    )
 
-    from src.config.settings import get_app_settings
+    tasks_vm = build_admin_tasks_view_model(result)
+    daily_task = _task("Daily Vertical Videos", tasks_vm)
 
-    get_app_settings.cache_clear()
-
-    try:
-        release_repo = _ReleaseStoreStub(
-            releases_by_client={
-                "configured-client": Release(
-                    platform=Platform.YOUTUBE.value,
-                    client_id="configured-client",
-                    release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
-                    release_id="yt-abc",
-                    published_at=(datetime.now(UTC) - timedelta(hours=48)).timestamp(),
-                )
-            }
-        )
-
-        tasks_vm = build_admin_tasks_view_model(_TimeSeriesReaderStub(), release_repo)
-        weekly_task = _weekly_task(tasks_vm)
-
-        assert weekly_task.older_than_24h is False
-        assert weekly_task.warning_message is None
-    finally:
-        get_app_settings.cache_clear()
+    assert daily_task.older_than_24h is True
+    assert daily_task.warning_message == "No daily publish in 24+ hours"
 
 
-def test_build_admin_tasks_view_model_weekly_stale_after_7_days(monkeypatch) -> None:
-    monkeypatch.setenv("TOP_MUSIC_YT_SEARCH_REGION_CODE", "ES")
-    monkeypatch.setenv("TOP_MUSIC_YT_AUTH_USER_ID", "configured-client")
+def test_build_admin_tasks_view_model_weekly_stale_after_7_days() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=(now - timedelta(days=8)).timestamp(),
+        latest_status_by_method={"weekly": "success"},
+    )
 
-    from src.config.settings import get_app_settings
+    tasks_vm = build_admin_tasks_view_model(result)
+    weekly_task = _task("Weekly Horizontal (YouTube)", tasks_vm)
 
-    get_app_settings.cache_clear()
+    assert weekly_task.older_than_24h is True
+    assert weekly_task.warning_message == "No weekly publish in 7+ days"
 
-    try:
-        release_repo = _ReleaseStoreStub(
-            releases_by_client={
-                "configured-client": Release(
-                    platform=Platform.YOUTUBE.value,
-                    client_id="configured-client",
-                    release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
-                    release_id="yt-old",
-                    published_at=(datetime.now(UTC) - timedelta(days=8)).timestamp(),
-                )
-            }
-        )
 
-        tasks_vm = build_admin_tasks_view_model(_TimeSeriesReaderStub(), release_repo)
-        weekly_task = _weekly_task(tasks_vm)
+def test_build_admin_tasks_view_model_non_youtube_weekly_not_applicable() -> None:
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        latest_status_by_method={},
+    )
 
-        assert weekly_task.older_than_24h is True
-        assert weekly_task.warning_message == "No weekly publish in 7+ days"
-    finally:
-        get_app_settings.cache_clear()
+    tasks_vm = build_admin_tasks_view_model(result)
+
+    for platform_name in ("TIKTOK", "INSTAGRAM", "SPOTIFY"):
+        task = _task(f"Weekly Horizontal ({platform_name})", tasks_vm)
+        assert task.applicable is False
+        assert task.last_run_label == "Not applicable"

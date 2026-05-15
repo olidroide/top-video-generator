@@ -17,10 +17,10 @@ from src.application.trigger_admin_task_use_case import TriggerAdminTaskRequest
 from src.domain.models import IntegrationCheckResult, IntegrationPlatform
 from src.web.dependencies import (
     CheckPlatformConnectionUseCaseDep,
+    GetAdminTaskStatusUseCaseDep,
     GetOperationalMetricsUseCaseDep,
     TimeSeriesRepositoryDep,
     TriggerAdminTaskUseCaseDep,
-    get_release_repo,
     get_settings,
     get_setup_page_use_case,
 )
@@ -153,9 +153,9 @@ async def admin_connections(
     request: Request,
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
     metrics_use_case: GetOperationalMetricsUseCaseDep,
+    task_status_use_case: GetAdminTaskStatusUseCaseDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
     timeseries_repo: TimeSeriesRepositoryDep,
-    release_repo: Annotated[Any, Depends(get_release_repo)],
 ) -> Response:
     if not settings.admin_password:
         return HTMLResponse(status_code=503, content="Admin password not configured")
@@ -174,7 +174,7 @@ async def admin_connections(
     # Build tasks panel view model
     from src.web.viewmodels import build_admin_tasks_view_model
 
-    tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
+    tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
     ctx["tasks"] = tasks_vm
     ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_use_case.execute().to_dict())
 
@@ -260,8 +260,7 @@ async def admin_health_status(
 @router.get("/tasks/status", response_class=HTMLResponse)
 async def admin_tasks_status(
     request: Request,
-    timeseries_repo: TimeSeriesRepositoryDep,
-    release_repo: Annotated[Any, Depends(get_release_repo)],
+    task_status_use_case: GetAdminTaskStatusUseCaseDep,
 ) -> Response:
     """HTMX partial — returns the #tasks-grid fragment with task status cards."""
     if not _is_admin(request):
@@ -270,7 +269,7 @@ async def admin_tasks_status(
     # Build view model from repos
     from src.web.viewmodels import build_admin_tasks_view_model
 
-    tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
+    tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
 
     return templates.TemplateResponse(
         request=request,
@@ -324,18 +323,26 @@ async def trigger_admin_task(
         return PlainTextResponse(content=f"Error: {trigger_result.message}", status_code=400)
 
     # Dispatch background task
+    async def _run_with_task_tracking(task_method: str, task_fn: Any) -> None:
+        try:
+            await task_fn()
+            trigger_use_case.mark_completed(task_method=task_method)
+        except Exception as exc:
+            trigger_use_case.mark_failed(task_method=task_method, error_message=str(exc))
+            raise
+
     if method == "fetch":
         from src.entrypoints.fetch_data import main_async as fetch_main_async
 
-        background_tasks.add_task(fetch_main_async)
+        background_tasks.add_task(_run_with_task_tracking, "fetch", fetch_main_async)
     elif method == "daily":
         from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 
-        background_tasks.add_task(publish_vertical_main_async)
+        background_tasks.add_task(_run_with_task_tracking, "daily", publish_vertical_main_async)
     elif method == "weekly":
         from src.entrypoints.publish_video import main_async as publish_weekly_main_async
 
-        background_tasks.add_task(publish_weekly_main_async)
+        background_tasks.add_task(_run_with_task_tracking, "weekly", publish_weekly_main_async)
 
     # Return feedback to HTMX
     return templates.TemplateResponse(

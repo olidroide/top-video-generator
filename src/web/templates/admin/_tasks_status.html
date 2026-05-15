@@ -27,6 +27,11 @@
           {% endif %}
           <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
             Source: {{ task.source }}
+            {% if task.name == "Fetch Data" %}
+              <span style="display: block; margin-top: 0.25rem; color: #D97706;">
+                <em>Persisted from task execution events</em>
+              </span>
+            {% endif %}
           </p>
         </section>
 
@@ -84,6 +89,7 @@
           {% endif %}
           <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
             Source: {{ task.source }}
+            <span style="display: block; margin-top: 0.25rem; color: #D97706;"><em>Persisted from task execution events</em></span>
           </p>
         </section>
 
@@ -139,6 +145,9 @@
           {% endif %}
           <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
             Source: {{ task.source }}
+            <span style="display: block; margin-top: 0.25rem; color: #D97706;">
+              <em>YouTube-only, persisted from task execution events</em>
+            </span>
           </p>
         </section>
 

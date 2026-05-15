@@ -327,8 +327,8 @@ def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeyp
     assert login_response.status_code == 303
     assert response.status_code == 200
     assert 'id="tasks-feedback"' in response.text
-    assert "Accepted:" in response.text
-    assert "Task &#39;fetch&#39; ready for execution." in response.text
+    assert "Requested:" in response.text
+    assert "Task &#39;fetch&#39; scheduled. Background execution will begin shortly." in response.text
 
 
 def test_admin_connection_check_instagram_not_configured_aligns_card_state(monkeypatch) -> None:

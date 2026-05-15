@@ -143,6 +143,22 @@ class ReleaseKind(StrEnum):
     WEEKLY_HORIZONTAL = "WEEKLY_HORIZONTAL"
 
 
+class TaskMethod(StrEnum):
+    """Admin task identifiers."""
+
+    FETCH = "fetch"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+class TaskRunStatus(StrEnum):
+    """Task execution state transitions."""
+
+    QUEUED = "queued"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class Release(BaseModel):
     """Represents a published release on a platform."""
 
@@ -151,6 +167,15 @@ class Release(BaseModel):
     release_kind: str | None = None
     release_id: str | None = None
     published_at: float | None = None
+
+
+class TaskRunState(BaseModel, frozen=True):
+    """Persisted admin task execution event."""
+
+    task_method: TaskMethod
+    status: TaskRunStatus
+    event_at: datetime
+    error_message: str | None = None
 
 
 class Video(BaseModel):

@@ -1,6 +1,6 @@
 # Top Video Generator — Architecture Decision Record
 
-## Status: Phase 2 complete; architecture hardening and boundary cleanup in progress (2026-05-15)
+## Status: Phase 1.5 complete (data resilience tests); Phase 2.1 skipped by YAGNI (single-instance); Phase 2.2 in progress (TaskRunState persistence) (2026-05-15)
 
 ## Overview
 
@@ -173,20 +173,55 @@ flowchart LR
 
 - Format: `type(scope): description`
 - Avoid generic, context-free messages (e.g. `fix`, `update`).
+## ADR-004: Release Kind Transition Policy
 
+- **Decision:** Implement staged transition from `release_kind=null` legacy compatibility to strict `release_kind` requirement.
+- **Current phase (Phase 2.0):**
+  - Reads: accept null (fallback to DAILY_VERTICAL).
+  - Writes: always include explicit `release_kind`.
+  - Telemetry: track count of legacy null reads; fail-fast if residual legacy > threshold.
+- **Phase 2.1 (Day 30 in 30/60 roadmap):** Backfill null → inferred kind in `db_release.json`.
+- **Phase 2.2 (Day 60):** Reads no longer accept null; any remaining null → error + operator alert.
+- **Rationale:** Eliminates ambiguity in daily vs weekly idempotence checks; allows confident separation of publish workflows by schedule.
 ## Current Priority Debt
 
-1. **Observability:** `/metrics` is in-memory and not exported to a centralized backend.
-2. **Scheduler resilience:** per-job isolation, retries, and non-fatal partial failures are still incomplete.
-3. **Publish entrypoint cleanup:** publish orchestration is now use-case owned, but selected entrypoints still have dependency-wiring detail that should keep moving toward reusable factories.
-4. **Web contracts:** route-level input/output contracts and template boundaries need tighter tests.
-5. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
+1. **Task state persistence:** TaskRunState (task execution history) is being migrated to TinyFlux-backed persistence for admin observability and durable task status history.
+2. **Publisher factory refactoring:** Publish entrypoint dependency wiring is still repeated across `publish_video.py` and `publish_vertical.py`; needs extraction into shared factory.
+3. **Health dashboard:** Admin panel needs operational visibility (task history, storage integrity, recent errors). Requires TaskRunState persistence + metrics export (Fase 2.3-2.4).
+4. **Scheduler observability:** Scheduler job heartbeats and isolation reporting need hardening to detect stuck jobs and partial failures quickly.
+5. **Migration gating:** SQLite migration decision deferred to Fase 3 pending Fase 2.5 metrics (per-instance data volume, lock contention, timeseries query patterns).
+
+## Operational State Semantics
+
+Canonical task states and their sources of truth:
+
+| State | Meaning | Source | Transition Trigger |
+|-------|---------|--------|--------------------|
+| **Requested** | Task triggered by operator; execution not started | TaskRunState.status | Immediate feedback from trigger endpoint |
+| **Running** | Job process executing (fetch_data / publish_vertical / publish_video) | TaskRunState.status + background job start signal | Background job heartbeat after acquired lock |
+| **Succeeded** | Job completed without error; artifacts written (videos, releases, metrics) | TaskRunState.status + background job completion signal | Background job exit code 0 + state persist |
+| **Failed** | Job terminated with error; may have partial artifacts | TaskRunState.status + background job error signal + error detail | Background job exception caught + state persist with error |
+
+**Key invariant:** "Requested" does NOT imply execution will start or succeed. Admin feedback must always clarify "acceptance of request" not "confirmation of success".
+
+**Admin panel cards:**
+- Daily/Weekly task cards show last TaskRunState, not inferred timestamp.
+- Trigger endpoint feedback remains request-acceptance semantics only; final success/failure is sourced from persisted TaskRunState events.
 
 ## Immediate Next Steps
 
-1. Continue extracting shared dependency-wiring from publish entrypoints into reusable factories while keeping delivery shells thin.
-2. Expand web contract coverage around route fragments and admin/status partials.
-3. Harden scheduler behavior around retries, heartbeat reporting, and partial-failure visibility.
+**Fase 2.1: YAGNI Decision (Closed)**
+- ✅ Single-machine, single-instance runtime confirmed.
+- ✅ TinyDB + TinyFlux retained (no atomic-storage migration in this phase).
+- ✅ Concurrency-hardening work deferred unless architecture shifts to multi-instance writers.
+
+**Fase 2.2-2.5: Structural Improvements**
+- 🔄 Persist `TaskRunState` (task execution history) to TinyFlux-backed repository and use it as source of truth for admin task status.
+- Extract publisher dependency factories from publish entrypoints
+- Build operational health dashboard (task history, error timeline, recent events)
+- Collect metrics for SQLite migration decision gate (Fase 3)
+
+**Validation:** All fases require `make pre-push-check` pass gate + new test coverage for behavior changes.
 
 ## Next Steps: 30/60-Day Analysis Plan
 
@@ -297,6 +332,17 @@ Revisit the storage decision only if one or more of these become true:
 - Auth, release, or video metadata needs clearer operational tooling than a flat file can offer.
 
 Time-series storage should be reviewed separately. TinyFlux can remain the right fit while the workload is append-heavy and operational analytics stay simple.
+
+## Anti-Patterns & CI Guardrails
+
+Enforced via pre-commit + ruff rules:
+
+1. **Legacy module re-introduction:** Imports from `src.db_client`, `src.yt_client`, `src.video_processing` → CI rejection.
+2. **Business logic in entrypoints/web:** Scoring, ranking, release validation outside domain/application → PR comment + requirement to move.
+3. **Protocol runtime checks:** `isinstance(..., VideoPublisher)` module-level → linting failure.
+4. **Pydantic v1 APIs:** `Optional[X]` instead of `X | None` in new code → linting failure.
+5. **Mutable default args:** `def func(x={}):` → linting failure.
+6. **Raw API dicts crossing boundaries:** Domain/application receive canonical models, not raw JSON/SDK objects → architectural review.
 
 ## Minimum Validation for Architecture-Relevant Changes
 

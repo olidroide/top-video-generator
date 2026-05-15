@@ -19,6 +19,8 @@ from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
 from src.domain.ports import IntegrationChecker, OAuthProvider
 from src.domain.ports import OperationalMetricsReader as OperationalMetricsRepositoryPort
 from src.domain.ports import ReleaseDateValidator as ReleaseRepositoryPort
+from src.domain.ports import TaskRunStateReader as TaskRunStateRepositoryPort
+from src.domain.ports import TaskRunStateWriter as TaskRunStateWriterPort
 from src.domain.ports import TimeSeriesReader as TimeSeriesRepositoryPort
 from src.domain.ports import VideoMetadataReader as VideoRepositoryPort
 from src.infrastructure.social.spotify_client import SpotifyClient
@@ -27,6 +29,9 @@ from src.infrastructure.storage.operational_metrics_repository import (
     OperationalMetricsRepository as TinyFluxOperationalMetricsRepository,
 )
 from src.infrastructure.storage.release_repository import ReleaseRepository as TinyDbReleaseRepository
+from src.infrastructure.storage.task_run_state_repository import (
+    TaskRunStateRepository as TinyFluxTaskRunStateRepository,
+)
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository as TinyDbTimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository as TinyDbVideoRepository
 from src.infrastructure.youtube.yt_client import YTClient
@@ -83,6 +88,13 @@ def get_operational_metrics_repo(
     )
 
 
+def get_task_run_state_repo(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> TaskRunStateRepositoryPort:
+    db_path = settings.db_timeseries_file if settings.is_production_env else f"{settings.db_timeseries_file}.test"
+    return TinyFluxTaskRunStateRepository(db_path)
+
+
 def get_authorize_use_case(
     auth_repo: Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)],
     yt_provider: Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)],
@@ -134,10 +146,9 @@ def get_check_platform_connection_use_case(
 
 
 def get_admin_task_status_use_case(
-    timeseries_repo: Annotated[TimeSeriesRepositoryPort, Depends(get_timeseries_repo)],
-    release_repo: Annotated[ReleaseRepositoryPort, Depends(get_release_repo)],
+    task_run_state_repo: Annotated[TaskRunStateRepositoryPort, Depends(get_task_run_state_repo)],
 ) -> GetAdminTaskStatusUseCase:
-    return GetAdminTaskStatusUseCase(timeseries_repo, release_repo)
+    return GetAdminTaskStatusUseCase(task_run_state_repo)
 
 
 def get_operational_metrics_use_case(
@@ -150,8 +161,10 @@ def get_operational_metrics_use_case(
     )
 
 
-def get_trigger_admin_task_use_case() -> TriggerAdminTaskUseCase:
-    return TriggerAdminTaskUseCase()
+def get_trigger_admin_task_use_case(
+    task_run_state_repo: Annotated[TaskRunStateWriterPort, Depends(get_task_run_state_repo)],
+) -> TriggerAdminTaskUseCase:
+    return TriggerAdminTaskUseCase(task_run_state_repo)
 
 
 AuthorizeUseCaseDep = Annotated[AuthorizeUseCase, Depends(get_authorize_use_case)]

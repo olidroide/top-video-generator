@@ -5,45 +5,45 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.domain.models import TaskMethod, TaskRunStatus
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
-    from src.domain.ports import ReleaseStore, TimeSeriesReader
+    from src.domain.ports import TaskRunStateReader
 
 logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
 class TaskStatusResult:
-    """Result containing current task execution status from repositories."""
+    """Result containing persisted task execution status from TinyFlux."""
 
     fetch_last_timestamp: float | None
-    """Unix timestamp of last fetch (from timeseries), None if never."""
+    """Unix timestamp of last successful fetch, None if never."""
 
-    daily_releases_by_platform: dict[str, float]
-    """Platform -> last daily release timestamp. Empty dict if no releases recorded."""
+    daily_last_timestamp: float | None
+    """Unix timestamp of last successful daily publish, None if never."""
 
-    weekly_releases_by_platform: dict[str, float]
-    """Platform -> last weekly release timestamp. Empty dict if no releases recorded."""
+    weekly_last_timestamp: float | None
+    """Unix timestamp of last successful weekly publish, None if never."""
+
+    latest_status_by_method: dict[str, str]
+    """Latest persisted status per method (queued/success/failed)."""
 
 
 class GetAdminTaskStatusUseCase:
     """
     Read current task execution status from repositories.
 
-    Reads from:
-    - TimeSeriesRepository: last_timestamp (fetch operation)
-    - ReleaseRepository: daily & weekly releases by platform
+    Reads from TaskRunStateRepository (TinyFlux): queued/success/failed events.
     """
 
     def __init__(
         self,
-        timeseries_repo: TimeSeriesReader,
-        release_repo: ReleaseStore,
+        task_run_state_reader: TaskRunStateReader,
     ) -> None:
         """Initialize with repository ports."""
-        self._timeseries_repo = timeseries_repo
-        self._release_repo = release_repo
+        self._task_run_state_reader = task_run_state_reader
 
     def execute(self) -> TaskStatusResult:
         """
@@ -52,41 +52,36 @@ class GetAdminTaskStatusUseCase:
         Returns:
             TaskStatusResult with fetch timestamp and release statuses by platform.
         """
-        # Fetch last timeseries timestamp
-        fetch_last = self._timeseries_repo.get_last_timestamp()
-        fetch_last_float = fetch_last.timestamp() if fetch_last else None
+        fetch_last = self._task_run_state_reader.get_latest_task_event(
+            task_method=TaskMethod.FETCH,
+            status=TaskRunStatus.SUCCESS,
+        )
+        daily_last = self._task_run_state_reader.get_latest_task_event(
+            task_method=TaskMethod.DAILY,
+            status=TaskRunStatus.SUCCESS,
+        )
+        weekly_last = self._task_run_state_reader.get_latest_task_event(
+            task_method=TaskMethod.WEEKLY,
+            status=TaskRunStatus.SUCCESS,
+        )
 
-        # Query daily releases (DAILY_VERTICAL) for each platform
-        daily_releases = {}
-        for platform in ["YOUTUBE", "TIKTOK", "INSTAGRAM", "SPOTIFY"]:
-            release = self._release_repo.get_release(
-                platform=platform,
-                client_id="default",
-                release_kind="DAILY_VERTICAL",
-            )
-            if release and release.published_at:
-                daily_releases[platform] = release.published_at
-
-        # Query weekly releases (WEEKLY_HORIZONTAL) for each platform
-        weekly_releases = {}
-        for platform in ["YOUTUBE", "TIKTOK", "INSTAGRAM", "SPOTIFY"]:
-            release = self._release_repo.get_release(
-                platform=platform,
-                client_id="default",
-                release_kind="WEEKLY_HORIZONTAL",
-            )
-            if release and release.published_at:
-                weekly_releases[platform] = release.published_at
+        latest_status_by_method: dict[str, str] = {}
+        for task_method in TaskMethod:
+            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
+            if latest is not None:
+                latest_status_by_method[task_method.value] = latest.status.value
 
         logger.debug(
             "admin_task_status_fetched",
-            fetch_last_timestamp=fetch_last_float,
-            daily_platforms=len(daily_releases),
-            weekly_platforms=len(weekly_releases),
+            fetch_last_timestamp=fetch_last.event_at.timestamp() if fetch_last else None,
+            daily_last_timestamp=daily_last.event_at.timestamp() if daily_last else None,
+            weekly_last_timestamp=weekly_last.event_at.timestamp() if weekly_last else None,
+            methods_with_status=len(latest_status_by_method),
         )
 
         return TaskStatusResult(
-            fetch_last_timestamp=fetch_last_float,
-            daily_releases_by_platform=daily_releases,
-            weekly_releases_by_platform=weekly_releases,
+            fetch_last_timestamp=fetch_last.event_at.timestamp() if fetch_last else None,
+            daily_last_timestamp=daily_last.event_at.timestamp() if daily_last else None,
+            weekly_last_timestamp=weekly_last.event_at.timestamp() if weekly_last else None,
+            latest_status_by_method=latest_status_by_method,
         )

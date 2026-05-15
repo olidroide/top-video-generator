@@ -16,6 +16,9 @@ if TYPE_CHECKING:
         PublishingResult,
         Release,
         SpotifyAuth,
+        TaskMethod,
+        TaskRunState,
+        TaskRunStatus,
         TikTokAuth,
         Video,
         VideoPoint,
@@ -106,6 +109,26 @@ class ReleaseStore(Protocol):
     def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool: ...
 
     def add_or_update_release(self, release: Release) -> Release: ...
+
+
+class TaskRunStateWriter(Protocol):
+    def record_task_event(
+        self,
+        *,
+        task_method: TaskMethod,
+        status: TaskRunStatus,
+        error_message: str | None = None,
+        event_time: datetime | None = None,
+    ) -> None: ...
+
+
+class TaskRunStateReader(Protocol):
+    def get_latest_task_event(
+        self,
+        *,
+        task_method: TaskMethod,
+        status: TaskRunStatus | None = None,
+    ) -> TaskRunState | None: ...
 
 
 class SpotifyPlaylistUpdater(Protocol):
