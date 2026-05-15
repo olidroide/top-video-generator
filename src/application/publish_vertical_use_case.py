@@ -146,12 +146,25 @@ class PublishVerticalUseCase:
         async def _publish_one(publisher: VideoPublisher) -> PublishingResult:
             description = yt_description if publisher.platform_name == Platform.YOUTUBE else yt_title
             try:
-                return await publish_executor.publish(
+                coro = publish_executor.publish(
                     publisher=publisher,
                     video_list=content.canonical_video_list,
                     file_path=file_path,
                     title=yt_title,
                     description=description,
+                )
+                if publisher.platform_name == Platform.TIKTOK:
+                    coro = asyncio.wait_for(coro, timeout=90)
+                return await coro
+            except TimeoutError:
+                logger.warning(
+                    "publish_vertical.publish_timeout",
+                    platform=publisher.platform_name,
+                )
+                return PublishingResult(
+                    platform=publisher.platform_name,
+                    success=False,
+                    error="publish timed out",
                 )
             except Exception as exc:
                 logger.exception(

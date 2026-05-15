@@ -10,8 +10,8 @@ logger = get_logger(__name__)
 def build_publishers() -> list[VideoPublisher]:
     publishers: list[VideoPublisher] = [
         InstagramPublisher(),
-        TikTokPublisher(),
         YouTubePublisher(),
+        TikTokPublisher(),
     ]
     enabled = [p for p in publishers if p.is_enabled]
     skipped = [p for p in publishers if not p.is_enabled]

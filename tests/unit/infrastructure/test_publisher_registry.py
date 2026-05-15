@@ -52,4 +52,4 @@ def test_build_publishers_filters_disabled_publishers(monkeypatch) -> None:
 
     result = publisher_registry.build_publishers()
 
-    assert [publisher.platform_name for publisher in result] == [Platform.TIKTOK, Platform.YOUTUBE]
+    assert [publisher.platform_name for publisher in result] == [Platform.YOUTUBE, Platform.TIKTOK]

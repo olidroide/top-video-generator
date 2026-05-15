@@ -11,18 +11,23 @@ permissions:
   packages: write
 
 jobs:
-  publish:
-    name: Build and Publish Multi-Arch Image
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4
@@ -60,19 +65,21 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=top-video-generator-release
-          cache-to: type=gha,scope=top-video-generator-release,mode=max
+          cache-from: type=gha,scope=top-video-${{ matrix.platform }}
+          cache-to: type=gha,scope=top-video-${{ matrix.platform }},mode=max
+          provenance: mode=max
 
       - name: Build summary
         run: |
           {
-            echo "## Published image"
+            echo "## Published image (${{ matrix.platform }})"
             echo ""
             echo "- Image: ghcr.io/${{ github.repository }}"
+            echo "- Platform: ${{ matrix.platform }}"
             echo "- Tags:"
             echo "${{ steps.meta.outputs.tags }}" | sed 's/^/  - /'
             echo "- Digest: ${{ steps.build.outputs.digest }}"
@@ -81,7 +88,7 @@ jobs:
   release-notes:
     name: Publish Release Notes
     runs-on: ubuntu-latest
-    needs: publish
+    needs: build
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
 
     steps:
