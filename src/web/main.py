@@ -1,5 +1,3 @@
-from typing import Any, cast
-
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -24,7 +22,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     app.include_router(ops_router)
 
     app.add_middleware(
-        cast("Any", SessionMiddleware),
+        SessionMiddleware,
         secret_key=resolved_settings.app_secret_key or "dev-secret",
     )
 

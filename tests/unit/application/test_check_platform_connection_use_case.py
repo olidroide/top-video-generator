@@ -39,3 +39,19 @@ async def test_check_platform_connection_use_case_returns_error_when_checker_mis
     assert result.platform == IntegrationPlatform.YOUTUBE
     assert result.status == IntegrationCheckStatus.ERROR
     assert result.message == "No checker registered for this platform."
+
+
+async def test_check_platform_connection_use_case_returns_error_when_checker_raises() -> None:
+    checker = create_autospec(IntegrationChecker, instance=True)
+    checker.platform_name = IntegrationPlatform.YOUTUBE
+    checker.check_connection = AsyncMock(side_effect=RuntimeError("boom"))
+    use_case = CheckPlatformConnectionUseCase(checkers=[checker])
+
+    result = await use_case.execute(CheckPlatformConnectionRequest(platform=IntegrationPlatform.YOUTUBE))
+
+    assert result.platform == IntegrationPlatform.YOUTUBE
+    assert result.status == IntegrationCheckStatus.ERROR
+    assert result.is_configured is False
+    assert result.is_publish_target is False
+    assert result.message == "Unexpected checker failure: boom"
+    checker.check_connection.assert_awaited_once()

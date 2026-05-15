@@ -391,6 +391,75 @@ class TestPublishVerticalUseCase:
         assert release_store.saved[0].platform == Platform.YOUTUBE.value
 
     @pytest.mark.asyncio
+    async def test_publish_pending_vertical_videos_isolates_publisher_exceptions(self) -> None:
+        class _ReleaseStoreFake:
+            def __init__(self) -> None:
+                self.saved: list[Release] = []
+
+            def is_release_at_date(
+                self,
+                platform: str,
+                release_date: datetime.date,
+                release_kind: str | None = None,
+            ) -> bool:
+                del platform, release_date, release_kind
+                return False
+
+            def add_or_update_release(self, release: Release) -> Release:
+                self.saved.append(release)
+                return release
+
+        class _VerticalPipelineFake:
+            async def build_vertical_video(self, video_list: list[Video]) -> str:
+                del video_list
+                return "/tmp/final-vertical.mp4"
+
+        class _PublishExecutorFake:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            async def publish(
+                self,
+                publisher: SimpleNamespace,
+                video_list: tuple,
+                file_path: str,
+                title: str,
+                description: str,
+            ) -> PublishingResult:
+                del video_list, file_path, title, description
+                self.calls.append(publisher.platform_name.value)
+                if publisher.platform_name == Platform.TIKTOK:
+                    raise RuntimeError("upload exploded")
+                return PublishingResult(platform=publisher.platform_name, success=True, published_id="ok")
+
+        use_case = PublishVerticalUseCase()
+        release_store = _ReleaseStoreFake()
+        executor = _PublishExecutorFake()
+        publishers = (
+            SimpleNamespace(platform_name=Platform.TIKTOK),
+            SimpleNamespace(platform_name=Platform.YOUTUBE),
+        )
+
+        await use_case.publish_pending_vertical_videos(
+            release_store=release_store,
+            publish_executor=executor,
+            vertical_video_pipeline=_VerticalPipelineFake(),
+            pending_publishers=publishers,
+            video_list=(make_video("v1", score=1, channel_name="A"),),
+            publisher_client_identity=PublisherClientIdentity(
+                youtube_client_id="yt-owner",
+                instagram_client_id="ig-owner",
+                tiktok_client_id="tt-owner",
+            ),
+            yt_title_template="@@TOP_DATE@@ @@HASHTAGS@@",
+            yt_description_template="@@TOP_DATE@@\n@@VIDEO_LIST@@\n@@DISCLAIMER@@",
+        )
+
+        assert executor.calls == [Platform.TIKTOK.value, Platform.YOUTUBE.value]
+        assert len(release_store.saved) == 1
+        assert release_store.saved[0].platform == Platform.YOUTUBE.value
+
+    @pytest.mark.asyncio
     async def test_publish_pending_vertical_videos_skips_when_no_publishers(self) -> None:
         class _ReleaseStoreFake:
             def is_release_at_date(

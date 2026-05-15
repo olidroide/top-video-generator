@@ -7,18 +7,21 @@ import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from pydantic import ValidationError
 from tinydb import TinyDB
 
-from src.config.settings import PROJECT_ROOT, get_app_settings
+if TYPE_CHECKING:
+    from pathlib import Path
+
+from src.config.settings import get_app_settings
 from src.domain.models import CanonicalVideo, Platform, Release, SpotifyAuth, TikTokAuth, YtAuth
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.logging import get_logger, setup_logging
+from src.shared.utils import resolve_project_path
 
 logger = get_logger(__name__)
 
@@ -62,11 +65,6 @@ class MigrationSummary:
     @property
     def has_errors(self) -> bool:
         return bool(self.errors)
-
-
-def _resolve_project_path(path_value: str) -> Path:
-    path = Path(path_value)
-    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def _normalize_platform(value: object) -> str | None:
@@ -432,10 +430,10 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    source_db = _resolve_project_path(args.source or settings.db_data_file)
-    video_db = _resolve_project_path(args.video_db or settings.db_video_file)
-    auth_db = _resolve_project_path(args.auth_db or settings.db_auth_file)
-    release_db = _resolve_project_path(args.release_db or settings.db_release_file)
+    source_db = resolve_project_path(args.source or settings.db_data_file)
+    video_db = resolve_project_path(args.video_db or settings.db_video_file)
+    auth_db = resolve_project_path(args.auth_db or settings.db_auth_file)
+    release_db = resolve_project_path(args.release_db or settings.db_release_file)
 
     summary = migrate_legacy_data(
         source_db=source_db,

@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
 
@@ -25,6 +26,66 @@ from src.shared.logging import get_logger, setup_logging
 logger = get_logger(__name__)
 
 
+@dataclass(frozen=True)
+class VerticalPublishJobContext:
+    """Dependencies and configuration for vertical publish job."""
+
+    timeseries_repo: TimeSeriesRepository
+    video_repo: VideoRepository
+    release_repo: ReleaseRepository
+    publishers: list
+    publish_vertical_use_case: PublishVerticalUseCase
+    spotify_playlist_updater: SpotifyPlaylistUpdaterAdapter
+    vertical_video_pipeline: VerticalVideoPipelineAdapter
+    video_publish_executor: VideoPublishExecutorAdapter
+    fetch_videos_use_case: FetchTopVideosUseCase
+
+
+def _build_repositories(settings: AppSettings) -> tuple[TimeSeriesRepository, VideoRepository, ReleaseRepository]:
+    """Factory: build all storage repositories with correct file paths."""
+    db_video_file = settings.db_video_file
+    db_release_file = settings.db_release_file
+    db_timeseries_file = settings.db_timeseries_file
+
+    if not settings.is_production_env:
+        db_video_file += ".test"
+        db_release_file += ".test"
+        db_timeseries_file += ".test"
+
+    return (
+        TimeSeriesRepository(db_timeseries_file),
+        VideoRepository(Path(db_video_file)),
+        ReleaseRepository(db_release_file),
+    )
+
+
+def _build_job_dependencies(
+    timeseries_repo: TimeSeriesRepository,
+    video_repo: VideoRepository,
+    release_repo: ReleaseRepository,
+    settings: AppSettings,
+) -> VerticalPublishJobContext:
+    """Factory: build all adapters, use cases, and orchestration dependencies."""
+    publishers = build_publishers()
+    publish_vertical_use_case = PublishVerticalUseCase()
+    spotify_playlist_updater = SpotifyPlaylistUpdaterAdapter(SpotifyClient())
+    vertical_video_pipeline = VerticalVideoPipelineAdapter(settings)
+    video_publish_executor = VideoPublishExecutorAdapter()
+    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
+
+    return VerticalPublishJobContext(
+        timeseries_repo=timeseries_repo,
+        video_repo=video_repo,
+        release_repo=release_repo,
+        publishers=publishers,
+        publish_vertical_use_case=publish_vertical_use_case,
+        spotify_playlist_updater=spotify_playlist_updater,
+        vertical_video_pipeline=vertical_video_pipeline,
+        video_publish_executor=video_publish_executor,
+        fetch_videos_use_case=fetch_videos_use_case,
+    )
+
+
 async def main_async() -> None:
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "vertical_publish") as execution_lock:
@@ -35,25 +96,16 @@ async def main_async() -> None:
 
 async def _run_vertical_publish_job(settings: AppSettings) -> None:
     day = datetime.datetime.now(UTC).date()
-    db_video_file = settings.db_video_file
-    db_release_file = settings.db_release_file
-    db_timeseries_file = settings.db_timeseries_file
 
-    # Initialize repositories
-    timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-    video_repo = VideoRepository(Path(db_video_file))
-    release_repo = ReleaseRepository(db_release_file)
-    publishers = build_publishers()
-    publish_vertical_use_case = PublishVerticalUseCase()
-    spotify_playlist_updater = SpotifyPlaylistUpdaterAdapter(SpotifyClient())
-    vertical_video_pipeline = VerticalVideoPipelineAdapter(settings)
-    video_publish_executor = VideoPublishExecutorAdapter()
+    # Build dependencies
+    timeseries_repo, video_repo, release_repo = _build_repositories(settings)
+    job = _build_job_dependencies(timeseries_repo, video_repo, release_repo, settings)
 
-    fetch_videos_use_case = FetchTopVideosUseCase(timeseries_repo, video_repo)
-    job_context = await publish_vertical_use_case.build_job_context(
-        release_store=release_repo,
-        publishers=publishers,
-        fetch_top_videos_use_case=fetch_videos_use_case,
+    # Build job context
+    job_context = await job.publish_vertical_use_case.build_job_context(
+        release_store=job.release_repo,
+        publishers=job.publishers,
+        fetch_top_videos_use_case=job.fetch_videos_use_case,
         day=day,
         spotify_playlist_original=settings.spotify_playlist_original,
         is_spotify_configured=settings.is_spotify_configured,
@@ -63,9 +115,10 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
         logger.info("publish_vertical.already_completed", day=str(day))
         return
 
-    await publish_vertical_use_case.maybe_update_spotify_original_playlist(
-        release_store=release_repo,
-        spotify_playlist_updater=spotify_playlist_updater,
+    # Publish Spotify playlist if needed
+    await job.publish_vertical_use_case.maybe_update_spotify_original_playlist(
+        release_store=job.release_repo,
+        spotify_playlist_updater=job.spotify_playlist_updater,
         spotify_release_pending=job_context.spotify_release_pending,
         spotify_playlist_original=settings.spotify_playlist_original,
         spotify_user_id=settings.spotify_user_id,
@@ -76,10 +129,11 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
         logger.info("publish_vertical.no_pending_publishers", day=str(day))
         return
 
-    await publish_vertical_use_case.publish_pending_vertical_videos(
-        release_store=release_repo,
-        publish_executor=video_publish_executor,
-        vertical_video_pipeline=vertical_video_pipeline,
+    # Publish pending vertical videos
+    await job.publish_vertical_use_case.publish_pending_vertical_videos(
+        release_store=job.release_repo,
+        publish_executor=job.video_publish_executor,
+        vertical_video_pipeline=job.vertical_video_pipeline,
         pending_publishers=job_context.pending_publishers,
         video_list=job_context.video_list,
         publisher_client_identity=PublisherClientIdentity(

@@ -5,18 +5,14 @@ from pathlib import Path
 
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_data_use_case import FetchDataUseCase
-from src.config.settings import PROJECT_ROOT, AppSettings, get_app_settings
+from src.config.settings import AppSettings, get_app_settings
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger, setup_logging
+from src.shared.utils import resolve_project_path
 
 logger = get_logger(__name__)
-
-
-def _resolve_project_path(path_value: str) -> Path:
-    path = Path(path_value)
-    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 async def main_async() -> None:
@@ -29,8 +25,8 @@ async def main_async() -> None:
 
 async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     settings = settings if settings is not None else get_app_settings()
-    db_video_file = _resolve_project_path(settings.db_video_file)
-    db_timeseries_file = _resolve_project_path(settings.db_timeseries_file)
+    db_video_file = resolve_project_path(settings.db_video_file)
+    db_timeseries_file = resolve_project_path(settings.db_timeseries_file)
 
     youtube_source = YouTubeSource(settings=settings)
     video_repo = VideoRepository(db_video_file)

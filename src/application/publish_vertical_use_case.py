@@ -145,13 +145,25 @@ class PublishVerticalUseCase:
 
         async def _publish_one(publisher: VideoPublisher) -> PublishingResult:
             description = yt_description if publisher.platform_name == Platform.YOUTUBE else yt_title
-            return await publish_executor.publish(
-                publisher=publisher,
-                video_list=content.canonical_video_list,
-                file_path=file_path,
-                title=yt_title,
-                description=description,
-            )
+            try:
+                return await publish_executor.publish(
+                    publisher=publisher,
+                    video_list=content.canonical_video_list,
+                    file_path=file_path,
+                    title=yt_title,
+                    description=description,
+                )
+            except Exception as exc:
+                logger.exception(
+                    "publish_vertical.unexpected_publish_error",
+                    platform=publisher.platform_name,
+                    error=str(exc),
+                )
+                return PublishingResult(
+                    platform=publisher.platform_name,
+                    success=False,
+                    error=str(exc),
+                )
 
         async with asyncio.TaskGroup() as task_group:
             tasks = [(publisher, task_group.create_task(_publish_one(publisher))) for publisher in pending_publishers]

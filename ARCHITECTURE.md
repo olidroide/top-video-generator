@@ -1,6 +1,6 @@
 # Top Video Generator — Architecture Decision Record
 
-## Status: Phase 2 complete; architecture hardening and boundary cleanup in progress (2026-04-25)
+## Status: Phase 2 complete; architecture hardening and boundary cleanup in progress (2026-05-15)
 
 ## Overview
 
@@ -8,13 +8,15 @@ Automated pipeline: fetch YouTube trending music data → score and rank → ren
 
 The active architecture is hexagonal (Ports & Adapters). The migration away from legacy god files is largely complete.
 
-## Implementation Snapshot (2026-04)
+## Implementation Snapshot (2026-05)
 
 - Hexagonal split is operational across `domain`, `application`, `adapters`, `infrastructure`, and web/entrypoint delivery layers.
 - Canonical domain ports are stable and used by adapters (`TrendingVideoFetcher`, `TimeSeriesReader`, `VideoMetadataReader`, `AuthCredentialStore`, `ReleaseDateValidator`, `VideoPublisher`, `OAuthProvider[OAuthResultT]`).
 - Structured logging and centralized settings are consistently applied (`src/shared/logging.py`, `src/config/settings.py`).
-- Concurrent publishing uses `asyncio.TaskGroup` with per-platform failure capture in application orchestration.
-- Remaining boundary debt is concentrated in selected entrypoints where business logic still needs migration into application use cases.
+- Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py` instead of the delivery entrypoint.
+- Concurrent publishing uses `asyncio.TaskGroup` with per-platform failure capture in application orchestration, including fault isolation in the vertical publish flow.
+- Integration connectivity checks are normalized at the application boundary so unexpected checker failures return stable `IntegrationCheckResult` values.
+- Remaining boundary debt is concentrated in selected publish entrypoints and in route/template contract coverage rather than in the fetch-data workflow.
 
 ## Current Layers
 
@@ -78,12 +80,12 @@ Entrypoints are thin orchestration layers only.
 
 - Allowed: load settings, build use cases/adapters, trigger workflows, report outcomes.
 - Not allowed: business scoring rules, ranking logic, manual cross-layer data shaping, release-window domain decisions.
-- Current migration gap: `src/entrypoints/fetch_data.py` still contains time-window checks and manual `VideoPoint` construction that should move into an application use case.
+- Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py`; the remaining migration gaps are concentrated in selected publish entrypoints where orchestration and dependency wiring still need further cleanup.
 
 Target direction:
 
-- Add a dedicated application use case for fetch-data orchestration.
 - Keep entrypoint logic as: parse config -> call use case -> emit operational logs.
+- Continue shrinking publish entrypoints toward the same model: thin delivery shell, application-owned orchestration.
 
 ## FastAPI Dependency Injection Pattern
 
@@ -103,7 +105,7 @@ Publishing fan-out is coordinated with `asyncio.TaskGroup` in application/use-ca
 - Per-task exceptions are captured and converted to `PublishingResult(success=False, error=...)`.
 - Partial failures are reported without aborting the whole batch unless a use case explicitly requires fail-fast behavior.
 
-This behavior is implemented in `src/application/publish_video_use_case.py` and should remain the default for multi-platform publishing.
+This behavior is implemented in `src/application/publish_video_use_case.py` and `src/application/publish_vertical_use_case.py` and should remain the default for multi-platform publishing.
 
 ## Runtime Topology
 
@@ -176,20 +178,117 @@ flowchart LR
 
 1. **Observability:** `/metrics` is in-memory and not exported to a centralized backend.
 2. **Scheduler resilience:** per-job isolation, retries, and non-fatal partial failures are still incomplete.
-3. **Entrypoint boundary cleanup:** selected entrypoints still contain business logic that should move into application use cases.
+3. **Publish entrypoint cleanup:** selected publish entrypoints still contain orchestration and dependency wiring that should keep moving into application use cases.
 4. **Web contracts:** route-level input/output contracts and template boundaries need tighter tests.
-5. **Storage:** migration readiness toward a multi-writer metadata store should be planned early, with SQLite as the first candidate.
-6. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
+5. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
+
+## Immediate Next Steps
+
+1. Continue shrinking `src/entrypoints/publish_video.py` and `src/entrypoints/publish_vertical.py` toward pure delivery wiring.
+2. Expand web contract coverage around route fragments and admin/status partials.
+3. Harden scheduler behavior around retries, heartbeat reporting, and partial-failure visibility.
+
+## Next Steps: 30/60-Day Analysis Plan
+
+### 30-Day Window (Quick Wins, Low Effort — Can Run in Parallel)
+
+These three items are standalone and require no structural changes.
+
+**1. Complete LOW-Priority Settings Cleanup**
+- **Task:** Remove unused settings (`yt_search_language_code`, `yt_search_category_code` already verified active; identify truly unused ones).
+- **Scope:** Audit `src/config/settings.py` for deprecated toggles; confirm no lingering references.
+- **Effort:** 1 session (~1 hour)
+- **Validation:** All tests pass; `make pre-push-check` green; no new `reportUnusedVariable` warnings.
+- **Rationale:** Keeps settings file lean and operational awareness high.
+
+**2. Harden Web Route Error Messages**
+- **Task:** Ensure all adapter error exceptions map to actionable user-facing messages in route handlers instead of generic 500 responses.
+- **Examples:** Spotify auth revocation → "Reconnect Spotify in setup"; Instagram login failure → "Invalid credentials"; TikTok cookie expired → "Refresh cookies".
+- **Scope:** Touch `src/web/routes/` handlers that wrap publish and platform-check use cases.
+- **Effort:** 2–3 sessions (~2 hours)
+- **Validation:** Manual web UX tests; existing route handler unit tests still pass.
+- **Rationale:** Improves operator debugging without distributed logging; single-server advantage.
+
+**3. Expand Integration Checker Error Resilience**
+- **Task:** Verify all integration checkers catch platform SDK exceptions and return stable `IntegrationCheckResult(status=ERROR, reason=...)` instead of uncaught stack traces.
+- **Current State:** Already done for Spotify; validate YouTube, Instagram, TikTok.
+- **Scope:** `src/adapters/{platform}_integration_checker.py` files.
+- **Effort:** 1 session (~45 minutes)
+- **Validation:** Raise SDK exceptions in test mocks; confirm use case returns ERROR, not exception.
+- **Rationale:** Admin panel reliability; single-server simplicity.
+
+---
+
+### 60-Day Window (Structural Improvements, Medium Effort — Sequential, Depends on 30-Day Baseline)
+
+These three items unlock observability, resilience, and entrypoint simplification.
+
+**1. Scheduler Fault Isolation and Heartbeat Visibility**
+- **Task:** Extend scheduler job isolation so that one job failure (fetch_data exception, publish_video timeout, etc.) does not crash the scheduler process or suppress other scheduled tasks.
+- **Current State:** Jobs catch exceptions; scheduler main loop is stable. Missing: per-job heartbeat logging and lingering background task cleanup.
+- **Scope:** `src/entrypoints/scheduler.py` and job dispatch behavior.
+- **Effort:** 2–3 sessions (~3 hours)
+- **Validation:** Write integration tests that raise exceptions in use cases; confirm scheduler continues and logs heartbeat events.
+- **Rationale:** Single-server reliability; operator visibility without a message queue or centralized logging.
+- **Follow-up:** Scheduler logs will show which tasks are stuck; can then add timeouts or async cleanup in subsequent work.
+
+**2. Entrypoint Dependency Wiring Factory (Simplify Publish Entrypoints)**
+- **Task:** Extract shared dependency-building logic from `src/entrypoints/publish_video.py` and `src/entrypoints/publish_vertical.py` into a reusable factory.
+- **Current State:** `publish_vertical.py` already uses a context dataclass and factory functions; `publish_video.py` still builds repositories inline.
+- **Scope:** Consolidate repository and adapter initialization into `src/entrypoints/_publisher_factories.py` or similar module.
+- **Effort:** 2 sessions (~2 hours)
+- **Validation:** All entrypoint integration tests still pass; no behavior change; code is simpler to read.
+- **Rationale:** Sets template for future entrypoints; reduces copy-paste risk.
+
+**3. Optional Storage Safety (Graceful Degradation for TinyDB/TinyFlux Missing Data)**
+- **Task:** Verify that absence of historical data (e.g., empty timeseries on startup, corrupted release metadata) does not crash publish flows.
+- **Current State:** Scoring logic falls back to default ranking; publish logic validates metadata before use.
+- **Scope:** Unit tests for edge cases: no timeseries records, no video metadata, malformed JSON in storage.
+- **Effort:** 2 sessions (~2 hours)
+- **Validation:** Write parametrized tests for edge cases; confirm flows return graceful error results or skip safely.
+- **Rationale:** Operational resilience without a distributed store; important for single-server deployments where manual recovery is the only option.
+
+---
+
+### Validation Strategy per Window
+
+**30-Day Checkpoints:**
+- Day 7: LOW settings audit complete and documented.
+- Day 14: Web route error messages updated; manual smoke test.
+- Day 21: Integration checker tests expanded; all checkers return stable results.
+- Day 30: All three items merged; `make pre-push-check` passes; no test regressions.
+
+**60-Day Checkpoints:**
+- Day 37: Scheduler isolation tests written; one failed job no longer cascades.
+- Day 44: Entrypoint factory extracted; both publish entrypoints refactored.
+- Day 51: Storage edge-case tests written and passing.
+- Day 60: All improvements merged; scheduler stability verified in test environment.
+
+---
+
+### Rationale: Why Not Prometheus/Broker/Metadata Migration?
+
+**Prometheus metrics backend:** Out of scope because metrics are currently in-memory counters observed via the `/metrics` route. A centralized backend requires infrastructure, scraping, and multi-instance complexity. Single-server logs provide sufficient observability until workload scales to multiple instances.
+
+**Message broker (Redis/RabbitMQ):** Out of scope because all jobs are orchestrated from a single scheduler and entrypoints. Async retry, job queuing, and worker pools make sense only after distributed deployment. Current single-server design has no distributed failure modes that a broker would solve.
+
+**Migrating metadata off TinyDB:** Out of scope because the current file-backed approach remains operationally sound for a single-server workload. The revisit criteria in ADR-001 have not been met. A metadata migration is expensive, brings new failure modes (database connection, schema changes), and benefits only multi-instance deployments or very large datasets.
+
+## Explicit Non-Goals
+
+- Prometheus or any centralized metrics backend is out of scope while the application continues to run on a single server.
+- A message broker such as Redis or RabbitMQ is out of scope because the workload is not distributed across multiple machines.
+- Replacing TinyDB metadata storage is out of scope for the current project phase; the existing single-server file-backed approach is still acceptable for the current workload.
 
 ## Improvement Roadmap
 
-### Storage Roadmap: TinyDB to SQLite
+### Storage Notes: Single-Server Persistence
 
-TinyDB and TinyFlux are still acceptable for the current single-instance phase, but the storage layer needs a clear exit path before concurrency, retention, or backup requirements grow beyond what file-backed stores can safely provide.
+TinyDB and TinyFlux are still acceptable for the current single-server phase. The project does not currently plan a metadata migration because the operational model is intentionally simple and local.
 
-#### Migration Criteria
+#### Revisit Criteria
 
-Move metadata off TinyDB when one or more of these become true:
+Revisit the storage decision only if one or more of these become true:
 
 - Concurrent writes start happening from more than one long-lived process or worker group.
 - We need ACID semantics, WAL-backed recovery, or reliable point-in-time backups.
@@ -198,95 +297,6 @@ Move metadata off TinyDB when one or more of these become true:
 - Auth, release, or video metadata needs clearer operational tooling than a flat file can offer.
 
 Time-series storage should be reviewed separately. TinyFlux can remain the right fit while the workload is append-heavy and operational analytics stay simple.
-
-#### Phased Plan
-
-##### Phase 1: Introduce a storage boundary
-
-- Keep domain and application code unchanged.
-- Isolate metadata access behind a repository contract in infrastructure.
-- Preserve the canonical domain models across the boundary; do not leak TinyDB or SQLite payloads upward.
-
-##### Phase 2: Add a SQLite implementation
-
-- Implement the same repository behavior with SQLite as the target backend.
-- Use explicit transactions and WAL mode for safer concurrent access.
-- Keep the schema narrow for hot-path fields and use JSON only for optional flexible metadata.
-- Reuse the current repository semantics first; schema optimization comes after functional parity.
-
-##### Phase 3: Dual-write validation
-
-- Write to TinyDB and SQLite in parallel for a short validation window.
-- Compare counts, round-trips, and representative records.
-- Capture write latency and `database is locked` failures before cutover.
-
-##### Phase 4: Cut over readers
-
-- Route reads to SQLite once parity is verified.
-- Keep TinyDB as a temporary fallback only while the rollback window is open.
-- Remove fallback behavior after a stable soak period.
-
-##### Phase 5: Remove the legacy backend
-
-- Delete the TinyDB-backed metadata implementation after the rollback window closes.
-- Document backup, restore, and maintenance commands for SQLite.
-- Re-run the storage tests against the new backend and lock the behavior with regression coverage.
-
-##### Phase 6: Reassess time-series storage
-
-- Keep TinyFlux until the time-series workload needs richer temporal aggregation, retention policies, or stronger multi-writer behavior.
-- Prefer the simplest store that preserves the query shape the application actually needs.
-
-#### Code Migration Examples
-
-Current TinyDB shape:
-
-```python
-from pathlib import Path
-
-from tinydb import TinyDB
-
-
-class VideoRepository:
-    def __init__(self, db_path: Path) -> None:
-        self._db = TinyDB(str(db_path))
-        self._table = self._db.table("video")
-```
-
-Target SQLite shape:
-
-```python
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from src.domain.models import CanonicalVideo
-
-
-class SqliteVideoRepository:
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
-
-    async def upsert(self, video: CanonicalVideo) -> None:
-        async with self._session_factory() as session:
-            # VideoRow is the mapped SQLAlchemy model for the SQLite table.
-            row = VideoRow.from_domain(video)
-            session.add(row)
-            await session.commit()
-```
-
-Temporary dual-write bridge:
-
-```python
-class DualWriteVideoRepository:
-    def __init__(self, primary, shadow) -> None:
-        self._primary = primary
-        self._shadow = shadow
-
-    async def upsert(self, video) -> None:
-        await self._primary.upsert(video)
-        await self._shadow.upsert(video)
-```
-
-These snippets are illustrative only. They show the migration shape: keep the domain model stable, change the persistence adapter, validate parity, then remove the old backend.
 
 ## Minimum Validation for Architecture-Relevant Changes
 

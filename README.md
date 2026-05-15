@@ -73,7 +73,7 @@ flowchart LR
     style Platforms fill:#FCE7F3,stroke:#EC4899,stroke-width:2px,color:#831843
 ```
 
-Scoring note: ranking logic is canonically implemented in `src/domain/services/scoring_service.py` and orchestrated by application/use-case flows. Some entrypoint flows are still being migrated to keep business rules out of delivery code.
+Scoring note: ranking logic is canonically implemented in `src/domain/services/scoring_service.py` and orchestrated by application/use-case flows. Fetch-data orchestration already lives in `src/application/fetch_data_use_case.py`; the remaining delivery-layer cleanup is concentrated in selected publish entrypoints and web contract hardening.
 
 ### Key Components
 
@@ -137,7 +137,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Current Architecture Issues
 
-1. **Entrypoint Boundary Debt**: some job entrypoints still include business shaping/orchestration logic that should be moved into dedicated application use cases.
+1. **Entrypoint Boundary Debt**: fetch-data has been migrated into an application use case, but selected publish entrypoints still contain orchestration and dependency-wiring detail that should continue moving toward thinner delivery shells.
 
 2. **Web Delivery Layer Stabilization**: route modules are split under `src/web/routes/`, but route-level contracts and template boundary tests still need hardening.
 
@@ -147,11 +147,14 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 5. **Process-Local Observability**: `/health` and `/metrics` exist, but metrics are in-memory and local to a single process, not centralized or Prometheus-compatible.
 
-6. **Scoring Consistency**: Domain scoring service is canonical, but consistency hardening and regression coverage should continue for ranking semantics.
+6. **Scoring Consistency**: domain scoring service is canonical, but consistency hardening and regression coverage should continue for ranking semantics.
 
 ### Improvements Implemented
 
 ✅ **Hexagonal Split** (`src/domain`, `src/application`, `src/adapters`, `src/infrastructure`): Core migration out of legacy god files is completed
+✅ **Fetch Orchestration Extraction** (`src/application/fetch_data_use_case.py`): daily fetch orchestration moved out of the fetch entrypoint into the application layer
+✅ **Vertical Publish Fault Isolation** (`src/application/publish_vertical_use_case.py`): multi-platform publish fan-out now isolates per-publisher exceptions so one failure does not cancel the full batch
+✅ **Integration Check Contract Hardening** (`src/application/check_platform_connection_use_case.py`): unexpected checker failures now return consistent `IntegrationCheckResult` payloads instead of leaking exceptions upward
 ✅ **Async Isolation** (`src/infrastructure/`): Blocking integrations are isolated with `asyncio.to_thread()`
 ✅ **Retry Utilities** (`src/utils/retry.py`): Exponential backoff with jitter for resilient uploads
 ✅ **Health Checks** (`/health` endpoint): Validates ffmpeg, templates, database
@@ -160,12 +163,21 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Planned Improvements
 
-- [ ] Message broker (Redis/RabbitMQ) for reliable task queuing
 - [ ] Separate container services for ingest/process/publish
-- [ ] Migrate metadata storage from TinyDB to SQLite
-- [ ] Add Prometheus metrics export
 - [ ] Implement dead-letter queue for failed uploads
 - [ ] Add integration tests with mocked external APIs
+
+### Explicit Non-Goals
+
+- Prometheus metrics export is out of scope for this project. Metrics are intentionally process-local because the system runs on a single server.
+- A message broker is out of scope for this project. Jobs are not distributed across multiple machines, so adding Redis or RabbitMQ would add operational complexity without solving a real problem.
+- Migrating metadata storage away from TinyDB is not a current project goal. For the current single-server workload, TinyDB and TinyFlux remain an acceptable fit.
+
+### Near-Term Next Steps
+
+- Finish thinning the remaining publish entrypoints so orchestration stays in application use cases and delivery code only wires dependencies and triggers flows.
+- Tighten web route and template contract tests under `src/web/routes/` to make SSR/HTMX fragments safer to change.
+- Keep improving scheduler resilience with stronger per-job isolation, retries, and explicit partial-failure reporting.
 
 ## Quick Start
 

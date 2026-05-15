@@ -2,14 +2,14 @@
 
 import asyncio
 import datetime
-from collections.abc import Sequence
 from datetime import UTC
 from pathlib import Path
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.application.workers.factory import WorkerFactory
 from src.config.settings import AppSettings, get_app_settings
-from src.domain.models import Platform, Release, ReleaseKind, TimeseriesRange, Video
+from src.domain.models import Platform, Release, ReleaseKind, TimeseriesRange
+from src.domain.services.video_metadata_service import generate_youtube_description, generate_youtube_title
 from src.domain.utils import extract_video_hashtags
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
@@ -46,50 +46,6 @@ def _build_video_pipeline(video_downloader: VideoDownloader) -> tuple[VideoCompo
     )
     renderer = VideoRenderer(asset_manager)
     return VideoCompositor(asset_manager, renderer), ThumbnailGenerator(asset_manager)
-
-
-def generate_yt_title(video_list: Sequence[Video], hashtag_list: list[str] | None = None) -> str:
-    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
-    hashtags = " ".join(hashtag_list) if hashtag_list else ""
-    return (
-        get_app_settings()
-        .yt_title_template.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}")
-        .replace("@@HASHTAGS@@", f"\n{hashtags}")
-    )
-
-
-def generate_yt_description(video_list: Sequence[Video]) -> str:
-    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
-    channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
-    original_publishers = ",".join(channels_names)
-    fair_use_text = (
-        "As per the 3rd section of fair use guidelines borrowing small bits of material from "
-        "an original work is more likely to be considered fair use. Copyright disclaimer under "
-        "section 107 of the copyright act 1976, allowance is made for fair use"
-    )
-    legal_notice = (
-        "This publication and the information included in it are not intended to serve "
-        "a substitute for consultation with an attonery."
-    )
-    copyright_notice = (
-        "Please note no copyright infringement is intended, and I do not own nor claim "
-        "to own any of the original publishers recordings used in this video. "
-        f"Original publishers : {original_publishers}."
-    )
-    disclaimer = f"------\nDisclaimer\n  - {legal_notice}\n\n  - {copyright_notice}\n\n  - {fair_use_text}\n------"
-
-    video_list_names = ""
-    for video in video_list:
-        video_list_names += f"{video.score}.- {video.title_cleaned} {video.yt_video_url} \n"
-        if video.channel and video.channel.name:
-            video_list_names += f"© {video.channel.name}\n\n"
-
-    return (
-        get_app_settings()
-        .yt_description_template.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
-        .replace("@@VIDEO_LIST@@", f"{video_list_names}")
-        .replace("@@DISCLAIMER@@", disclaimer)
-    )
 
 
 async def main_async() -> None:
@@ -140,12 +96,19 @@ async def _run_weekly_publish_job(settings: AppSettings) -> None:
     compositor, thumbnail_generator = _build_video_pipeline(downloader)
     file_path = await compositor.join_processed_videos([video.video_id for video in video_list])
 
-    yt_title = generate_yt_title(video_list)
+    hashtag_list = extract_video_hashtags(video_list)
+    yt_title = generate_youtube_title(
+        video_list=video_list,
+        title_template=settings.yt_title_template,
+        hashtags=hashtag_list,
+    )
     logger.debug("generated title: ", yt_title=yt_title)
-    yt_description = generate_yt_description(video_list)
+    yt_description = generate_youtube_description(
+        video_list=video_list,
+        description_template=settings.yt_description_template,
+    )
     logger.debug("generated description:", yt_description=yt_description)
     thumbnail_path = await thumbnail_generator.generate_thumbnail(video_list[-4:])
-    hashtag_list = extract_video_hashtags(video_list)
     try:
         playlist_id = settings.yt_playlist_id_weekly
 
