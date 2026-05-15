@@ -3,6 +3,7 @@
 import asyncio
 import gc
 import sys
+from typing import Any
 
 import zmq
 
@@ -15,6 +16,40 @@ from src.infrastructure.video.renderer import VideoRenderer
 from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
+
+
+def _process_video(video: Video, compositor: VideoCompositor, screen_orientation: str) -> dict[str, str]:
+    handlers: dict[str, Any] = {
+        "vertical": compositor.post_process_vertical_video,
+        "horizontal": compositor.post_process_video,
+    }
+    handler = handlers.get(screen_orientation, compositor.post_process_video)
+
+    if not video.video_id.strip():
+        logger.error("post_processor.video_id_missing", orientation=screen_orientation)
+        return {
+            "video_id": video.video_id,
+            "status": "error",
+            "error": "video_id is empty",
+        }
+
+    try:
+        asyncio.run(handler(video))
+        return {
+            "video_id": video.video_id,
+            "status": "ok",
+        }
+    except Exception as exc:  # pragma: no cover - exercised via worker runtime paths
+        logger.exception(
+            "post_processor.video_failed",
+            video_id=video.video_id,
+            orientation=screen_orientation,
+        )
+        return {
+            "video_id": video.video_id,
+            "status": "error",
+            "error": str(exc),
+        }
 
 
 def main_main(port: int, screen_orientation: str) -> None:
@@ -42,19 +77,13 @@ def main_main(port: int, screen_orientation: str) -> None:
     )
     renderer = VideoRenderer(asset_manager)
     compositor = VideoCompositor(asset_manager, renderer)
-    map_screen_orientation_process = {
-        "vertical": compositor.post_process_vertical_video,
-        "horizontal": compositor.post_process_video,
-    }
-
     while True:
         logger.debug("listen on port:", port=port)
         video_work_json: list[str] = consumer_receiver.recv_json()  # type: ignore[assignment]
         logger.debug("Process videos: ", number_of_videos=len(video_work_json))
         for video_json in video_work_json:
             video = Video.model_validate_json(video_json)
-            asyncio.run(map_screen_orientation_process.get(screen_orientation, compositor.post_process_video)(video))
-            result = {"video_id": video.video_id}
+            result = _process_video(video=video, compositor=compositor, screen_orientation=screen_orientation)
             consumer_sender.send_json(result)  # type: ignore[no-untyped-call]
             gc.collect()
         logger.debug("finish process all the videos, worker exit", number_of_videos=len(video_work_json))

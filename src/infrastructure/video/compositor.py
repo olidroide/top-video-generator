@@ -67,6 +67,13 @@ class VideoCompositor:
         self._video_yt_resources_folder = asset_manager.video_yt_resources_folder
         self._video_generated_folder = asset_manager.video_generated_folder
 
+    def _source_video_file(self, video: Video) -> pathlib.Path:
+        video_id = video.video_id.strip()
+        if not video_id:
+            raise ValueError("video_id is empty")
+
+        return pathlib.Path(self._video_yt_resources_folder) / f"{video_id}.mp4"
+
     async def post_process_video(self, video: Video) -> None:
         """Compose horizontal video (1920x1080) with overlays and render.
 
@@ -77,8 +84,9 @@ class VideoCompositor:
         x_width = 1920
         y_height = 1080
         seconds_per_clip = 8
+        source_file = await asyncio.to_thread(self._source_video_file, video)
         clip = VideoFileClip(
-            filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
+            filename=str(source_file),
             target_resolution=video_target_resolution(x_width, y_height),
         )
         raw_duration: Any = getattr(clip, "duration", 0.0)
@@ -111,8 +119,9 @@ class VideoCompositor:
         _x_width = 1080
         _y_height = 1920
         seconds_per_clip = 8
+        source_file = await asyncio.to_thread(self._source_video_file, video)
         clip = VideoFileClip(
-            filename=f"{self._video_yt_resources_folder}/{video.video_id}.mp4",
+            filename=str(source_file),
         )
         clip = clip_with_position(clip, "top")
         clip_duration = float(clip.duration or 0.0)

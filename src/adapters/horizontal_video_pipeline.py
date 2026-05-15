@@ -10,6 +10,7 @@ from src.infrastructure.video.compositor import VideoCompositor
 from src.infrastructure.video.downloader import VideoDownloader
 from src.infrastructure.video.renderer import VideoRenderer
 from src.infrastructure.video.thumbnail_generator import ThumbnailGenerator
+from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -23,10 +24,17 @@ class HorizontalVideoPipelineAdapter:
 
     def __init__(self, settings: AppSettings) -> None:
         self._settings = settings
+        self._logger = get_logger(__name__)
 
     async def build_horizontal_video(self, video_list: Sequence[Video]) -> tuple[str, str]:
+        selected_videos = [video for video in video_list if video.video_id.strip()]
+        dropped_videos = len(video_list) - len(selected_videos)
+        if dropped_videos > 0:
+            self._logger.warning("horizontal_pipeline.invalid_video_id_filtered", dropped=dropped_videos)
+        if not selected_videos:
+            raise ValueError("No videos with valid video_id available for horizontal pipeline")
+
         downloader = VideoDownloader()
-        selected_videos = list(video_list)
         await downloader.download_video(selected_videos)
         WorkerFactory().start_workers(selected_videos)
 
