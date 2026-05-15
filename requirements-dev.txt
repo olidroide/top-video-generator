@@ -1,6 +1,0 @@
-# styling
-black==25.1.0
-ruff==0.11.9
-
-pytest==8.3.5
-pytest-asyncio==0.26.0

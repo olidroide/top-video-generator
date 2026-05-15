@@ -1,21 +1,62 @@
+x-top-video-generator-common: &top-video-generator-common
+  image: ${TOP_VIDEO_GENERATOR_IMAGE:-ghcr.io/olidroide/top-video-generator:latest}
+  pull_policy: ${TOP_VIDEO_GENERATOR_PULL_POLICY:-missing}
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 90s
+  env_file:
+    - path: ./.env
+      required: true
+    - path: ./.env.local
+      required: false
+  volumes:
+    - ./db:/app/db
+    - ./videos:/app/videos
+    - ./logs:/app/logs
+    - ./secrets:/app/secrets:ro
+  tmpfs:
+    - /app/run:mode=1777
+
 services:
-  top-video-generator:
-    image: top-video-generator
+  web:
+    <<: *top-video-generator-common
+    environment:
+      STEP: web
+      TOP_MUSIC_ADMIN_PASSWORD: ${TOP_MUSIC_ADMIN_PASSWORD:-}
     ports:
-      - "8080:8080"
-    volumes:
-      - ./prod:/app/db
-      - ./prod/videos:/app/videos
-      - ./prod/yt_client_secret.json:/app/yt_client_secret.json
-      - ./prod/instagram_session.json:/app/instagram_session.json
-      - ./prod/logs:/app/logs
-    env_file:
-      - ./docker-environment.env
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2500M
-        reservations:
-          cpus: '0.15'
-          memory: 64M
+      - "${TOP_VIDEO_GENERATOR_PORT:-8080}:8080"
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;
+            urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  scheduler:
+    <<: *top-video-generator-common
+    environment:
+      STEP: scheduler
+    mem_limit: 2500m
+    memswap_limit: 2500m
+    cpus: 2.0
+    healthcheck:
+      test: [ "CMD", "python", "-m", "src.entrypoints.scheduler_healthcheck" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  top-video-generator:
+    <<: *top-video-generator-common
+    profiles: [ "manual" ]
+    restart: "no"

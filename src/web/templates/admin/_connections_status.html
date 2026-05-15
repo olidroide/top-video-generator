@@ -1,0 +1,14 @@
+{#
+  HTMX partial — returned by GET /admin/connections/status
+  Replaces #connections-grid via hx-swap="outerHTML"
+#}
+<div
+  id="connections-grid"
+  class="platforms-grid"
+  role="list"
+  aria-label="Platform connections"
+>
+  {% for p in vm.platforms %}
+    {% include "admin/_platform_connection_card.html" %}
+  {% endfor %}
+</div>

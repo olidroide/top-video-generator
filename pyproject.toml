@@ -1,21 +1,409 @@
 [project]
 name = "top-video-generator"
 version = "1.0.0"
-requires-python = ">=3.11"
+description = "Automated video pipeline with Hexagonal Architecture"
 readme = "README.md"
+requires-python = ">=3.13"
+license-files = ["LICENSE"]
 authors = [
-  {name = "olidroide",email = "top-video-generator@olidroide.es"},
+  { name = "olidroide", email = "top-video-generator@olidroide.es" },
 ]
-maintainers = [
-  {name = "olidroide", email = "top-video-generator@olidroide.es"}
+keywords = ["automation", "hexagonal", "top", "video", "youtube"]
+dependencies = [
+  "aiofiles>=25.1.0,<26.0.0",
+  "aiohttp[speedups]>=3.13.4,<4.0.0",
+  "cryptography>=46.0.6,<47.0.0",
+  "emoji-country-flag>=2.1.0,<3.0.0",
+  "fastapi>=0.135.2,<1.0.0",
+  "google-api-python-client>=2.193.0,<3.0.0",
+  "google-auth>=2.49.1,<3.0.0",
+  "google-auth-httplib2>=0.3.1,<1.0.0",
+  "google-auth-oauthlib>=1.3.1,<2.0.0",
+  "isodate>=0.7.2,<1.0.0",
+  "itsdangerous>=2.2.0,<3.0.0",
+  "jinja2>=3.1.6,<4.0.0",
+  "moviepy>=2.1.1,<3.0.0",
+  "pillow>=10.4.0,<11.0.0",
+  "pydantic-settings>=2.13.1,<3.0.0",
+  "pydantic[email]>=2.12.5,<3.0.0",
+  "python-dotenv>=1.2.2,<2.0.0",
+  "python-multipart>=0.0.20,<0.1.0",
+  "pyzmq>=27.1.0,<28.0.0",
+  "segno>=1.6.6,<2.0.0",
+  "structlog>=25.5.0,<26.0.0",
+  "tenacity>=9.1.4,<10.0.0",
+  "tinydb>=4.8.2,<5.0.0",
+  "tinyflux>=1.2.0,<2.0.0",
+  "uvicorn>=0.42.0,<1.0.0",
+  "yt-dlp>=2026.3.17,<2027.0.0",
 ]
-keywords = ["youtube","top","video"]
 
-[tool.black]
-line-length = 120
-target-version = ['py311']
+[project.urls]
+Repository = "https://github.com/olidroide/top-video-generator"
+Tracker = "https://github.com/olidroide/top-video-generator/issues"
+
+# Entry points para ejecutar con 'uv run'
+[project.scripts]
+api-server = "src.entrypoints.api_server:main"
+fetch-data = "src.entrypoints.fetch_data:main"
+migrate-legacy-data = "src.entrypoints.migrate_legacy_data:main"
+publish-vertical = "src.entrypoints.publish_vertical:main"
+publish-video = "src.entrypoints.publish_video:main"
+scheduler-healthcheck = "src.entrypoints.scheduler_healthcheck:main"
+scheduler-run = "src.entrypoints.scheduler:main"
+
+[project.optional-dependencies]
+instagram = [
+  "instagrapi>=2.3.0,<3.0.0",
+]
+spotify = [
+  "redis>=7.4.0,<8.0.0",
+  "spotipyfree>=1.1.0,<2.0.0",
+  "websockets>=15.0.0,<16.0.0",
+]
+tiktok = [
+  "playwright>=1.58.0,<2.0.0",
+  "tiktok-uploader",
+]
+
+[dependency-groups]
+dev = [
+  "pre-commit>=4.5.1,<5.0.0",
+  "pytest>=9.0.2,<10.0.0",
+  "pytest-asyncio>=1.3.0,<2.0.0",
+  "respx>=0.22.0,<1.0.0",
+  "ruff>=0.15.8,<1.0.0",
+  "ty>=0.0.27,<0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "slow: mark test as slow running (deselect with -m 'not slow')",
+]
 
 [tool.ruff]
+cache-dir = ".ruff_cache"
 line-length = 120
-target-version = 'py311'
-include = ["*.py"]
+target-version = "py313"
+exclude = [".agents", ".github/skills"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "ANN",
+  "ARG",
+  "ASYNC",
+  "B",
+  "BLE",
+  "C4",
+  "C90",
+  "COM",
+  "DTZ",
+  "E",
+  "ERA",
+  "EXE",
+  "F",
+  "FA",
+  "FAST",
+  "FBT",
+  "FURB",
+  "G",
+  "I",
+  "ICN",
+  "INP",
+  "ISC",
+  "N",
+  "PERF",
+  "PGH",
+  "PIE",
+  "PL",
+  "PT",
+  "PTH",
+  "PYI",
+  "Q",
+  "RET",
+  "RSE",
+  "RUF",
+  "S",
+  "SIM",
+  "SLF",
+  "T10",
+  "T20",
+  "TC",
+  "TID",
+  "TRY",
+  "UP",
+  "W",
+  "YTT",
+]
+ignore = [
+  "ANN002",  # Missing type annotation for *args
+  "ANN003",  # Missing type annotation for **kwargs
+  "ANN401",  # Dynamically typed expressions (Any) disallowed
+  "B023",  # Function definition does not bind loop variable
+  "COM812",  # Trailing comma missing — conflicts with ruff formatter
+  "EXE002",  # The file is executable but no shebang is present
+  "FBT001",  # Boolean-typed positional argument in function definition
+  "FBT002",  # Boolean default positional argument in function definition
+  "FBT003",  # Boolean positional value in function call
+  "ISC001",  # Implicitly concatenated string — conflicts with ruff formatter
+  "PLC0415",  # Import outside top-level (needed for conditional legacy imports)
+  "PLE1205",  # Too many arguments for logging format — structlog uses kwargs
+  "PT001",  # Use @pytest.fixture() over @pytest.fixture
+  "RUF001",  # Ambiguous unicode is tolerated in existing repository text content
+  "TID252",  # Prefer absolute imports over relative imports from parent modules
+  "TRY003",  # Avoid specifying long messages outside the exception class
+  "TRY300",  # Consider moving this return statement to an else block
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.lint.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["i", "j", "k", "ex", "Run", "_", "df", "fp", "id", "x", "y"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "ANN",  # No type annotations required in tests
+  "ARG001",  # Unused function argument (fixtures)
+  "ASYNC240",  # Integration tests may use pathlib in async contexts
+  "D401",  # First line should be in imperative mood
+  "DTZ001",  # Tests may use naive datetimes as fixtures
+  "PLR2004",  # Magic value used in comparison
+  "PLW0108",  # Lambda may be unnecessary
+  "PT018",  # Composite asserts are acceptable in tests
+  "S108",  # Temp-like test paths are acceptable in tests
+  "S101",  # Use of assert detected
+  "S105",  # Hardcoded password string
+  "S106",  # Dummy credentials in tests are acceptable
+  "SLF001",  # Tests may access private members for focused assertions
+  "T20",  # Print found
+  "TC003",  # Type-checking import separation is unnecessary in tests
+]
+"src/infrastructure/youtube/client.py" = [
+  "ANN001",  # Legacy integration client pending typed API migration
+  "ANN201",  # Legacy integration client pending typed API migration
+  "ARG002",  # Legacy adapter compatibility methods keep unused parameters
+  "RET504",  # Legacy request helpers will be simplified during client migration
+  "TRY400",  # Legacy logging patterns pending client migration
+]
+"src/web/main.py" = [
+  "ANN201",  # Legacy FastAPI delivery layer pending route typing cleanup
+  "ARG001",  # FastAPI/templating handlers keep framework parameters unused
+  "BLE001",  # Legacy route error handling pending cleanup
+  "DTZ011",  # Legacy date handling pending timezone cleanup
+  "ERA001",  # Legacy commented code pending route cleanup
+  "G004",  # Legacy logging patterns pending cleanup
+  "PLW1510",  # Legacy subprocess health check pending refactor
+  "RET504",  # Legacy handlers pending simplification
+  "SIM103",  # Legacy boolean style pending cleanup
+  "TRY400",  # Legacy logging patterns pending cleanup
+]
+"src/web/**/*.py" = [
+  "B008",  # Allow FastAPI Depends() defaults only in delivery layer
+]
+"src/entrypoints/**/*.py" = [
+  "B008",  # Allow FastAPI/CLI dependency wiring in entrypoints
+]
+
+[tool.ruff.lint.pylint]
+max-args = 10
+
+[tool.ty]
+# ty type checker — https://docs.astral.sh/ty/
+
+[tool.ty.analysis]
+respect-type-ignore-comments = true
+
+[tool.ty.environment]
+python-version = "3.13"
+
+# ── Overrides ─────────────────────────────────────────────────────────────────
+
+# Tests: mocks, intentional wrong-type negative tests, frozen model mutation
+[[tool.ty.overrides]]
+include = ["tests/**/*.py"]
+
+[tool.ty.overrides.rules]
+invalid-assignment = "ignore"  # Factory/frozen model mutation tests
+invalid-argument-type = "ignore"  # Intentional wrong-type negative tests
+invalid-return-type = "ignore"  # Mock fixtures returning mocks as Protocol types
+missing-argument = "ignore"  # Pydantic models without required fields in negative tests
+unresolved-attribute = "ignore"  # mock .return_value / .side_effect / .assert_called
+
+# Domain @runtime_checkable Protocols: Pydantic validators are special
+[[tool.ty.overrides]]
+include = ["src/domain/*.py"]
+
+[tool.ty.overrides.rules]
+call-non-callable = "warn"  # field_validator / model_validator decorator patterns
+
+# FastAPI delivery layer: add_middleware + Jinja2 env.globals
+[[tool.ty.overrides]]
+include = ["src/web/*.py"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"  # Starlette add_middleware + Jinja2 env.globals.update()
+invalid-assignment = "ignore"  # Jinja2 env.globals dict-key assignment
+unresolved-attribute = "ignore"  # Starlette internals
+
+# ── Rules ──────────────────────────────────────────────────────────────────────
+
+[tool.ty.rules]
+# Core type safety
+possibly-unresolved-reference = "error"
+index-out-of-bounds = "error"
+division-by-zero = "error"
+unused-ignore-comment = "error"
+invalid-return-type = "error"
+unknown-argument = "error"
+invalid-argument-type = "error"
+unresolved-import = "error"
+unresolved-attribute = "error"
+possibly-missing-attribute = "error"
+invalid-await = "error"
+
+# Runtime safety
+call-non-callable = "error"
+invalid-assignment = "error"
+invalid-declaration = "error"
+invalid-raise = "error"
+invalid-exception-caught = "error"
+invalid-context-manager = "error"
+not-iterable = "error"
+not-subscriptable = "error"
+invalid-key = "error"
+missing-argument = "error"
+too-many-positional-arguments = "error"
+parameter-already-assigned = "error"
+positional-only-parameter-as-kwarg = "error"
+no-matching-overload = "error"
+unsupported-operator = "error"
+zero-stepsize-in-slice = "error"
+
+# Class and inheritance
+invalid-base = "error"
+duplicate-base = "error"
+inconsistent-mro = "error"
+conflicting-metaclass = "error"
+cyclic-class-definition = "error"
+instance-layout-conflict = "error"
+invalid-metaclass = "error"
+subclass-of-final-class = "error"
+override-of-final-method = "error"
+invalid-method-override = "error"
+invalid-explicit-override = "error"
+
+# Generics and type variables
+invalid-generic-class = "error"
+invalid-generic-enum = "error"
+invalid-legacy-type-variable = "error"
+invalid-type-variable-constraints = "error"
+invalid-paramspec = "error"
+invalid-type-arguments = "error"
+
+# Protocol and structural typing
+invalid-protocol = "warn"
+ambiguous-protocol-member = "ignore"
+
+# TypedDict
+invalid-typed-dict-statement = "error"
+missing-typed-dict-key = "error"
+
+# NamedTuple / dataclass
+invalid-named-tuple = "error"
+duplicate-kw-only = "error"
+invalid-frozen-dataclass-subclass = "error"
+super-call-in-named-tuple-method = "error"
+
+# Overloads
+invalid-overload = "error"
+useless-overload-body = "warn"
+
+# Type annotations and forward references
+invalid-syntax-in-forward-annotation = "error"
+escape-character-in-forward-annotation = "error"
+fstring-type-annotation = "error"
+byte-string-type-annotation = "error"
+raw-string-type-annotation = "error"
+implicit-concatenated-string-type-annotation = "error"
+invalid-type-form = "error"
+
+# Type checking
+invalid-type-checking-constant = "error"
+type-assertion-failure = "error"
+static-assert-error = "error"
+
+# Super and inheritance
+invalid-super-argument = "error"
+unavailable-implicit-super-arguments = "error"
+
+# Parameter defaults
+invalid-parameter-default = "error"
+conflicting-declarations = "error"
+
+# Type guards
+invalid-type-guard-definition = "error"
+invalid-type-guard-call = "error"
+
+# Miscellaneous
+invalid-attribute-access = "error"
+unresolved-reference = "error"
+invalid-newtype = "error"
+invalid-type-alias-type = "error"
+cyclic-type-alias-definition = "error"
+invalid-total-ordering = "error"
+unsupported-bool-conversion = "error"
+
+# Warnings — useful but non-critical
+deprecated = "warn"
+undefined-reveal = "warn"
+redundant-cast = "warn"
+ineffective-final = "warn"
+unresolved-global = "warn"
+unsupported-base = "warn"
+possibly-missing-implicit-call = "warn"
+invalid-ignore-comment = "warn"
+ignore-comment-unknown-rule = "warn"
+
+# Disabled — too noisy / known false positives
+possibly-missing-import = "ignore"
+unsupported-dynamic-base = "ignore"
+
+[tool.ty.src]
+# Include canonical code + integration tests.
+# tests/unit excluded: create_autospec generates runtime-only mock attributes
+# (return_value, side_effect, assert_called, etc.) that ty can't infer → false positives.
+include = ["src", "tests/integration"]
+exclude = [".github/skills"]
+respect-ignore-files = true
+
+[tool.ty.terminal]
+output-format = "full"
+error-on-warning = true
+
+[tool.uv]
+package = true
+override-dependencies = [
+  "moviepy==2.2.1",
+]

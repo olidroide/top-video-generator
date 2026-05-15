@@ -1,0 +1,473 @@
+/* ═══════════════════════════════════════════════════════
+   NOTHING DESIGN SYSTEM — Admin Panel (Pico CSS v2 base)
+   Pico handles: layout, typography, forms, light/dark.
+   This file: Nothing aesthetic on top (accent, mono, dots).
+   ═══════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+/* ── Override Pico primary with brand red ───────────── */
+:root {
+  --pico-primary:                  #fc2b4c;
+  --pico-primary-hover:            #d91e3b;
+  --pico-primary-focus:            rgba(252, 43, 76, 0.25);
+  --pico-primary-inverse:          #fff;
+  --pico-border-radius:            0;
+  --pico-form-element-border-radius: 0;
+
+  /* Nothing tokens (theme-independent) */
+  --n-accent:    #fc2b4c;
+  --n-font-mono: 'Space Mono', 'Courier New', monospace;
+  --n-green:     #22c55e;
+  --n-gray:      #888;
+}
+
+/* ── Dot-matrix background texture ─────────────────── */
+/* Uses Pico muted border color — adapts to light/dark   */
+body {
+  background-image: radial-gradient(
+    circle,
+    var(--pico-muted-border-color) 1px,
+    transparent 1px
+  );
+  background-size: 24px 24px;
+  background-attachment: fixed;
+}
+
+/* ── Nav brand ──────────────────────────────────────── */
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--pico-color);
+}
+
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--n-accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Small nav links and buttons */
+header nav a.secondary,
+header nav [role="button"].secondary,
+header nav button.secondary {
+  font-family: var(--n-font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#theme-toggle {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  margin-bottom: 0;
+}
+
+/* ── Section header ─────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: calc(var(--pico-spacing) * 1.5);
+  padding-bottom: var(--pico-spacing);
+  border-bottom: 1px dashed var(--pico-muted-border-color);
+}
+
+.section-title {
+  font-family: var(--n-font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+  margin: 0;
+}
+
+.section-title::before {
+  content: '// ';
+  color: var(--n-accent);
+}
+
+.section-meta {
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  color: var(--pico-muted-color);
+  white-space: nowrap;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.n-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  margin-bottom: 0;
+  border-radius: 0;
+  border: 1px solid var(--n-accent);
+  background: var(--n-accent);
+  color: #fff;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.38rem 0.75rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.n-btn:hover,
+.n-btn:focus-visible {
+  background: var(--pico-primary-hover);
+  border-color: var(--pico-primary-hover);
+  color: #fff;
+}
+
+.n-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.n-btn .htmx-indicator {
+  margin-left: 0.1rem;
+}
+
+.n-btn--outline {
+  border: 1px dashed var(--pico-muted-border-color);
+  background: transparent;
+  color: var(--pico-muted-color);
+  font-weight: 400;
+}
+
+.n-btn--outline:hover,
+.n-btn--outline:focus-visible {
+  border-color: var(--n-accent);
+  color: var(--n-accent);
+  background: transparent;
+}
+
+.n-btn--compact {
+  padding: 0.35rem 0.7rem;
+}
+
+.refresh-action__icon {
+  font-size: 0.7rem;
+}
+
+/* ── Platform cards grid ────────────────────────────── */
+/* Pico's .grid doesn't support minmax; use own grid     */
+.platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--pico-spacing);
+}
+
+/* ── Platform card (built on Pico <article>) ────────── */
+article.platform-card {
+  --pico-card-border-color: var(--pico-muted-border-color);
+  border-style: dashed;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.18s;
+  margin-bottom: 0;
+}
+
+article.platform-card--connected {
+  --pico-card-border-color: rgba(34, 197, 94, 0.4);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+article.platform-card--unconfigured {
+  opacity: 0.5;
+}
+
+/* ── Card layout helpers ────────────────────────────── */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--pico-spacing);
+}
+
+.platform-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.card-body {
+  flex: 1;
+  margin-bottom: var(--pico-spacing);
+}
+
+.data-row {
+  display: flex;
+  gap: 0.5rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.63rem;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+.data-key {
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  min-width: 3.5rem;
+}
+
+.data-val {
+  color: var(--pico-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.card-foot a[role="button"],
+.card-foot button {
+  font-family: var(--n-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.38rem 0.75rem;
+  margin-bottom: 0;
+}
+
+.card-foot button .platform-card__check-spinner {
+  color: var(--n-accent);
+  margin-left: 0.4rem;
+}
+
+/* ── Status indicator ───────────────────────────────── */
+.n-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.n-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.n-status__dot--on  { background-color: var(--n-green); }
+.n-status__dot--off { background-color: var(--n-accent); }
+.n-status__dot--na  { background-color: var(--n-gray); }
+
+.n-status__label--on  { color: var(--n-green); }
+.n-status__label--off { color: var(--n-accent); }
+.n-status__label--na  { color: var(--pico-muted-color); }
+
+/* ── Login layout ────────────────────────────────────── */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--pico-spacing);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+  margin-bottom: 1.5rem;
+}
+
+.login-eyebrow-dot {
+  width: 9px;
+  height: 9px;
+  background: var(--n-accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.login-title {
+  font-family: var(--n-font-mono);
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 0.3rem;
+}
+
+.login-sub {
+  font-family: var(--n-font-mono);
+  font-size: 0.66rem;
+  color: var(--pico-muted-color);
+  letter-spacing: 0.1em;
+  margin-bottom: calc(var(--pico-spacing) * 1.5);
+}
+
+/* Pico handles input styling; keep mono font */
+.login-card label {
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.login-card input[type="password"] {
+  font-family: var(--n-font-mono);
+}
+
+/* ── Error / notice banners ─────────────────────────── */
+.n-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  color: var(--n-accent);
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(252, 43, 76, 0.35);
+  background-color: rgba(252, 43, 76, 0.08);
+  margin-bottom: var(--pico-spacing);
+}
+
+.n-error__glyph {
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 0.02rem;
+}
+
+.n-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: var(--pico-muted-color);
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--pico-muted-border-color);
+  margin-bottom: var(--pico-spacing);
+}
+
+.n-task-feedback {
+  padding: var(--pico-spacing);
+  margin: var(--pico-spacing) 0;
+  border-radius: var(--pico-border-radius);
+  font-family: var(--n-font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+}
+
+.n-task-feedback-placeholder {
+  display: none;
+  margin-top: var(--pico-spacing);
+}
+
+.n-task-feedback--accepted {
+  color: var(--pico-muted-color);
+  background-color: rgba(148, 163, 184, 0.09);
+  border: 1px dashed var(--pico-muted-border-color);
+}
+
+/* ── Theme toggle (floating on login page) ──────────── */
+.theme-toggle-float {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 200;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  margin-bottom: 0;
+}
+
+/* ── Admin footer ───────────────────────────────────── */
+.admin-footer {
+  text-align: center;
+  padding: var(--pico-spacing) 0 calc(var(--pico-spacing) * 2);
+  border-top: 1px solid var(--pico-muted-border-color);
+  margin-top: calc(var(--pico-spacing) * 2);
+}
+
+.admin-footer small {
+  font-family: var(--n-font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ── HTMX ───────────────────────────────────────────── */
+.htmx-indicator {
+  display: none;
+  opacity: 0;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+  opacity: 1;
+}
+
+button.htmx-request .refresh-action__icon {
+  animation: n-spin 0.65s linear infinite;
+  display: inline-block;
+}
+
+@keyframes n-spin {
+  to { transform: rotate(360deg); }
+}
+
+.n-spin {
+  animation: n-spin 0.65s linear infinite;
+  display: inline-block;
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .platforms-grid {
+    grid-template-columns: 1fr;
+  }
+}

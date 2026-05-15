@@ -1,29 +1,27 @@
-#!/bin/bash
-#!/usr/bin/env python3
+#!/bin/sh
 
+set -eu
 
-#set -exo pipefail
+step="${STEP:-${1:-}}"
 
-
-arg1=${STEP:-NO}
-
-case $arg1 in
-    "fetch_data" )
-        python src/script_fetch_yt_data.py
+case "$step" in
+    "fetch_data")
+        exec python -m src.entrypoints.fetch_data
         ;;
-    "vertical_publish" )
-        python src/script_generate_vertical_publish_top_video.py
+    "vertical_publish")
+        exec python -m src.entrypoints.publish_vertical
         ;;
-    "weekly_publish" )
-        python src/script_generate_publish_top_video.py
+    "weekly_publish")
+        exec python -m src.entrypoints.publish_video
         ;;
-    "web" )
-        uvicorn src.web.main:app --port 8080 --host 0.0.0.0
+    "web")
+        exec python -m src.entrypoints.api_server
+        ;;
+    "scheduler")
+        exec python -m src.entrypoints.scheduler
         ;;
     *)
-      echo "use STEP=[fetch_data | vertical_publish | weekly_publish | web]"
+        echo "use STEP=[fetch_data | vertical_publish | weekly_publish | web | scheduler]" >&2
+        exit 1
+        ;;
 esac
-
-#make schedule
-#python src/script_fetch_yt_data.py
-#python src/script_generate_publish_top_video.py

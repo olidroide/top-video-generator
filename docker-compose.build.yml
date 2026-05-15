@@ -1,9 +1,7 @@
-version: "3"
-
 services:
   top-video-generator:
     container_name: top-video-generator
-    image: top-video-generator:latest
+    image: ${TOP_VIDEO_GENERATOR_IMAGE:-top-video-generator:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -11,4 +9,7 @@ services:
         - "UID=${UID:-1000}"
         - "GID=${GID:-1000}"
     env_file:
-      - ./docker-environment.env
+      - path: ./.env
+        required: true
+      - path: ./.env.local
+        required: false

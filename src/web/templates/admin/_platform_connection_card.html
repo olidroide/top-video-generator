@@ -1,0 +1,96 @@
+{% set status_key = 'on' if p.is_connected else ('off' if p.is_configured else 'na') %}
+{% set status_label = 'CONNECTED' if p.is_connected else ('NOT CONNECTED' if p.is_configured else 'NOT CONFIGURED') %}
+
+<article
+  id="platform-card-{{ p.slug }}"
+  class="platform-card {% if p.is_connected %}platform-card--connected{% elif not p.is_configured %}platform-card--unconfigured{% endif %}"
+  role="listitem"
+  aria-label="{{ p.name }} connection"
+>
+  <div class="card-head">
+    <span class="platform-label">
+      <i class="{{ p.icon_class }}" aria-hidden="true" style="color:var(--pico-muted-color);width:1rem;text-align:center;"></i>
+      {{ p.name | upper }}
+    </span>
+    <span class="n-status" aria-label="Status: {{ status_label }}">
+      <span class="n-status__dot n-status__dot--{{ status_key }}" aria-hidden="true"></span>
+      <span class="n-status__label--{{ status_key }}">{{ status_label }}</span>
+    </span>
+  </div>
+
+  <hr aria-hidden="true">
+
+  <div class="card-body">
+    <div class="data-row">
+      <span class="data-key">ID</span>
+      {% if p.connected_id %}
+        <span class="data-val" title="{{ p.connected_id }}">{{ p.connected_id }}</span>
+      {% else %}
+        <span class="data-val" style="color:var(--pico-muted-color);">—</span>
+      {% endif %}
+    </div>
+    <div class="data-row">
+      <span class="data-key">AUTH</span>
+      <span class="data-val">{{ p.auth_type }}</span>
+    </div>
+  </div>
+
+  <hr aria-hidden="true">
+
+  {% include "admin/_platform_check_status.html" %}
+
+  <hr aria-hidden="true">
+
+  <div class="card-foot">
+    {% if not p.is_configured %}
+      <button disabled class="outline secondary" title="Configure env vars to enable">
+        Set Env Vars
+      </button>
+    {% elif p.auth_type == 'CREDENTIAL' %}
+      {% if p.is_connected %}
+        <button disabled class="outline secondary">&#10003; Credentials Set</button>
+      {% else %}
+        <button disabled class="outline secondary" title="Set username &amp; password env vars">
+          Set Credentials
+        </button>
+      {% endif %}
+    {% else %}
+      {% if p.auth_url %}
+        <a
+          href="{{ p.auth_url }}"
+          role="button"
+          aria-label="Connect {{ p.name }} via OAuth"
+        >
+          Connect &#8599;
+        </a>
+      {% endif %}
+      {% if p.is_connected %}
+        <a
+          href="{{ p.auth_url or '#' }}"
+          role="button"
+          class="secondary outline"
+          aria-label="Re-authenticate {{ p.name }}"
+        >
+          Re-auth &#8599;
+        </a>
+      {% endif %}
+    {% endif %}
+
+    <button
+      {% if not p.can_run_check %}disabled{% endif %}
+      class="secondary outline"
+      hx-post="/admin/connections/{{ p.slug }}/check"
+      hx-target="#platform-card-{{ p.slug }}"
+      hx-swap="outerHTML"
+      hx-indicator="#check-spinner-{{ p.slug }}"
+      aria-label="{{ p.check_action_label }} for {{ p.name }}"
+    >
+      {{ p.check_action_label }}
+      <i
+        id="check-spinner-{{ p.slug }}"
+        class="fas fa-sync-alt htmx-indicator n-spin platform-card__check-spinner"
+        aria-hidden="true"
+      ></i>
+    </button>
+  </div>
+</article>

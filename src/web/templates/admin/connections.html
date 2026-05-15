@@ -1,0 +1,97 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Connections{% endblock %}
+
+{% block page_content %}
+
+  {# ── Section header with HTMX refresh trigger ── #}
+  <div class="section-header">
+    <h2 class="section-title">Platform Connections</h2>
+
+    <div class="section-actions">
+      <span class="section-meta">
+        {{ vm.connected_count }}/{{ vm.total_count }} CONNECTED
+      </span>
+
+      {# HTMX: on-demand refresh, replaces #connections-grid outerHTML #}
+      <button
+        class="n-btn n-btn--outline n-btn--compact"
+        hx-get="/admin/connections/status"
+        hx-target="#connections-grid"
+        hx-swap="outerHTML"
+        aria-label="Refresh connection status"
+      >
+        <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  {# ── Connections grid — swapped by HTMX ── #}
+  {% include "admin/_connections_status.html" %}
+
+  {# ── System Health ── #}
+  <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
+    <h2 class="section-title">System Health</h2>
+
+    <div class="section-actions">
+      <span class="section-meta">v{{ health_vm.version }} &nbsp;&#183;&nbsp;
+        {% if health_vm.overall == 'healthy' %}
+          <span style="color: var(--n-green);">HEALTHY</span>
+        {% else %}
+          <span style="color: var(--n-accent);">UNHEALTHY</span>
+        {% endif %}
+      </span>
+
+      <button
+        class="n-btn n-btn--outline n-btn--compact"
+        hx-get="/admin/health/status"
+        hx-target="#health-checks"
+        hx-swap="outerHTML"
+        aria-label="Refresh system health"
+      >
+        <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  {% include "admin/_health_status.html" with context %}
+
+  {# ── Task Operations ── #}
+  <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
+    <h2 class="section-title">Task Operations</h2>
+
+    <button
+      class="n-btn n-btn--outline n-btn--compact"
+      hx-get="/admin/tasks/status"
+      hx-target="#tasks-grid"
+      hx-swap="outerHTML"
+      aria-label="Refresh task status"
+    >
+      <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+      Refresh
+    </button>
+  </div>
+
+  {% include "admin/_tasks_status.html" with context %}
+
+  {# ── Runtime Metrics ── #}
+  <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
+    <h2 class="section-title">Runtime Metrics</h2>
+
+    <button
+      class="n-btn n-btn--outline n-btn--compact"
+      hx-get="/admin/metrics/status"
+      hx-target="#metrics-grid"
+      hx-swap="outerHTML"
+      aria-label="Refresh runtime metrics"
+    >
+      <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+      Refresh
+    </button>
+  </div>
+
+  {% include "admin/_metrics_status.html" with context %}
+
+{% endblock %}

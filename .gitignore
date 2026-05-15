@@ -79,12 +79,14 @@ __pypackages__/
 
 # Environments
 *.env
+.env.local
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+run/
 
 # Spyder project settings
 .spyderproject
@@ -122,4 +124,7 @@ cython_debug/
 *.DS_Store
 .AppleDouble
 .LSOverride
-.Trashes
+.Trashes.env
+videos*
+db*
+logs*

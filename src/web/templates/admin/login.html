@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  {# Anti-FOUC: apply saved theme before first paint #}
+  <script>(function(){var t=localStorage.getItem('admin-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link href="{{ url_for('static', path='/admin.css') }}" rel="stylesheet">
+  <title>Admin Login — Top Video Generator</title>
+</head>
+<body>
+
+  {# Floating theme toggle #}
+  <button
+    id="theme-toggle"
+    class="outline secondary theme-toggle-float"
+    onclick="toggleAdminTheme()"
+    aria-label="Toggle light/dark mode"
+  >🌙</button>
+
+  <div class="login-wrap" role="main">
+    <article class="login-card">
+
+      {# Nothing-style eyebrow with red dot #}
+      <div class="login-eyebrow" aria-hidden="true">
+        <span class="login-eyebrow-dot"></span>
+        Top Video Generator
+      </div>
+
+      <h1 class="login-title">Admin<br>Access</h1>
+      <p class="login-sub">ENTER CREDENTIALS TO CONTINUE</p>
+
+      {# Error banner #}
+      {% if error %}
+        <div class="n-error" role="alert" aria-live="assertive">
+          <span class="n-error__glyph" aria-hidden="true">!</span>
+          <span>{{ error }}</span>
+        </div>
+      {% endif %}
+
+      {# No password configured warning #}
+      {% if not password_configured %}
+        <div class="n-notice" role="alert">
+          <span aria-hidden="true">&#9888;</span>
+          <span>
+            No admin password configured.
+            Set <code>TOP_MUSIC_ADMIN_PASSWORD</code>
+            in your environment to enable login.
+          </span>
+        </div>
+      {% endif %}
+
+      <form method="post" action="/admin/login" autocomplete="off">
+        <label for="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          placeholder="&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;"
+          autocomplete="current-password"
+          aria-required="true"
+          {% if not password_configured %}disabled{% endif %}
+        >
+
+        <button
+          type="submit"
+          style="width: 100%; margin-top: 0.5rem;"
+          {% if not password_configured %}disabled{% endif %}
+        >
+          Authenticate &#8594;
+        </button>
+      </form>
+
+      <p style="margin-top: 1.5rem; text-align: center;">
+        <a href="/" class="secondary" style="font-family: var(--n-font-mono); font-size: 0.62rem; letter-spacing: 0.1em;">
+          &#8592; Back to app
+        </a>
+      </p>
+
+    </article>
+  </div>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('theme-toggle');
+      var current = document.documentElement.getAttribute('data-theme') || 'dark';
+      if (btn) btn.textContent = current === 'dark' ? '🌙' : '☀️';
+    })();
+
+    function toggleAdminTheme() {
+      var html = document.documentElement;
+      var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('admin-theme', next);
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    }
+  </script>
+
+</body>
+</html>

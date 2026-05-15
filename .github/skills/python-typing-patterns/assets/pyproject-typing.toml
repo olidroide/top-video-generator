@@ -1,0 +1,43 @@
+# pyproject.toml - Type checker configuration
+# Copy these sections to your pyproject.toml
+# This project uses `ty` (https://github.com/astral-sh/ty) — the Astral type checker.
+# Run: uv run ty check src/ tests/
+
+# ============================================================
+# ty Configuration
+# ============================================================
+
+[tool.ty]
+# Paths to type-check
+src = ["src"]
+
+# Python version to target (must match pyproject.toml requires-python)
+python-version = "3.13"
+
+# ============================================================
+# ty Rule Severities
+# ============================================================
+
+[tool.ty.rules]
+# Errors — fail the check
+division-by-zero = "error"
+unresolved-attribute = "error"
+missing-argument = "error"
+too-many-arguments = "error"
+invalid-return-type = "error"
+not-iterable = "error"
+unsupported-operator = "error"
+invalid-argument-type = "error"
+
+# Warnings — displayed but don't fail
+possibly-unbound = "warn"
+unused-ignore-comment = "warn"
+
+# ============================================================
+# Recommended dev dependencies
+# ============================================================
+
+# [project.optional-dependencies]
+# dev = [
+#     "ty>=0.0.1",    # uv add --dev ty
+# ]

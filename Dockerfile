@@ -1,79 +1,92 @@
-# Build stage for compiling Python packages
-FROM python:3.12.8-slim-bookworm AS builder
+# syntax=docker/dockerfile:1.10
+
+FROM python:3.13.9-slim-bookworm AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.9.4 /uv /uvx /bin/
 
 ENV PIP_DEFAULT_TIMEOUT=100 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PATH="/app/.venv/bin:/bin:$PATH"
 
-# Install build dependencies for compiling Python packages
+WORKDIR /app
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential \
-        gcc \
-        g++ \
-        libzmq3-dev \
-        libjpeg-dev \
-        zlib1g-dev \
-        libpng-dev \
-        libfreetype6-dev \
-        liblcms2-dev \
-        libopenjp2-7-dev \
-        libtiff5-dev \
-        tk-dev \
-        tcl-dev \
-        libwebp-dev \
-        libharfbuzz-dev \
-        libfribidi-dev \
-        libxcb1-dev \
-        pkg-config \
-        && rm -rf /var/lib/apt/lists/*
+    build-essential \
+    gcc \
+    g++ \
+    libzmq3-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libopenjp2-7-dev \
+    libtiff-dev \
+    tk-dev \
+    tcl-dev \
+    libwebp-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libxcb1-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment and install packages
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+COPY pyproject.toml uv.lock README.md LICENSE /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --frozen --extra instagram --extra tiktok --no-install-project
 
-COPY ./requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
+COPY ./src /app/src
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --frozen --extra instagram --extra tiktok
 
-# Runtime stage - minimal final image
-FROM python:3.12.8-slim-bookworm
+FROM python:3.13.9-slim-bookworm
 LABEL MAINTAINER="top-video-generator@olidroide.es"
+LABEL org.opencontainers.image.source="https://github.com/olidroide/top-video-generator"
+LABEL org.opencontainers.image.description="Automated trending music video pipeline"
 
 ENV PYTHONUNBUFFERED=1 \
-    OAUTHLIB_INSECURE_TRANSPORT=1 \
-    PATH="/opt/venv/bin:$PATH" \
+    PATH="/app/.venv/bin:$PATH" \
     IMAGEIO_FFMPEG_EXE="/usr/bin/ffmpeg" \
+    PLAYWRIGHT_BROWSERS_PATH="/ms-playwright" \
     MAGICK_HOME="/usr" \
     MAGICK_CONFIGURE_PATH="/etc/ImageMagick-6" \
     FONTCONFIG_PATH="/etc/fonts"
 
-# Copy virtual environment from builder stage
-COPY --from=builder /opt/venv /opt/venv
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
 
 # Install only runtime dependencies (no build tools)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libzmq5 \
-        libjpeg62-turbo \
-        zlib1g \
-        libpng16-16 \
-        libfreetype6 \
-        liblcms2-2 \
-        libopenjp2-7 \
-        libtiff6 \
-        libwebp7 \
-        libharfbuzz0b \
-        libfribidi0 \
-        libxcb1 \
-        ffmpeg \
-        imagemagick \
-        fonts-liberation \
-        fonts-noto-mono \
-        fonts-dejavu-core \
-        fontconfig \
-        && apt-get clean \
-        && rm -rf /var/lib/apt/lists/* \
-        && rm -rf /var/cache/apt/*
+    libzmq5 \
+    libjpeg62-turbo \
+    zlib1g \
+    libpng16-16 \
+    libfreetype6 \
+    liblcms2-2 \
+    libopenjp2-7 \
+    libtiff6 \
+    libwebp7 \
+    libharfbuzz0b \
+    libfribidi0 \
+    libxcb1 \
+    ffmpeg \
+    imagemagick \
+    fonts-liberation \
+    fonts-noto-mono \
+    fonts-dejavu-core \
+    fontconfig \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/*
+
+# Install Playwright browser binaries required by tiktok-uploader.
+RUN /app/.venv/bin/playwright install --with-deps chromium
 
 # Install project-provided fonts in standard locations and expose predictable paths
 COPY ./src/resources/fonts/* /usr/local/share/fonts/truetype/custom/
@@ -104,20 +117,18 @@ RUN sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml && \
 ARG UID=1000
 ARG GID=1000
 RUN groupadd -g "${GID}" app && \
-    useradd --create-home --no-log-init -u "${UID}" -g "${GID}" app
-
-WORKDIR /app
+    useradd --create-home --no-log-init -u "${UID}" -g "${GID}" app && \
+    mkdir -p /app/run && \
+    chown app:app /app/run /ms-playwright
 
 # Copy application files
 COPY ./src /app/src
-COPY ./src/resources /app/resources  
-COPY ./src/web /app/web
-COPY pyproject.toml /app
-COPY Makefile /app
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY ./src/resources /app/resources
+COPY pyproject.toml /app/pyproject.toml
+COPY Makefile /app/Makefile
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV PYTHONPATH=/app
 USER app
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-

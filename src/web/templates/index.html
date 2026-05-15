@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block title %}
-    {{ title_page }}
+    {{ vm.title_page }}
 {% endblock %}
 
 {% block page_content %}
@@ -14,17 +14,19 @@
         <div class="card-content">
             <div class="columns  is-mobile is-vcentered">
                 <div class="column is-narrow">
-                    <a class="button is-light" href="?daily={{ timeseries_previous_date.strftime("%Y-%m-%d") }}">
-                    <span class="icon">
-                        <i class="fa fa-caret-left"></i>
-                    </span>
-                    </a>
+                    {% if vm.timeseries_previous_href %}
+                        <a class="button is-light" href="{{ vm.timeseries_previous_href }}">
+                        <span class="icon">
+                            <i class="fa fa-caret-left"></i>
+                        </span>
+                        </a>
+                    {% endif %}
                 </div>
                 <div class="column">
                     <div class="columns is-multiline is-centered">
                         <div class="column is-full is-flex is-justify-content-center">
                             <p>
-                                {{ timeseries_daily_date }}
+                                {{ vm.timeseries_daily_date }}
                             </p>
                         </div>
                         <div class="column is-flex is-justify-content-center">
@@ -35,60 +37,42 @@
                                             aria-controls="dropdown-menu"
                                             onclick="this.parentNode.parentNode.classList.toggle('is-active')"
                                     >
-                                        <span>{{ 'Weekly' if timeseries_weekly_date else 'Daily' }}</span>
+                                        <span>{{ vm.timeseries_mode_label }}</span>
                                         <span class="icon is-small"><i class="fas fa-angle-down" aria-hidden="true"></i></span>
                                     </button>
                                 </div>
                                 <div class="dropdown-menu" id="dropdown-menu" role="menu">
                                     <div class="dropdown-content">
-                                        <a href="?daily={{ timeseries_daily_date.strftime("%Y-%m-%d") }}"
-                                           class="dropdown-item {{ 'is-active' if not timeseries_weekly_date }}">Daily</a>
-                                        <a href="?weekly={{ timeseries_daily_date.strftime("%Y-%m-%d") }}"
-                                           class="dropdown-item {{ 'is-active' if timeseries_weekly_date }}">Weekly</a>
+                                        <a href="{{ vm.timeseries_daily_href }}"
+                                           class="dropdown-item {{ 'is-active' if not vm.is_weekly }}">Daily</a>
+                                        <a href="{{ vm.timeseries_weekly_href }}"
+                                           class="dropdown-item {{ 'is-active' if vm.is_weekly }}">Weekly</a>
                                     </div>
                                 </div>
                             </div>
 
                         </div>
 
-                        {% if credentials_owner %}
-                            <div class="column is-flex is-justify-content-center">
-                                {% if not video_list %}
-                                    <form action="/retry?method=fetch" method="post">
-                                        <input type="submit" value="Force Fetch Data">
-                                    </form>
-                                {% endif %}
-
-                                {% if not yt_video_published and not timeseries_weekly_date %}
-                                    <form action="/retry?method=daily" method="post">
-                                        <input type="submit" value="Force Generate & Publish Daily Video">
-                                    </form>
-                                {% endif %}
-                                {% if not yt_video_published and timeseries_weekly_date %}
-                                    <form action="/retry?method=weekly" method="post">
-                                        <input type="submit" value="Force Generate & Publish Weekly Video">
-                                    </form>
-                                {% endif %}
-                            </div>
+                        {% if vm.credentials_owner %}
                         {% endif %}
 
                     </div>
                 </div>
                 <div class="column is-narrow">
-                    {% if timeseries_next_date %}
+                    {% if vm.timeseries_next_href %}
                         <a class="button is-light is-pulled-right"
-                           href="?daily={{ timeseries_next_date.strftime("%Y-%m-%d") }}">
-                        <span class="icon">
-                        <i class="fa fa-caret-right"></i>
-                    </span>
+                           href="{{ vm.timeseries_next_href }}">
+                            <span class="icon">
+                                <i class="fa fa-caret-right"></i>
+                            </span>
+                        </a>
                     {% endif %}
-                    </a>
                 </div>
             </div>
         </div>
     </div>
 
-    {% for video in video_list %}
+    {% for video in vm.video_list %}
         <div class="block video-row" style="--my-color-var: url('{{ video.yt_video_thumbnail_url }}')">
             <div class="columns is-vcentered columns-video-row">
                 <div class="column is-2">
@@ -114,9 +98,7 @@
                     <p class="title is-6">{{ video.yt_video_title_cleaned }}</p>
                 </div>
                 <div class="column ">
-                    <p class="channel-name ">
-                        {{ video.channel.name }}
-                    </p>
+                    <p class="channel-name ">{{ video.channel_name }}</p>
                 </div>
                 <div class="column ">
                     <a href="{{ video.yt_video_url }}">
@@ -130,5 +112,3 @@
     {% endfor %}
 
 {% endblock %}
-
-

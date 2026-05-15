@@ -1,0 +1,205 @@
+{% set ns = namespace(first_card=true) %}
+<div id="tasks-grid" role="region" aria-label="Task Operations">
+  {% for task in tasks.tasks %}
+    {# First card — always applicable (Fetch Data) #}
+    {% if ns.first_card %}
+      <article
+        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
+        style="
+          {% if task.older_than_24h %}
+            --pico-card-background-color: #FEF3C7;
+            --pico-card-border-color: #F59E0B;
+          {% endif %}
+        "
+      >
+        <header>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+        </header>
+
+        <section style="margin-bottom: var(--pico-spacing);">
+          <p style="margin: 0; font-size: 0.9em;">
+            <strong>Last Run:</strong> {{ task.last_run_label }}
+          </p>
+          {% if task.hours_since is not none %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+              {{ task.hours_since }} hours ago
+            </p>
+          {% endif %}
+          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
+            Source: {{ task.source }}
+            {% if task.name == "Fetch Data" %}
+              <span style="display: block; margin-top: 0.25rem; color: #D97706;">
+                <em>Persisted from task execution events</em>
+              </span>
+            {% endif %}
+          </p>
+        </section>
+
+        {% if task.warning_message and task.older_than_24h %}
+          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
+            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
+              ⚠ {{ task.warning_message }}
+            </p>
+          </section>
+        {% endif %}
+
+        <footer>
+          <button
+            class="n-btn"
+            hx-post="/admin/tasks/fetch/trigger"
+            hx-target="#tasks-feedback"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this"
+            title="Manually trigger fetch from YouTube"
+            aria-label="Trigger fetch task"
+          >
+            Trigger Fetch
+            <span class="htmx-indicator" aria-hidden="true">
+              <i class="fas fa-circle-notch n-spin"></i>
+            </span>
+          </button>
+        </footer>
+      </article>
+
+      {% set ns.first_card = false %}
+
+    {# Daily vertical card #}
+    {% elif task.name == "Daily Vertical Videos" %}
+      <article
+        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
+        style="
+          {% if task.older_than_24h %}
+            --pico-card-background-color: #FEF3C7;
+            --pico-card-border-color: #F59E0B;
+          {% endif %}
+        "
+      >
+        <header>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+        </header>
+
+        <section style="margin-bottom: var(--pico-spacing);">
+          <p style="margin: 0; font-size: 0.9em;">
+            <strong>Last Publish:</strong> {{ task.last_run_label }}
+          </p>
+          {% if task.hours_since is not none %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+              {{ task.hours_since }} hours ago
+            </p>
+          {% endif %}
+          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
+            Source: {{ task.source }}
+            <span style="display: block; margin-top: 0.25rem; color: #D97706;"><em>Persisted from task execution events</em></span>
+          </p>
+        </section>
+
+        {% if task.warning_message and task.older_than_24h %}
+          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
+            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
+              ⚠ {{ task.warning_message }}
+            </p>
+          </section>
+        {% endif %}
+
+        <footer>
+          <button
+            class="n-btn"
+            hx-post="/admin/tasks/daily/trigger"
+            hx-target="#tasks-feedback"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this"
+            title="Manually trigger daily vertical publish"
+            aria-label="Trigger daily task"
+          >
+            Trigger Daily
+            <span class="htmx-indicator" aria-hidden="true">
+              <i class="fas fa-circle-notch n-spin"></i>
+            </span>
+          </button>
+        </footer>
+      </article>
+
+    {# Weekly horizontal — YouTube only #}
+    {% elif task.name == "Weekly Horizontal (YouTube)" %}
+      <article
+        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
+        style="
+          {% if task.older_than_24h %}
+            --pico-card-background-color: #FEF3C7;
+            --pico-card-border-color: #F59E0B;
+          {% endif %}
+        "
+      >
+        <header>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+        </header>
+
+        <section style="margin-bottom: var(--pico-spacing);">
+          <p style="margin: 0; font-size: 0.9em;">
+            <strong>Last Publish:</strong> {{ task.last_run_label }}
+          </p>
+          {% if task.hours_since is not none %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+              {{ task.hours_since }} hours ago
+            </p>
+          {% endif %}
+          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
+            Source: {{ task.source }}
+            <span style="display: block; margin-top: 0.25rem; color: #D97706;">
+              <em>YouTube-only, persisted from task execution events</em>
+            </span>
+          </p>
+        </section>
+
+        {% if task.warning_message and task.older_than_24h %}
+          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
+            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
+              ⚠ {{ task.warning_message }}
+            </p>
+          </section>
+        {% endif %}
+
+        <footer>
+          <button
+            class="n-btn"
+            hx-post="/admin/tasks/weekly/trigger"
+            hx-target="#tasks-feedback"
+            hx-swap="outerHTML"
+            hx-disabled-elt="this"
+            title="Manually trigger weekly horizontal publish"
+            aria-label="Trigger weekly task"
+          >
+            Trigger Weekly
+            <span class="htmx-indicator" aria-hidden="true">
+              <i class="fas fa-circle-notch n-spin"></i>
+            </span>
+          </button>
+        </footer>
+      </article>
+
+    {# Other platforms (not applicable) #}
+    {% elif not task.applicable %}
+      <article class="platform-card" style="--pico-card-background-color: #F3F4F6; --pico-card-border-color: #D1D5DB;">
+        <header>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+        </header>
+
+        <section>
+          <p style="margin: 0; font-size: 0.9em; color: #666;">
+            <em>{{ task.warning_message }}</em>
+          </p>
+        </section>
+      </article>
+
+    {% endif %}
+  {% endfor %}
+
+  {# HTMX feedback region for async messages #}
+  <div
+    id="tasks-feedback"
+    aria-live="polite"
+    aria-atomic="true"
+    role="status"
+    class="n-task-feedback-placeholder"
+  ></div>
+</div>

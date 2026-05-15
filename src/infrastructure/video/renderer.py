@@ -1,0 +1,642 @@
+# pyright: reportMissingTypeStubs=false
+
+"""Video Renderer - text overlays, templates, and clip composition.
+
+Part of C1 split (video_processing.py -> infrastructure/video/).
+Extracted: March 8, 2026 - Phase 4 hexagonal architecture.
+
+This module handles all video rendering operations:
+- Text overlay generation (score, title, channel, views)
+- Template masking and composition
+- Font path resolution and fallback
+- QR code generation for video URLs
+
+Dependencies: VideoAssetManager (paths), moviepy, segno
+"""
+
+import math
+import pathlib
+from typing import TYPE_CHECKING
+
+import segno
+
+from src.domain.models import Video, VideoScoreStatus
+from src.shared.logging import get_logger
+
+from .moviepy_compat import (
+    ColorClip,
+    MoviePyClip,
+    VideoFileClip,
+    build_image_clip,
+    build_text_clip,
+    clip_cropped,
+    clip_mask_color,
+    clip_resized,
+    clip_with_duration,
+    clip_with_position,
+    clip_with_start,
+    video_target_resolution,
+)
+
+if TYPE_CHECKING:
+    from src.infrastructure.video.asset_manager import VideoAssetManager
+
+logger = get_logger(__name__)
+
+_MILLNAMES = ("", "k", "M", "B", "T", "P", "E", "Z", "Y")
+_FONT_RESOURCES_DIR = pathlib.Path(__file__).resolve().parents[2] / "resources" / "fonts"
+
+
+def _resolve_font(font_path: str, *, fallback_font: str, template_name: str, font_label: str) -> str:
+    font_exists = pathlib.Path(font_path).exists()
+    resolved_font = font_path if font_exists else fallback_font
+    logger.debug(
+        "video_renderer.font_resolution",
+        template=template_name,
+        font_label=font_label,
+        font_path=font_path,
+        font_path_exists=font_exists,
+        fallback_font=fallback_font,
+        resolved_font=resolved_font,
+    )
+    return resolved_font
+
+
+def _format_compact_number(value: float | None, *, precision: int = 0) -> str:
+    """Format numeric values with short suffixes used by the video overlays."""
+    amount = float(0 if value is None else value)
+    magnitude = 0 if amount == 0 else math.floor(math.log10(abs(amount)) / 3)
+    index = max(0, min(len(_MILLNAMES) - 1, magnitude))
+    scaled_amount = amount / 10 ** (3 * index)
+    return f"{scaled_amount:.{precision}f}{_MILLNAMES[index]}"
+
+
+class VideoRenderer:
+    """Renders text overlays and applies templates to video clips.
+
+    Responsibilities:
+    - Generate text overlays (score, title, views, channel)
+    - Apply horizontal/vertical templates with masking
+    - Create QR codes for video URLs
+    - Font path resolution with fallbacks
+
+    Does NOT:
+    - Manage file paths (see VideoAssetManager)
+    - Compose final videos (see VideoCompositor)
+    - Generate thumbnails (see ThumbnailGenerator)
+    """
+
+    def __init__(self, asset_manager: "VideoAssetManager") -> None:
+        """Initialize renderer with asset manager for path access.
+
+        Args:
+            asset_manager: VideoAssetManager instance providing template and resource paths
+        """
+        self._asset_manager = asset_manager
+
+    def overlay_texts_template(self, video_file_clip: MoviePyClip, video: Video) -> list[MoviePyClip]:
+        """Generate horizontal format text overlays (6 TextClips + 1 ImageClip).
+
+        Creates text overlays for score, title, channel, views, and QR code
+        positioned for horizontal video format (1920x1080).
+
+        Args:
+            video_file_clip: Source video clip for duration reference
+            video: Video metadata (score, title, channel, etc.)
+
+        Returns:
+            List of 7 clips: 6 TextClip instances + 1 ImageClip (QR code)
+        """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
+        map_score_growth = {
+            VideoScoreStatus.NEW: "~",
+            VideoScoreStatus.UP: "^",
+            VideoScoreStatus.DOWN: "v",
+            VideoScoreStatus.EQUAL: "=",
+        }
+        map_score_growth_color = {
+            VideoScoreStatus.NEW: "yellow",
+            VideoScoreStatus.UP: "blue",
+            VideoScoreStatus.DOWN: "red",
+            VideoScoreStatus.EQUAL: "white",
+        }
+
+        map_view_growth_color = {
+            VideoScoreStatus.NEW: "black",
+            VideoScoreStatus.UP: "blue",
+            VideoScoreStatus.DOWN: "red",
+            VideoScoreStatus.EQUAL: "black",
+        }
+
+        score_status = video.score_status or VideoScoreStatus.NEW
+        score_growth_status_value = map_score_growth[score_status]
+        score_growth_status_color = map_score_growth_color[score_status]
+        view_growth_color = map_view_growth_color[score_status]
+        channel_name = video.channel.name if video.channel else "Unknown channel"
+
+        max_length = 42
+        video_title = video.title or ""
+        title = (
+            video_title.replace("(Video)", "")
+            .replace("(Music Video)", "")
+            .replace("Official Video", "")
+            .replace("#Video", "")
+            .replace("Full Video", "")
+            .replace("(video)", "")
+            .replace(" - ", " ")
+            .replace("()", "")
+            .strip()
+        )[:max_length]
+
+        views = _format_compact_number(video.views, precision=2)
+        views_growth = _format_compact_number(video.views_growth, precision=2)
+
+        # Generate QR code if not exists
+        qr_path = pathlib.Path(f"{self._asset_manager.video_yt_resources_folder}/{video.video_id}_qr.png")
+        if not qr_path.exists():
+            qr_video = segno.make(video.yt_video_url)
+            qr_video.save(str(qr_path), dark="pink", light="#323524", scale=8)
+
+        # Font path resolution with fallbacks
+        font_droid_sans_path = str(_FONT_RESOURCES_DIR / "droidsans.ttf")
+        font_monocraft_path = str(_FONT_RESOURCES_DIR / "monocraft.otf")
+
+        font_droid_sans = _resolve_font(
+            font_droid_sans_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="horizontal",
+            font_label="droid_sans",
+        )
+        font_monocraft = _resolve_font(
+            font_monocraft_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="horizontal",
+            font_label="monocraft",
+        )
+
+        logger.debug(
+            "video_renderer.score_status_symbol",
+            template="horizontal",
+            score_status=score_status.value,
+            symbol=score_growth_status_value,
+            font=font_monocraft,
+        )
+
+        score_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score:02d}",
+                        font=font_droid_sans,
+                        font_size=130,
+                        color="white",
+                        stroke_color="white",
+                        stroke_width=1,
+                    ),
+                    (190, 705),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        score_growth_status_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        str(score_growth_status_value),
+                        font=font_monocraft,
+                        font_size=77,
+                        color=score_growth_status_color,
+                        stroke_color="white",
+                        stroke_width=4,
+                    ),
+                    (335, 730),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        title,
+                        font=font_monocraft,
+                        color="white",
+                        font_size=42,
+                        kerning=-2,
+                        size=(1250, 120),
+                        align="West",
+                        method="caption",
+                    ),
+                    (180, 940),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        channel_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"© {channel_name}",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                    ),
+                    (258, 115),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views}",
+                        font=font_monocraft,
+                        font_size=41,
+                        color="black",
+                        kerning=0,
+                        size=(240, 80),
+                        align="center",
+                        method="caption",
+                    ),
+                    (1525, 210),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views_growth}",
+                        font=font_monocraft,
+                        font_size=38,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(240, 80),
+                        align="center",
+                        method="caption",
+                    ),
+                    (1525, 480),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        qr_image_clip = clip_with_duration(
+            clip_with_position(build_image_clip(str(qr_path), is_mask=False), (1498, 688)),
+            clip_duration,
+        )
+
+        return [
+            score_text_clip,
+            score_growth_status_text_clip,
+            title_text_clip,
+            channel_text_clip,
+            views_text_clip,
+            views_growth_text_clip,
+            qr_image_clip,
+        ]
+
+    def overlay_texts_vertical_template(self, video_file_clip: MoviePyClip, video: Video) -> list[MoviePyClip]:
+        """Generate vertical format text overlays (9 TextClips).
+
+        Creates text overlays positioned for vertical video format (1080x1920).
+        Includes additional clips for views/growth titles and previous score.
+
+        Args:
+            video_file_clip: Source video clip for duration reference
+            video: Video metadata (score, title, channel, etc.)
+
+        Returns:
+            List of 9 TextClip instances
+        """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
+        map_score_growth = {
+            VideoScoreStatus.NEW: "~",
+            VideoScoreStatus.UP: "^",
+            VideoScoreStatus.DOWN: "v",
+            VideoScoreStatus.EQUAL: "=",
+        }
+        map_score_growth_color = {
+            VideoScoreStatus.NEW: "yellow",
+            VideoScoreStatus.UP: "rgb( 0, 0, 205)",  # blue
+            VideoScoreStatus.DOWN: "red",
+            VideoScoreStatus.EQUAL: "white",
+        }
+
+        map_view_growth_color = {
+            VideoScoreStatus.NEW: "black",
+            VideoScoreStatus.UP: "rgb( 0, 0, 205)",  # blue
+            VideoScoreStatus.DOWN: "red",
+            VideoScoreStatus.EQUAL: "black",
+        }
+
+        score_status = video.score_status or VideoScoreStatus.NEW
+        score_growth_status_value = map_score_growth[score_status]
+        score_growth_status_color = map_score_growth_color[score_status]
+        view_growth_color = map_view_growth_color[score_status]
+        channel_name = video.channel.name if video.channel else "Unknown channel"
+
+        max_length = 38
+        title = video.title_cleaned[:max_length]
+
+        views = _format_compact_number(video.views, precision=2)
+        views_growth = _format_compact_number(video.views_growth, precision=2)
+
+        # Font path resolution with fallbacks
+        font_droid_sans_path = str(_FONT_RESOURCES_DIR / "droidsans.ttf")
+        font_monocraft_path = str(_FONT_RESOURCES_DIR / "monocraft.otf")
+
+        font_droid_sans = _resolve_font(
+            font_droid_sans_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="vertical",
+            font_label="droid_sans",
+        )
+        font_monocraft = _resolve_font(
+            font_monocraft_path,
+            fallback_font="DejaVu Sans Mono",
+            template_name="vertical",
+            font_label="monocraft",
+        )
+
+        logger.debug(
+            "video_renderer.score_status_symbol",
+            template="vertical",
+            score_status=score_status.value,
+            symbol=score_growth_status_value,
+            font=font_monocraft,
+        )
+
+        score_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score:02d}",
+                        font=font_droid_sans,
+                        font_size=240,
+                        color="white",
+                        stroke_color="white",
+                        stroke_width=1,
+                    ),
+                    (96, 770),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        score_growth_status_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        str(score_growth_status_value),
+                        font=font_monocraft,
+                        font_size=77,
+                        color=score_growth_status_color,
+                        stroke_color="white",
+                        stroke_width=4,
+                    ),
+                    (170, 990),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        score_previous_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{video.score_previous or 'N'}",
+                        font=font_droid_sans,
+                        font_size=66,
+                        color=score_growth_status_color,
+                    ),
+                    (245, 995),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        title,
+                        font=font_monocraft,
+                        color="white",
+                        font_size=58,
+                        kerning=-2,
+                        size=(850, 180),
+                        align="West",
+                        method="caption",
+                    ),
+                    (83, 1180),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+        channel_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"© {channel_name}",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                    ),
+                    (83, 1347),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views}",
+                        font=font_monocraft,
+                        font_size=58,
+                        color="white",
+                        kerning=0,
+                        size=(300, 200),
+                        align="center",
+                        method="caption",
+                    ),
+                    (83, 1400),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        "views",
+                        font=font_monocraft,
+                        font_size=24,
+                        color="white",
+                        kerning=0,
+                        size=(190, 131),
+                        align="center",
+                        method="caption",
+                    ),
+                    (83, 1480),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        f"{views_growth}",
+                        font=font_monocraft,
+                        font_size=58,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(300, 200),
+                        align="center",
+                        method="caption",
+                    ),
+                    (400, 1400),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        views_growth_title_text_clip = clip_with_start(
+            clip_with_duration(
+                clip_with_position(
+                    build_text_clip(
+                        "NEW views",
+                        font=font_monocraft,
+                        font_size=24,
+                        color=view_growth_color,
+                        kerning=0,
+                        size=(190, 131),
+                        align="center",
+                        method="caption",
+                    ),
+                    (480, 1480),
+                ),
+                clip_duration,
+            ),
+            0,
+        )
+
+        return [
+            score_text_clip,
+            score_growth_status_text_clip,
+            score_previous_text_clip,
+            title_text_clip,
+            channel_text_clip,
+            views_text_clip,
+            views_title_text_clip,
+            views_growth_text_clip,
+            views_growth_title_text_clip,
+        ]
+
+    async def overlay_with_video_template(self, video_file_clip: MoviePyClip) -> list[MoviePyClip]:
+        """Apply horizontal template overlay with blue screen masking.
+
+        Creates a 3-layer composition: black base, original video, masked template.
+        Template blue screen [0,0,255] is removed with color masking.
+
+        Args:
+            video_file_clip: Source video clip to overlay template on
+
+        Returns:
+            List of 3 clips: [base_clip, video_file_clip, masked_template_clip]
+        """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
+        overlay_clip = clip_with_duration(
+            VideoFileClip(
+                filename=self._asset_manager.template_file,
+                target_resolution=video_target_resolution(video_file_clip.w, video_file_clip.h),
+            ),
+            clip_duration,
+        )
+        masked_clip = clip_with_duration(
+            clip_mask_color(overlay_clip, color=(0, 0, 255), threshold=40, stiffness=3),
+            clip_duration,
+        )
+
+        base_clip = ColorClip(
+            size=(video_file_clip.w, video_file_clip.h),
+            color=(0, 0, 0),
+            duration=clip_duration,
+        )
+        return [
+            base_clip,
+            video_file_clip,
+            masked_clip,
+        ]
+
+    async def overlay_with_vertical_video_template(self, video_file_clip: MoviePyClip) -> list[MoviePyClip]:
+        """Apply vertical template overlay with crop/resize transformations.
+
+        Creates a 3-layer composition for vertical format (1080x1920).
+        Video is cropped (x1=15), resized to 1080/1.3 x 1920/1.3, and repositioned.
+
+        Args:
+            video_file_clip: Source video clip to overlay template on
+
+        Returns:
+            List of 3 clips: [base_clip, transformed_video, masked_template_clip]
+        """
+        clip_duration = float(getattr(video_file_clip, "duration", 0.0) or 0.0)
+
+        overlay_clip = clip_with_duration(
+            VideoFileClip(
+                filename=self._asset_manager.template_vertical_file,
+                target_resolution=video_target_resolution(1080, 1920),
+            ),
+            clip_duration,
+        )
+        masked_clip = clip_with_duration(
+            clip_mask_color(overlay_clip, color=(0, 0, 255), threshold=50, stiffness=3),
+            clip_duration,
+        )
+
+        clip2 = clip_with_position(
+            clip_with_position(
+                clip_resized(
+                    clip_cropped(video_file_clip, x1=15),
+                    width=1080 / 1.3,
+                    height=1920 / 1.3,
+                ),
+                "top",
+            ),
+            (-500, -150),
+        )
+
+        base_clip = ColorClip(
+            size=(1080, 1920),
+            color=(0, 0, 0),
+            duration=clip_duration,
+        )
+        return [
+            base_clip,
+            clip2,
+            masked_clip,
+        ]

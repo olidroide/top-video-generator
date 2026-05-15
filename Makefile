@@ -1,9 +1,20 @@
 .ONESHELL:
 
 install-requirements:
-	pip install -r requirements-dev.txt
-	pip install -r requirements.txt
+	uv sync --all-extras
 
+dev-install:
+	uv sync --all-extras --dev
+
+install-hooks:
+	git config --unset core.hooksPath || true
+	uv run pre-commit install --install-hooks
+
+pre-commit-run:
+	uv run pre-commit run --hook-stage pre-commit --all-files
+
+pre-push-check:
+	uv run pre-commit run --hook-stage pre-push --all-files
 
 build-local-image:
 	docker buildx bake -f docker-bake.hcl top-video-generator-local
@@ -12,20 +23,49 @@ build-local-image:
 #	docker build -t top-video-generator .
 
 run-web:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=web" -p 8080:8080 --detach --rm top-video-generator
+	docker compose build web
+	docker compose up -d web
 
 run-fetch-data:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=fetch_data" --rm top-video-generator
+	docker compose run --rm -e "STEP=fetch_data" top-video-generator
 
 run-compose-daily:
-	docker-compose -f ~/Git/top-video-generator/docker-compose.yml run -e "STEP=vertical_publish" --rm top-video-generator
-
+	docker compose run --rm -e "STEP=vertical_publish" top-video-generator
 
 format:
-	black .
+	uv run ruff format src tests
 
 lint:
-	ruff check src tests
+	uv run ruff check src tests
+
+type-check:
+	uv run ty check src/ tests/
+
+quality:
+	uv run ruff format --check src/ tests/
+	uv run ruff check src/ tests/
+	uv run ty check src/ tests/
+
+test:
+	uv run pytest tests/ -x -q --ignore=tests/integration/video
 
 schedule:
-	python scheduler.py
+	docker compose up -d scheduler
+
+web-run:
+	uv run api-server
+
+fetch-run:
+	uv run fetch-data
+
+publish-run:
+	uv run publish-video
+
+vertical-publish-run:
+	uv run publish-vertical
+
+scheduler-run:
+	uv run scheduler-run
+
+migrate-legacy-data-run:
+	uv run migrate-legacy-data $(ARGS)

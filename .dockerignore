@@ -31,14 +31,12 @@ coverage.xml
 *~
 
 # Docker files
-Dockerfile*
 .dockerignore
-docker-compose*.yml
 
 # Documentation
-README.md
 docs/
 *.md
+!README.md
 
 # Other
 .DS_Store
@@ -47,3 +45,4 @@ node_modules
 *.tmp
 *.temp
 .env*
+tests/
