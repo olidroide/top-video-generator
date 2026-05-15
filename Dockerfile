@@ -13,7 +13,9 @@ ENV PIP_DEFAULT_TIMEOUT=100 \
 
 WORKDIR /app
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt/lists \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
@@ -32,8 +34,7 @@ RUN apt-get update && \
     libharfbuzz-dev \
     libfribidi-dev \
     libxcb1-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    pkg-config
 
 COPY pyproject.toml uv.lock README.md LICENSE /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -61,7 +62,9 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 
 # Install only runtime dependencies (no build tools)
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt/lists \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     libzmq5 \
     libjpeg62-turbo \
@@ -80,38 +83,27 @@ RUN apt-get update && \
     fonts-liberation \
     fonts-noto-mono \
     fonts-dejavu-core \
-    fontconfig \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /var/cache/apt/*
+    fontconfig
 
 # Install Playwright browser binaries required by tiktok-uploader.
-RUN /app/.venv/bin/playwright install --with-deps chromium
+RUN --mount=type=cache,target=/ms-playwright \
+    /app/.venv/bin/playwright install --with-deps chromium
 
 # Install project-provided fonts in standard locations and expose predictable paths
-COPY ./src/resources/fonts/* /usr/local/share/fonts/truetype/custom/
 COPY ./src/resources/fonts/* /usr/share/fonts/truetype/custom/
 
 RUN sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml && \
     sed -i 's/<policy domain="path" rights="none" pattern="@\*"/<policy domain="path" rights="read,write" pattern="@*"/g' /etc/ImageMagick-6/policy.xml && \
     echo '<policy domain="resource" name="memory" value="256MiB"/>' >> /etc/ImageMagick-6/policy.xml && \
     echo '<policy domain="resource" name="disk" value="1GiB"/>' >> /etc/ImageMagick-6/policy.xml && \
-    # Normalize permissions on installed fonts (recurse for nested dirs)
     find /usr/share/fonts -type f \( -name "*.ttf" -o -name "*.otf" \) -exec chmod 644 {} + && \
-    find /usr/local/share/fonts -type f \( -name "*.ttf" -o -name "*.otf" \) -exec chmod 644 {} + && \
-    # Symlinks to match the hardcoded paths used by the app
     ln -sf /usr/share/fonts/truetype/custom/droidsans.ttf /usr/share/fonts/droidsans.ttf && \
     ln -sf /usr/share/fonts/truetype/custom/webdings.ttf /usr/share/fonts/webdings.ttf && \
     ln -sf /usr/share/fonts/truetype/custom/monocraft.otf /usr/share/fonts/monocraft.otf && \
-    # Rebuild font cache and print a small diagnostic
     fc-cache -f -v && \
     dpkg-reconfigure -f noninteractive fontconfig && \
     echo "Available fonts (filtered):" && \
-    fc-list | grep -i "droid\|monocraft\|webdings" || echo "Warning: Some fonts not found" && \
-    echo "Expected font paths:" && \
-    ls -la /usr/share/fonts/truetype/custom/ || true && \
-    ls -la /usr/share/fonts/ | grep -E "droidsans|webdings|monocraft" || true && \
-    rm -rf /var/cache/*
+    fc-list | grep -i "droid\|monocraft\|webdings" || echo "Warning: Some fonts not found"
 
 # Create non-root user
 ARG UID=1000

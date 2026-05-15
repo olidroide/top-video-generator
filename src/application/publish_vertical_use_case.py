@@ -146,6 +146,29 @@ class PublishVerticalUseCase:
         async def _publish_one(publisher: VideoPublisher) -> PublishingResult:
             description = yt_description if publisher.platform_name == Platform.YOUTUBE else yt_title
             try:
+                if publisher.platform_name == Platform.TIKTOK:
+                    from src.adapters.tiktok_integration_checker import TikTokIntegrationChecker
+
+                    checker = TikTokIntegrationChecker()
+                    if not checker.is_configured:
+                        return PublishingResult(
+                            platform=publisher.platform_name,
+                            success=False,
+                            error="TikTok not configured",
+                        )
+                    result = await checker.check_connection()
+                    if result.status.value != "ok":
+                        logger.warning(
+                            "publish_vertical.tiktok_skipped_by_connection_check",
+                            status=result.status.value,
+                            message=result.message,
+                        )
+                        return PublishingResult(
+                            platform=publisher.platform_name,
+                            success=False,
+                            error=f"TikTok connection failed: {result.message}",
+                        )
+
                 coro = publish_executor.publish(
                     publisher=publisher,
                     video_list=content.canonical_video_list,
@@ -154,7 +177,7 @@ class PublishVerticalUseCase:
                     description=description,
                 )
                 if publisher.platform_name == Platform.TIKTOK:
-                    coro = asyncio.wait_for(coro, timeout=90)
+                    coro = asyncio.wait_for(coro, timeout=15)
                 return await coro
             except TimeoutError:
                 logger.warning(
@@ -178,27 +201,18 @@ class PublishVerticalUseCase:
                     error=str(exc),
                 )
 
-        results = await asyncio.gather(
-            *[_publish_one(publisher) for publisher in pending_publishers],
-            return_exceptions=True,
-        )
-
-        for publisher, result_or_exc in zip(pending_publishers, results, strict=True):
-            if isinstance(result_or_exc, Exception):
-                logger.exception(
-                    "publish_vertical.unexpected_publish_error",
-                    platform=publisher.platform_name,
-                    error=str(result_or_exc),
+        # Sequential execution: one publisher at a time.
+        # Prevents thread-pool saturation from blocking publishers
+        # (e.g. TikTok Playwright timeout blocking Instagram/YouTube).
+        for publisher in pending_publishers:
+            result = await _publish_one(publisher)
+            if result.success:
+                self.persist_publisher_release(
+                    release_store=release_store,
+                    publisher=publisher,
+                    result=result,
+                    publisher_client_identity=publisher_client_identity,
                 )
-                continue
-            if not result_or_exc.success:
-                continue
-            self.persist_publisher_release(
-                release_store=release_store,
-                publisher=publisher,
-                result=result_or_exc,
-                publisher_client_identity=publisher_client_identity,
-            )
 
     async def build_job_context(
         self,
