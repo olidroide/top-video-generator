@@ -70,3 +70,36 @@ def test_is_release_at_date_accepts_legacy_unscoped_release_for_transition(tmp_p
         )
     finally:
         repo.close()
+
+
+def test_get_latest_release_returns_latest_by_published_at(tmp_path) -> None:
+    repo = ReleaseRepository(str(tmp_path / "db.json"))
+    try:
+        repo.add_or_update_release(
+            Release(
+                platform=Platform.YOUTUBE.value,
+                client_id="creator",
+                release_kind=ReleaseKind.DAILY_VERTICAL.value,
+                release_id="old-id",
+                published_at=datetime(2026, 3, 30, 9, 0, tzinfo=UTC).timestamp(),
+            )
+        )
+        repo.add_or_update_release(
+            Release(
+                platform=Platform.YOUTUBE.value,
+                client_id="creator-2",
+                release_kind=ReleaseKind.DAILY_VERTICAL.value,
+                release_id="new-id",
+                published_at=datetime(2026, 3, 31, 9, 0, tzinfo=UTC).timestamp(),
+            )
+        )
+
+        latest = repo.get_latest_release(
+            platform=Platform.YOUTUBE.value,
+            release_kind=ReleaseKind.DAILY_VERTICAL.value,
+        )
+
+        assert latest is not None
+        assert latest.release_id == "new-id"
+    finally:
+        repo.close()

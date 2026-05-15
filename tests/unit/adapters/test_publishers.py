@@ -91,6 +91,25 @@ class TestYouTubePublisher:
         assert "upload failed" in (result.error or "")
         assert result.platform == Platform.YOUTUBE
 
+    async def test_publish_none_id_returns_error_result(self) -> None:
+        from src.adapters.youtube_publisher import YouTubePublisher
+
+        mock_client = MagicMock()
+        mock_client.upload_video = AsyncMock(return_value=None)
+
+        with patch("src.adapters.youtube_publisher._build_yt_client", return_value=mock_client):
+            publisher = YouTubePublisher()
+            result = await publisher.publish_video(
+                video_list=_VIDEO_LIST,
+                file_path="/tmp/video.mp4",
+                title="Top Songs",
+                description="Weekly top",
+            )
+
+        assert result.success is False
+        assert "no media id" in (result.error or "")
+        assert result.platform == Platform.YOUTUBE
+
     def test_platform_name(self) -> None:
         from src.adapters.youtube_publisher import YouTubePublisher
 
@@ -141,6 +160,25 @@ class TestTikTokPublisher:
         assert result.success is False
         assert "tiktok error" in (result.error or "")
 
+    async def test_publish_none_id_returns_error_result(self) -> None:
+        from src.adapters.tiktok_publisher import TikTokPublisher
+
+        mock_client = MagicMock()
+        mock_client.upload_video = MagicMock(return_value=None)
+
+        with patch("src.adapters.tiktok_publisher.TikTokUploaderClient", return_value=mock_client):
+            publisher = TikTokPublisher()
+            result = await publisher.publish_video(
+                video_list=_VIDEO_LIST,
+                file_path="/tmp/video.mp4",
+                title="Weekly top",
+                description="",
+            )
+
+        assert result.success is False
+        assert "no media id" in (result.error or "")
+        assert result.platform == Platform.TIKTOK
+
     def test_platform_name(self) -> None:
         from src.adapters.tiktok_publisher import TikTokPublisher
 
@@ -190,6 +228,25 @@ class TestInstagramPublisher:
 
         assert result.success is False
         assert "instagram down" in (result.error or "")
+
+    async def test_publish_none_id_returns_error_result(self) -> None:
+        from src.adapters.instagram_publisher import InstagramPublisher
+
+        mock_client = MagicMock()
+        mock_client.upload_video = AsyncMock(return_value=None)
+
+        with patch("src.adapters.instagram_publisher.InstagramClient", return_value=mock_client):
+            publisher = InstagramPublisher()
+            result = await publisher.publish_video(
+                video_list=_VIDEO_LIST,
+                file_path="/tmp/video.mp4",
+                title="Reel caption",
+                description="",
+            )
+
+        assert result.success is False
+        assert "no media id" in (result.error or "")
+        assert result.platform == Platform.INSTAGRAM
 
     def test_platform_name(self) -> None:
         from src.adapters.instagram_publisher import InstagramPublisher

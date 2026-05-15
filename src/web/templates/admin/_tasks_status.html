@@ -20,6 +20,16 @@
           <p style="margin: 0; font-size: 0.9em;">
             <strong>Last Run:</strong> {{ task.last_run_label }}
           </p>
+          {% if task.last_status %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
+              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            </p>
+          {% endif %}
+          {% if task.last_error %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
+              <strong>Last Error:</strong> {{ task.last_error }}
+            </p>
+          {% endif %}
           {% if task.hours_since is not none %}
             <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
               {{ task.hours_since }} hours ago
@@ -53,7 +63,7 @@
             title="Manually trigger fetch from YouTube"
             aria-label="Trigger fetch task"
           >
-            Trigger Fetch
+            {{ task.action_label }}
             <span class="htmx-indicator" aria-hidden="true">
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
@@ -82,6 +92,16 @@
           <p style="margin: 0; font-size: 0.9em;">
             <strong>Last Publish:</strong> {{ task.last_run_label }}
           </p>
+          {% if task.last_status %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
+              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            </p>
+          {% endif %}
+          {% if task.last_error %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
+              <strong>Last Error:</strong> {{ task.last_error }}
+            </p>
+          {% endif %}
           {% if task.hours_since is not none %}
             <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
               {{ task.hours_since }} hours ago
@@ -91,6 +111,13 @@
             Source: {{ task.source }}
             <span style="display: block; margin-top: 0.25rem; color: #D97706;"><em>Persisted from task execution events</em></span>
           </p>
+          {% if task.detail_rows %}
+            <div style="margin-top: var(--pico-spacing); padding-top: var(--pico-spacing); border-top: 1px dashed #ddd;">
+              {% for row in task.detail_rows %}
+                <p style="margin: 0 0 0.35rem 0; font-size: 0.83em; color: #555;">{{ row }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
         </section>
 
         {% if task.warning_message and task.older_than_24h %}
@@ -111,7 +138,7 @@
             title="Manually trigger daily vertical publish"
             aria-label="Trigger daily task"
           >
-            Trigger Daily
+            {{ task.action_label }}
             <span class="htmx-indicator" aria-hidden="true">
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
@@ -138,6 +165,16 @@
           <p style="margin: 0; font-size: 0.9em;">
             <strong>Last Publish:</strong> {{ task.last_run_label }}
           </p>
+          {% if task.last_status %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
+              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            </p>
+          {% endif %}
+          {% if task.last_error %}
+            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
+              <strong>Last Error:</strong> {{ task.last_error }}
+            </p>
+          {% endif %}
           {% if task.hours_since is not none %}
             <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
               {{ task.hours_since }} hours ago
@@ -169,7 +206,7 @@
             title="Manually trigger weekly horizontal publish"
             aria-label="Trigger weekly task"
           >
-            Trigger Weekly
+            {{ task.action_label }}
             <span class="htmx-indicator" aria-hidden="true">
               <i class="fas fa-circle-notch n-spin"></i>
             </span>

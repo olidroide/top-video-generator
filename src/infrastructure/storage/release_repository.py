@@ -51,6 +51,35 @@ class ReleaseRepository:
         # Return the most recent (last inserted)
         return Release.model_validate(results[-1])
 
+    def get_latest_release(self, platform: str, release_kind: str | None = None) -> Release | None:
+        """Return the most recent release for a platform, optionally scoped by release kind."""
+        table = self._db.table(self._TABLE)
+        results = table.search(Query().platform == platform)
+        if not results:
+            return None
+        if release_kind is not None:
+            results = [result for result in results if result.get("release_kind") == release_kind]
+            if not results:
+                return None
+
+        latest: dict | None = None
+        latest_ts = float("-inf")
+        for result in results:
+            ts = result.get("published_at")
+            if ts is None:
+                continue
+            try:
+                ts_float = float(ts)
+            except (TypeError, ValueError):
+                continue
+            if ts_float >= latest_ts:
+                latest = result
+                latest_ts = ts_float
+
+        if latest is None:
+            return Release.model_validate(results[-1])
+        return Release.model_validate(latest)
+
     def update_release(self, release: Release) -> Release:
         """
         Update an existing release record.

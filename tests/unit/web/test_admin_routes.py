@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from src.application.get_admin_task_status_use_case import TaskStatusResult
 from src.application.get_operational_metrics_use_case import OperationalMetricsResult
 from src.application.get_setup_page_use_case import GetSetupPageResult
 from src.config.settings import AppSettings
 from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
 from src.web.dependencies import (
+    get_admin_task_status_use_case,
     get_check_platform_connection_use_case,
     get_operational_metrics_use_case,
     get_setup_page_use_case,
@@ -40,6 +43,14 @@ class _OperationalMetricsUseCaseStub:
     result: OperationalMetricsResult
 
     def execute(self) -> OperationalMetricsResult:
+        return self.result
+
+
+@dataclass
+class _AdminTaskStatusUseCaseStub:
+    result: TaskStatusResult
+
+    def execute(self) -> TaskStatusResult:
         return self.result
 
 
@@ -251,6 +262,41 @@ def test_admin_metrics_status_returns_partial_when_authenticated(monkeypatch) ->
     assert "FETCH" in response.text
     assert "COUNT" in response.text
     assert "ERROR RATE" in response.text
+
+
+def test_admin_tasks_status_renders_retry_and_video_details(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_admin_task_status_use_case] = lambda: _AdminTaskStatusUseCaseStub(
+        TaskStatusResult(
+            fetch_last_timestamp=None,
+            daily_last_timestamp=None,
+            weekly_last_timestamp=None,
+            latest_status_by_method={"daily": "failed"},
+            latest_error_by_method={"daily": "challenge_required"},
+            daily_publish_timestamps_by_platform={"YOUTUBE": (datetime.now(UTC) - timedelta(hours=2)).timestamp()},
+            latest_video_artifact_path="videos/20260515/20260515_vertical_format.mp4",
+            latest_video_artifact_timestamp=(datetime.now(UTC) - timedelta(hours=1)).timestamp(),
+        )
+    )
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.get("/admin/tasks/status")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert "Retry Daily" in response.text
+    assert "Last Error:" in response.text
+    assert "challenge_required" in response.text
+    assert "Last processed video:" in response.text
+    assert "Artifact path: videos/20260515/20260515_vertical_format.mp4" in response.text
 
 
 def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:

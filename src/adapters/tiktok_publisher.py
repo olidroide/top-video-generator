@@ -26,6 +26,12 @@ class TikTokPublisher:
         try:
             client = TikTokUploaderClient()
             published_id = await asyncio.to_thread(client.upload_video, file_path, title)
+            if not published_id:
+                return PublishingResult(
+                    platform=self.platform_name,
+                    success=False,
+                    error="tiktok upload returned no media id",
+                )
             return PublishingResult(platform=self.platform_name, success=True, published_id=published_id)
         except Exception as exc:  # noqa: BLE001
             return PublishingResult(platform=self.platform_name, success=False, error=str(exc))

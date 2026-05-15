@@ -5,9 +5,12 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from src.infrastructure.video.asset_manager import VideoAssetManager
 
 
+@pytest.mark.slow
 class TestVideoAssetManagerAfterMigration:
     """Test VideoAssetManager operates correctly after extraction from VideoProcessing."""
 

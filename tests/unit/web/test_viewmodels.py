@@ -74,3 +74,31 @@ def test_build_admin_tasks_view_model_non_youtube_weekly_not_applicable() -> Non
         task = _task(f"Weekly Horizontal ({platform_name})", tasks_vm)
         assert task.applicable is False
         assert task.last_run_label == "Not applicable"
+
+
+def test_build_admin_tasks_view_model_daily_failed_recommends_retry_and_shows_details() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        latest_status_by_method={"daily": "failed"},
+        latest_error_by_method={"daily": "challenge_required"},
+        daily_publish_timestamps_by_platform={
+            "YOUTUBE": (now - timedelta(hours=2)).timestamp(),
+            "INSTAGRAM": (now - timedelta(hours=26)).timestamp(),
+        },
+        latest_video_artifact_path="videos/20260515/20260515_vertical_format.mp4",
+        latest_video_artifact_timestamp=(now - timedelta(hours=1)).timestamp(),
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+    daily_task = _task("Daily Vertical Videos", tasks_vm)
+
+    assert daily_task.action_label == "Retry Daily"
+    assert daily_task.warning_message == "Last daily run failed. Retry recommended."
+    assert daily_task.last_error == "challenge_required"
+    assert daily_task.source == "videos_folder"
+    assert any(row.startswith("Last processed video:") for row in daily_task.detail_rows)
+    assert any("Artifact path: videos/20260515/20260515_vertical_format.mp4" in row for row in daily_task.detail_rows)
+    assert any(row.startswith("YOUTUBE:") for row in daily_task.detail_rows)

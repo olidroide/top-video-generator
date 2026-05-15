@@ -409,6 +409,10 @@ class AdminTaskViewModel:
     source: str
     applicable: bool
     warning_message: str | None
+    last_status: str | None
+    last_error: str | None
+    action_label: str
+    detail_rows: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -464,10 +468,15 @@ def build_admin_tasks_view_model(
     from src.domain.models import Platform
 
     now = datetime.now(UTC)
+    latest_status = task_status.latest_status_by_method
+    latest_errors = task_status.latest_error_by_method
 
     fetch_last_float = task_status.fetch_last_timestamp
     fetch_hours = (now.timestamp() - fetch_last_float) / _SECONDS_PER_HOUR if fetch_last_float else None
     fetch_older_than_24h = fetch_hours is not None and fetch_hours >= _HOURS_PER_DAY
+    fetch_status = latest_status.get("fetch")
+    fetch_error = latest_errors.get("fetch")
+    fetch_failed = fetch_status == "failed"
 
     # Daily vertical releases
     daily_task_vm = AdminTaskViewModel(
@@ -477,27 +486,65 @@ def build_admin_tasks_view_model(
         older_than_24h=fetch_older_than_24h,
         source="task_run_state" if fetch_last_float else "never",
         applicable=True,
-        warning_message="No videos fetched in 24+ hours" if fetch_older_than_24h else None,
+        warning_message=(
+            "Last fetch run failed. Retry recommended."
+            if fetch_failed
+            else ("No videos fetched in 24+ hours" if fetch_older_than_24h else None)
+        ),
+        last_status=fetch_status,
+        last_error=fetch_error,
+        action_label="Retry Fetch" if fetch_failed else "Trigger Fetch",
     )
 
     daily_timestamp = task_status.daily_last_timestamp
     daily_hours = (now.timestamp() - daily_timestamp) / _SECONDS_PER_HOUR if daily_timestamp else None
     daily_older_than_24h = daily_hours is not None and daily_hours >= _HOURS_PER_DAY
+    daily_status = latest_status.get("daily")
+    daily_error = latest_errors.get("daily")
+    daily_failed = daily_status == "failed"
+
+    latest_artifact_path = task_status.latest_video_artifact_path
+    latest_artifact_ts = task_status.latest_video_artifact_timestamp
+    platform_rows = tuple(
+        f"{platform}: {build_time_label(ts)}"
+        for platform, ts in sorted(task_status.daily_publish_timestamps_by_platform.items(), key=lambda row: row[0])
+    )
+    artifact_rows = (
+        (
+            f"Last processed video: {build_time_label(latest_artifact_ts)}",
+            f"Artifact path: {latest_artifact_path}",
+        )
+        if latest_artifact_path and latest_artifact_ts
+        else ()
+    )
+
+    source = "task_run_state" if daily_timestamp else ("videos_folder" if latest_artifact_path else "never")
 
     daily_publish_task_vm = AdminTaskViewModel(
         name="Daily Vertical Videos",
         last_run_label=build_time_label(daily_timestamp),
         hours_since=int(daily_hours) if daily_hours else None,
         older_than_24h=daily_older_than_24h,
-        source="task_run_state" if daily_timestamp else "never",
+        source=source,
         applicable=True,
-        warning_message="No daily publish in 24+ hours" if daily_older_than_24h else None,
+        warning_message=(
+            "Last daily run failed. Retry recommended."
+            if daily_failed
+            else ("No daily publish in 24+ hours" if daily_older_than_24h else None)
+        ),
+        last_status=daily_status,
+        last_error=daily_error,
+        action_label="Retry Daily" if daily_failed else "Trigger Daily",
+        detail_rows=artifact_rows + platform_rows,
     )
 
     # Weekly horizontal YouTube
     weekly_yt_timestamp = task_status.weekly_last_timestamp
     weekly_yt_hours = (now.timestamp() - weekly_yt_timestamp) / _SECONDS_PER_HOUR if weekly_yt_timestamp else None
     weekly_yt_older_than_24h = weekly_yt_hours is not None and weekly_yt_hours >= _HOURS_PER_WEEK
+    weekly_status = latest_status.get("weekly")
+    weekly_error = latest_errors.get("weekly")
+    weekly_failed = weekly_status == "failed"
 
     weekly_yt_task_vm = AdminTaskViewModel(
         name="Weekly Horizontal (YouTube)",
@@ -506,7 +553,14 @@ def build_admin_tasks_view_model(
         older_than_24h=weekly_yt_older_than_24h,
         source="task_run_state" if weekly_yt_timestamp else "never",
         applicable=True,
-        warning_message="No weekly publish in 7+ days" if weekly_yt_older_than_24h else None,
+        warning_message=(
+            "Last weekly run failed. Retry recommended."
+            if weekly_failed
+            else ("No weekly publish in 7+ days" if weekly_yt_older_than_24h else None)
+        ),
+        last_status=weekly_status,
+        last_error=weekly_error,
+        action_label="Retry Weekly" if weekly_failed else "Trigger Weekly",
     )
 
     tasks: list[AdminTaskViewModel] = [daily_task_vm, daily_publish_task_vm, weekly_yt_task_vm]
@@ -521,6 +575,9 @@ def build_admin_tasks_view_model(
             source="never",
             applicable=False,
             warning_message="Weekly horizontal is only implemented for YouTube",
+            last_status=None,
+            last_error=None,
+            action_label="Not applicable",
         )
         tasks.append(task_vm)
 

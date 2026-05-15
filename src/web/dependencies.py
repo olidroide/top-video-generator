@@ -147,8 +147,14 @@ def get_check_platform_connection_use_case(
 
 def get_admin_task_status_use_case(
     task_run_state_repo: Annotated[TaskRunStateRepositoryPort, Depends(get_task_run_state_repo)],
+    release_repo: Annotated[ReleaseRepositoryPort, Depends(get_release_repo)],
+    settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> GetAdminTaskStatusUseCase:
-    return GetAdminTaskStatusUseCase(task_run_state_repo)
+    return GetAdminTaskStatusUseCase(
+        task_run_state_repo,
+        release_store=release_repo,
+        video_generated_folder=settings.video_generated_folder,
+    )
 
 
 def get_operational_metrics_use_case(

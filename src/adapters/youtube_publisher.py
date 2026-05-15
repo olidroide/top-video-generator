@@ -27,6 +27,12 @@ class YouTubePublisher:
         try:
             client = _build_yt_client()
             published_id = await client.upload_video(file_path, title, description)
+            if not published_id:
+                return PublishingResult(
+                    platform=self.platform_name,
+                    success=False,
+                    error="youtube upload returned no media id",
+                )
             return PublishingResult(platform=self.platform_name, success=True, published_id=published_id)
         except Exception as exc:  # noqa: BLE001
             return PublishingResult(platform=self.platform_name, success=False, error=str(exc))
