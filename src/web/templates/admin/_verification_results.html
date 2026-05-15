@@ -1,0 +1,68 @@
+<div id="verification-results" class="verification-region">
+  {% if report.results %}
+    <div style="margin-top: var(--pico-spacing);">
+      <h4 class="section-title" style="margin: 0 0 0.75rem 0;">Verification Results</h4>
+      {% for result in report.results %}
+        <article class="platform-card" style="margin-bottom: 0.75rem; padding: 0.75rem;">
+          <div class="card-head">
+            <span class="platform-label">
+              {{ result.platform }}
+              {% if result.status.value == 'live' %}
+                <span class="n-status">
+                  <span class="n-status__dot n-status__dot--on"></span>
+                  <span class="n-status__label--on">Live</span>
+                </span>
+              {% elif result.status.value == 'processing' %}
+                <span class="n-status">
+                  <span class="n-status__dot n-status__dot--off"></span>
+                  <span class="n-status__label--off">Processing</span>
+                </span>
+              {% else %}
+                <span class="n-status">
+                  <span class="n-status__dot n-status__dot--na"></span>
+                  <span class="n-status__label--na">{{ result.status.value|replace('_', ' ') }}</span>
+                </span>
+              {% endif %}
+            </span>
+            {% if result.url %}
+              <a href="{{ result.url }}" target="_blank" rel="noopener" class="n-btn n-btn--outline n-btn--compact">
+                View <i class="fas fa-external-link-alt" style="font-size: 0.65rem;"></i>
+              </a>
+            {% endif %}
+          </div>
+          {% if result.title or result.details %}
+            <div class="card-body">
+              {% if result.title %}
+                <div class="data-row">
+                  <span class="data-key">Title</span>
+                  <span class="data-val">{{ result.title }}</span>
+                </div>
+              {% endif %}
+              {% if result.details %}
+                <div class="data-row">
+                  <span class="data-key">Info</span>
+                  <span class="data-val">{{ result.details }}</span>
+                </div>
+              {% endif %}
+              {% if result.release_id %}
+                <div class="data-row">
+                  <span class="data-key">ID</span>
+                  <span class="data-val" style="font-family: var(--n-font-mono);">{{ result.release_id }}</span>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        </article>
+      {% endfor %}
+      {% if report.verified_at %}
+        <p class="section-meta" style="text-align: right; margin-top: 0.5rem;">
+          Verified: {{ report.verified_at | timestamp_to_time_label }}
+        </p>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="n-notice">
+      <span>No verification results available.</span>
+    </div>
+  {% endif %}
+</div>

@@ -21,6 +21,7 @@ from src.web.dependencies import (
     GetOperationalMetricsUseCaseDep,
     TimeSeriesRepositoryDep,
     TriggerAdminTaskUseCaseDep,
+    VerifyPublishedVideosUseCaseDep,
     get_settings,
     get_setup_page_use_case,
 )
@@ -353,4 +354,20 @@ async def trigger_admin_task(
             "message": trigger_result.message,
             "task_method": method,
         },
+    )
+
+
+@router.get("/verify", response_class=HTMLResponse)
+async def admin_verify_published(
+    request: Request,
+    verify_use_case: VerifyPublishedVideosUseCaseDep,
+) -> Response:
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+
+    report = await verify_use_case.execute()
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_verification_results.html",
+        context={"request": request, "report": report},
     )

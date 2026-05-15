@@ -45,6 +45,23 @@ class VideoScoreStatus(StrEnum):
     EQUAL = "EQUAL"
 
 
+class VideoVerificationStatus(StrEnum):
+    LIVE = "live"
+    PROCESSING = "processing"
+    NOT_FOUND = "not_found"
+    ERROR = "error"
+
+
+class VideoVerificationResult(BaseModel, frozen=True):
+    platform: str
+    status: VideoVerificationStatus
+    url: str
+    release_id: str | None = None
+    title: str | None = None
+    details: str | None = None
+    verified_at: datetime = datetime.now(UTC)
+
+
 class CanonicalVideo(BaseModel, frozen=True):
     video_id: str
     title: str

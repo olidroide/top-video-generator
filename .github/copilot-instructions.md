@@ -246,6 +246,38 @@ Minimum validation by change type:
 
 Do not mark work as complete without PoW unless blocked by environment constraints; if blocked, state the blocker and provide a nearest viable alternative check.
 
+## CI Checks — MANDATORY before every commit
+
+Run ALL checks before committing. CI fails if any step fails.
+
+```bash
+# 1. Format
+uv run ruff format --check src/ tests/
+
+# 2. Lint
+uv run ruff check src/ tests/
+
+# 3. Type check
+uv run ty check src/ tests/
+
+# 4. Tests
+uv run pytest tests/ -x -q --ignore=tests/integration/video
+
+# 5. Pre-commit
+uv run pre-commit run --hook-stage pre-commit --all-files
+
+# 6. Pre-push
+uv run pre-commit run --hook-stage pre-push --all-files
+```
+
+Make shortcuts: `make quality`, `make test`, `make pre-commit-run`, `make pre-push-check`.
+
+Rules:
+- NEVER commit without running all 6 checks
+- If any check fails, fix and re-run ALL checks
+- HTML templates (*.html) excluded from ruff (Jinja2 syntax)
+- Integration video tests excluded from CI
+
 ## Skill Routing
 
 Load relevant skill from .github/skills when task matches:

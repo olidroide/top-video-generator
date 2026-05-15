@@ -94,7 +94,7 @@ markers = [
 cache-dir = ".ruff_cache"
 line-length = 120
 target-version = "py313"
-exclude = [".agents", ".github/skills"]
+exclude = [".opencode", ".agents", ".github/skills", "*.html"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -183,6 +183,9 @@ ignore-names = ["i", "j", "k", "ex", "Run", "_", "df", "fp", "id", "x", "y"]
 max-complexity = 12
 
 [tool.ruff.lint.per-file-ignores]
+"*.html" = [
+  "ALL",  # Jinja2/HTML templates are not valid Python
+]
 "tests/**/*.py" = [
   "ANN",  # No type annotations required in tests
   "ARG001",  # Unused function argument (fixtures)

@@ -270,3 +270,15 @@ class InstagramClient:
         except Exception as exc:
             logger.exception("instagram_client.upload_failed", error=str(exc))
             return None
+
+    async def get_media_info(self, media_pk: str) -> Any | None:
+        try:
+
+            def _get_info() -> Any:
+                client = _get_instagram_client()
+                return client.media_info(media_pk)
+
+            return await asyncio.to_thread(_get_info)
+        except Exception as exc:
+            logger.exception("instagram_client.media_info_failed", error=str(exc))
+            return None

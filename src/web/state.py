@@ -1,5 +1,6 @@
 """Shared web-layer state and helpers."""
 
+from datetime import UTC, datetime
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -13,6 +14,14 @@ from src.shared.logging import get_logger
 logger = get_logger(__name__)
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+
+
+def _timestamp_to_time_label(timestamp: float) -> str:
+    dt = datetime.fromtimestamp(timestamp, tz=UTC)
+    return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+templates.env.filters["timestamp_to_time_label"] = _timestamp_to_time_label
 
 
 @lru_cache(maxsize=1)

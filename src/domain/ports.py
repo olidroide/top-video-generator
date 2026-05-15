@@ -22,6 +22,7 @@ if TYPE_CHECKING:
         TikTokAuth,
         Video,
         VideoPoint,
+        VideoVerificationResult,
         YtAuth,
     )
 
@@ -175,3 +176,10 @@ class OAuthProvider(Protocol[OAuthResultT]):
     async def step_1_get_authentication_url(self) -> str: ...
 
     async def step_2_exchange_code_authentication(self, authorization_value: str) -> OAuthResultT: ...
+
+
+class VideoVerifier(Protocol):
+    @property
+    def platform_name(self) -> str: ...
+
+    async def verify(self, release_id: str) -> VideoVerificationResult: ...

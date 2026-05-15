@@ -128,7 +128,7 @@
           </section>
         {% endif %}
 
-        <footer>
+        <div class="card-foot">
           <button
             class="n-btn"
             hx-post="/admin/tasks/daily/trigger"
@@ -143,8 +143,25 @@
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
           </button>
-        </footer>
+          <button
+            class="n-btn n-btn--outline"
+            hx-get="/admin/verify"
+            hx-target="#verification-results-container"
+            hx-swap="innerHTML"
+            hx-disabled-elt="this"
+            title="Verify latest published videos are live"
+            aria-label="Verify published videos"
+          >
+            <i class="fas fa-check-circle refresh-action__icon"></i> Verify Published
+            <span class="htmx-indicator" aria-hidden="true">
+              <i class="fas fa-circle-notch n-spin"></i>
+            </span>
+          </button>
+        </div>
       </article>
+
+      {# Verification results container #}
+      <div id="verification-results-container" style="grid-column: 1 / -1;"></div>
 
     {# Weekly horizontal — YouTube only #}
     {% elif task.name == "Weekly Horizontal (YouTube)" %}

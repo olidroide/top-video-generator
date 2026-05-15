@@ -13,6 +13,7 @@ from src.application.get_operational_metrics_use_case import GetOperationalMetri
 from src.application.get_setup_page_use_case import GetSetupPageUseCase
 from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
 from src.application.trigger_admin_task_use_case import TriggerAdminTaskUseCase
+from src.application.verify_published_videos_use_case import VerifyPublishedVideosUseCase
 from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import SpotifyAuth, YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
@@ -194,3 +195,19 @@ GetOperationalMetricsUseCaseDep = Annotated[
     GetOperationalMetricsUseCase,
     Depends(get_operational_metrics_use_case),
 ]
+
+
+def get_verify_published_videos_use_case(
+    release_repo: Annotated[ReleaseRepositoryPort, Depends(get_release_repo)],
+) -> VerifyPublishedVideosUseCase:
+    from src.adapters.instagram_video_verifier import InstagramVideoVerifier
+    from src.adapters.youtube_video_verifier import YouTubeVideoVerifier
+
+    verifiers = [YouTubeVideoVerifier(), InstagramVideoVerifier()]
+    return VerifyPublishedVideosUseCase(
+        release_store=release_repo,
+        verifiers=verifiers,
+    )
+
+
+VerifyPublishedVideosUseCaseDep = Annotated[VerifyPublishedVideosUseCase, Depends(get_verify_published_videos_use_case)]
