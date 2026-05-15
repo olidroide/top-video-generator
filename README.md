@@ -73,7 +73,7 @@ flowchart LR
     style Platforms fill:#FCE7F3,stroke:#EC4899,stroke-width:2px,color:#831843
 ```
 
-Scoring note: ranking logic is canonically implemented in `src/domain/services/scoring_service.py` and orchestrated by application/use-case flows. Fetch-data orchestration already lives in `src/application/fetch_data_use_case.py`; the remaining delivery-layer cleanup is concentrated in selected publish entrypoints and web contract hardening.
+Scoring note: ranking logic is canonically implemented in `src/domain/services/scoring_service.py` and orchestrated by application/use-case flows. Fetch-data orchestration lives in `src/application/fetch_data_use_case.py`, and weekly horizontal publish orchestration lives in `src/application/publish_video_use_case.py`; remaining delivery-layer cleanup is concentrated in shared entrypoint wiring and web contract hardening.
 
 ### Key Components
 
@@ -137,7 +137,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Current Architecture Issues
 
-1. **Entrypoint Boundary Debt**: fetch-data has been migrated into an application use case, but selected publish entrypoints still contain orchestration and dependency-wiring detail that should continue moving toward thinner delivery shells.
+1. **Entrypoint Boundary Debt**: fetch-data and weekly horizontal publish orchestration are now use-case owned, but selected entrypoints still contain dependency-wiring detail that should continue moving toward reusable factories and thinner delivery shells.
 
 2. **Web Delivery Layer Stabilization**: route modules are split under `src/web/routes/`, but route-level contracts and template boundary tests still need hardening.
 
@@ -153,6 +153,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ✅ **Hexagonal Split** (`src/domain`, `src/application`, `src/adapters`, `src/infrastructure`): Core migration out of legacy god files is completed
 ✅ **Fetch Orchestration Extraction** (`src/application/fetch_data_use_case.py`): daily fetch orchestration moved out of the fetch entrypoint into the application layer
+✅ **Weekly Horizontal Publish Extraction** (`src/application/publish_video_use_case.py`): weekly orchestration, idempotency checks, and release persistence now run in the application layer
 ✅ **Vertical Publish Fault Isolation** (`src/application/publish_vertical_use_case.py`): multi-platform publish fan-out now isolates per-publisher exceptions so one failure does not cancel the full batch
 ✅ **Integration Check Contract Hardening** (`src/application/check_platform_connection_use_case.py`): unexpected checker failures now return consistent `IntegrationCheckResult` payloads instead of leaking exceptions upward
 ✅ **Async Isolation** (`src/infrastructure/`): Blocking integrations are isolated with `asyncio.to_thread()`
@@ -175,7 +176,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 ### Near-Term Next Steps
 
-- Finish thinning the remaining publish entrypoints so orchestration stays in application use cases and delivery code only wires dependencies and triggers flows.
+- Continue consolidating shared publish dependency wiring into reusable factories so entrypoints remain thin delivery shells.
 - Tighten web route and template contract tests under `src/web/routes/` to make SSR/HTMX fragments safer to change.
 - Keep improving scheduler resilience with stronger per-job isolation, retries, and explicit partial-failure reporting.
 

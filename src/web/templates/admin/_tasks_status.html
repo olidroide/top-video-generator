@@ -115,7 +115,15 @@
 
     {# Weekly horizontal — YouTube only #}
     {% elif task.name == "Weekly Horizontal (YouTube)" %}
-      <article class="platform-card">
+      <article
+        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
+        style="
+          {% if task.older_than_24h %}
+            --pico-card-background-color: #FEF3C7;
+            --pico-card-border-color: #F59E0B;
+          {% endif %}
+        "
+      >
         <header>
           <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
         </header>
@@ -133,6 +141,14 @@
             Source: {{ task.source }}
           </p>
         </section>
+
+        {% if task.warning_message and task.older_than_24h %}
+          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
+            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
+              ⚠ {{ task.warning_message }}
+            </p>
+          </section>
+        {% endif %}
 
         <footer>
           <button

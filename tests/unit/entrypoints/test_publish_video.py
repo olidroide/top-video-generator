@@ -20,19 +20,41 @@ class _TimeSeriesRepositoryStub:
         return
 
 
+class _VideoRepositoryStub:
+    def __init__(self, _db_path: object) -> None:
+        return
+
+
 @pytest.mark.asyncio
 async def test_weekly_publish_returns_early_when_already_published(monkeypatch: pytest.MonkeyPatch) -> None:
-    fetch_use_case_initialized = False
+    execute_called = False
 
-    class _FetchTopVideosUseCaseGuard:
-        def __init__(self, _timeseries_repo: object, _video_repo: object) -> None:
-            nonlocal fetch_use_case_initialized
-            fetch_use_case_initialized = True
+    class _WeeklyUseCaseStub:
+        def __init__(
+            self,
+            *,
+            release_store: object,
+            fetch_top_videos_use_case: object,
+            horizontal_video_pipeline: object,
+            uploader: object,
+        ) -> None:
+            _ = release_store, fetch_top_videos_use_case, horizontal_video_pipeline, uploader
+
+        async def execute(self, request: object):
+            nonlocal execute_called
+            execute_called = True
+
+            class _Result:
+                success = True
+
+            _ = request
+            return _Result()
 
     monkeypatch.setattr("src.entrypoints.publish_video.ReleaseRepository", _ReleaseRepositoryStub)
     monkeypatch.setattr("src.entrypoints.publish_video.TimeSeriesRepository", _TimeSeriesRepositoryStub)
-    monkeypatch.setattr("src.entrypoints.publish_video.FetchTopVideosUseCase", _FetchTopVideosUseCaseGuard)
+    monkeypatch.setattr("src.entrypoints.publish_video.VideoRepository", _VideoRepositoryStub)
+    monkeypatch.setattr("src.entrypoints.publish_video.WeeklyHorizontalPublishUseCase", _WeeklyUseCaseStub)
 
     await _run_weekly_publish_job(AppSettings(env=Environment.DEVELOPMENT, yt_search_region_code="ES"))
 
-    assert not fetch_use_case_initialized
+    assert execute_called

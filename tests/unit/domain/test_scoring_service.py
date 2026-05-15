@@ -7,11 +7,12 @@ from datetime import UTC, date, datetime
 import pytest
 
 from src.domain.exceptions import ScoringError
-from src.domain.models import CanonicalVideo, VideoPoint, VideoScoreStatus
+from src.domain.models import CanonicalVideo, Channel, Video, VideoPoint, VideoScoreStatus
 from src.domain.services.scoring_service import (
     calculate_score_status,
     calculate_views_growth,
     datetime_range_start,
+    rank_videos_by_score,
     score_and_rank,
     score_and_rank_video_points,
 )
@@ -256,3 +257,35 @@ class TestScoreAndRankVideoPoints:
         assert ranked is not current
         assert ranked[0] is not current[0]
         assert ranked[1] is not current[1]
+
+
+class TestRankVideosByScore:
+    def _video(self, video_id: str, score: int | None) -> Video:
+        return Video(
+            video_id=video_id,
+            score=score,
+            title=f"Title {video_id}",
+            channel=Channel(name="Channel", channel_id="cid"),
+        )
+
+    def test_orders_by_score_desc_with_none_first(self) -> None:
+        videos = [
+            self._video("none", None),
+            self._video("low", 1),
+            self._video("high", 10),
+            self._video("mid", 5),
+        ]
+
+        ranked = rank_videos_by_score(videos)
+
+        # Mirrors existing weekly publish semantics from entrypoint refactor.
+        assert [video.video_id for video in ranked] == ["none", "high", "mid", "low"]
+
+    def test_does_not_mutate_input_list(self) -> None:
+        videos = [self._video("a", 2), self._video("b", None)]
+        original = list(videos)
+
+        ranked = rank_videos_by_score(videos)
+
+        assert videos == original
+        assert ranked is not videos

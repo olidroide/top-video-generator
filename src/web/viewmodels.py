@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 _SPOTIFY_REAUTH_PREFIX = "Spotify authorization is invalid or expired."
 _SECONDS_PER_HOUR = 3600
 _HOURS_PER_DAY = 24
+_HOURS_PER_WEEK = _HOURS_PER_DAY * 7
 
 
 @dataclass(frozen=True)
@@ -462,6 +463,7 @@ def build_admin_tasks_view_model(
     """
     from datetime import UTC, datetime
 
+    from src.config.settings import get_app_settings
     from src.domain.models import Platform, ReleaseKind
 
     now = datetime.now(UTC)
@@ -484,14 +486,25 @@ def build_admin_tasks_view_model(
     )
 
     # Weekly horizontal YouTube
+    settings = get_app_settings()
+    weekly_client_id = settings.yt_auth_user_id or "default"
     weekly_yt_release = release_repo.get_release(
         platform=Platform.YOUTUBE.value,
-        client_id="default",
+        client_id=weekly_client_id,
         release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
     )
+
+    # Backward-compatible fallback for existing releases persisted under legacy default client id.
+    if weekly_yt_release is None and weekly_client_id != "default":
+        weekly_yt_release = release_repo.get_release(
+            platform=Platform.YOUTUBE.value,
+            client_id="default",
+            release_kind=ReleaseKind.WEEKLY_HORIZONTAL.value,
+        )
+
     weekly_yt_timestamp = weekly_yt_release.published_at if weekly_yt_release else None
     weekly_yt_hours = (now.timestamp() - weekly_yt_timestamp) / _SECONDS_PER_HOUR if weekly_yt_timestamp else None
-    weekly_yt_older_than_24h = weekly_yt_hours is not None and weekly_yt_hours >= _HOURS_PER_DAY
+    weekly_yt_older_than_24h = weekly_yt_hours is not None and weekly_yt_hours >= _HOURS_PER_WEEK
 
     weekly_yt_task_vm = AdminTaskViewModel(
         name="Weekly Horizontal (YouTube)",
@@ -500,7 +513,7 @@ def build_admin_tasks_view_model(
         older_than_24h=weekly_yt_older_than_24h,
         source="release" if weekly_yt_timestamp else "never",
         applicable=True,
-        warning_message="No weekly publish in 24+ hours" if weekly_yt_older_than_24h else None,
+        warning_message="No weekly publish in 7+ days" if weekly_yt_older_than_24h else None,
     )
 
     tasks: list[AdminTaskViewModel] = [daily_task_vm, weekly_yt_task_vm]

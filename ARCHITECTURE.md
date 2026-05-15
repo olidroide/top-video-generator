@@ -16,7 +16,7 @@ The active architecture is hexagonal (Ports & Adapters). The migration away from
 - Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py` instead of the delivery entrypoint.
 - Concurrent publishing uses `asyncio.TaskGroup` with per-platform failure capture in application orchestration, including fault isolation in the vertical publish flow.
 - Integration connectivity checks are normalized at the application boundary so unexpected checker failures return stable `IntegrationCheckResult` values.
-- Remaining boundary debt is concentrated in selected publish entrypoints and in route/template contract coverage rather than in the fetch-data workflow.
+- Remaining boundary debt is concentrated in route/template contract coverage, scheduler resilience, and final entrypoint wiring simplification.
 
 ## Current Layers
 
@@ -80,7 +80,7 @@ Entrypoints are thin orchestration layers only.
 
 - Allowed: load settings, build use cases/adapters, trigger workflows, report outcomes.
 - Not allowed: business scoring rules, ranking logic, manual cross-layer data shaping, release-window domain decisions.
-- Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py`; the remaining migration gaps are concentrated in selected publish entrypoints where orchestration and dependency wiring still need further cleanup.
+- Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py`, and weekly horizontal publish orchestration now lives in `src/application/publish_video_use_case.py`; remaining migration gaps are concentrated in selected entrypoint dependency wiring and web contract hardening.
 
 Target direction:
 
@@ -178,13 +178,13 @@ flowchart LR
 
 1. **Observability:** `/metrics` is in-memory and not exported to a centralized backend.
 2. **Scheduler resilience:** per-job isolation, retries, and non-fatal partial failures are still incomplete.
-3. **Publish entrypoint cleanup:** selected publish entrypoints still contain orchestration and dependency wiring that should keep moving into application use cases.
+3. **Publish entrypoint cleanup:** publish orchestration is now use-case owned, but selected entrypoints still have dependency-wiring detail that should keep moving toward reusable factories.
 4. **Web contracts:** route-level input/output contracts and template boundaries need tighter tests.
 5. **Path/runner conventions:** must stay enforced via smoke tests on every entrypoint or Docker wiring change.
 
 ## Immediate Next Steps
 
-1. Continue shrinking `src/entrypoints/publish_video.py` and `src/entrypoints/publish_vertical.py` toward pure delivery wiring.
+1. Continue extracting shared dependency-wiring from publish entrypoints into reusable factories while keeping delivery shells thin.
 2. Expand web contract coverage around route fragments and admin/status partials.
 3. Harden scheduler behavior around retries, heartbeat reporting, and partial-failure visibility.
 
@@ -233,8 +233,8 @@ These three items unlock observability, resilience, and entrypoint simplificatio
 - **Follow-up:** Scheduler logs will show which tasks are stuck; can then add timeouts or async cleanup in subsequent work.
 
 **2. Entrypoint Dependency Wiring Factory (Simplify Publish Entrypoints)**
-- **Task:** Extract shared dependency-building logic from `src/entrypoints/publish_video.py` and `src/entrypoints/publish_vertical.py` into a reusable factory.
-- **Current State:** `publish_vertical.py` already uses a context dataclass and factory functions; `publish_video.py` still builds repositories inline.
+- **Task:** Consolidate shared dependency-building logic from publish entrypoints into a reusable factory.
+- **Current State:** `publish_vertical.py` already uses a context dataclass and factory functions; `publish_video.py` now delegates orchestration to `WeeklyHorizontalPublishUseCase` and should continue moving shared wiring into factory modules.
 - **Scope:** Consolidate repository and adapter initialization into `src/entrypoints/_publisher_factories.py` or similar module.
 - **Effort:** 2 sessions (~2 hours)
 - **Validation:** All entrypoint integration tests still pass; no behavior change; code is simpler to read.

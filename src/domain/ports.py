@@ -118,6 +118,23 @@ class VerticalVideoPipeline(Protocol):
     async def build_vertical_video(self, video_list: Sequence[Video]) -> str: ...
 
 
+class HorizontalVideoPipeline(Protocol):
+    async def build_horizontal_video(self, video_list: Sequence[Video]) -> tuple[str, str]: ...
+
+
+class WeeklyYouTubeUploader(Protocol):
+    async def upload_weekly_video(
+        self,
+        *,
+        video_path: str,
+        title: str,
+        description: str,
+        thumbnail_path: str,
+        playlist_id: str | None,
+        tags: list[str],
+    ) -> str | None: ...
+
+
 class VideoPublishExecutor(Protocol):
     async def publish(
         self,

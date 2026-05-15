@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 from src.domain.exceptions import ScoringError
-from src.domain.models import CanonicalVideo, VideoPoint, VideoScoreStatus
+from src.domain.models import CanonicalVideo, Video, VideoPoint, VideoScoreStatus
 
 
 def calculate_views_growth(current: CanonicalVideo, previous: CanonicalVideo | None) -> int:
@@ -133,6 +133,15 @@ def score_and_rank_video_points(
             )
         )
     return result
+
+
+def rank_videos_by_score(videos: list[Video]) -> list[Video]:
+    """Return a new list sorted by score DESC with score=None values at the end."""
+    return sorted(
+        videos,
+        key=lambda video: (video.score is None, video.score if video.score is not None else 0),
+        reverse=True,
+    )
 
 
 def datetime_range_start(
