@@ -165,17 +165,25 @@ class PublishVerticalUseCase:
                     error=str(exc),
                 )
 
-        async with asyncio.TaskGroup() as task_group:
-            tasks = [(publisher, task_group.create_task(_publish_one(publisher))) for publisher in pending_publishers]
+        results = await asyncio.gather(
+            *[_publish_one(publisher) for publisher in pending_publishers],
+            return_exceptions=True,
+        )
 
-        for publisher, task in tasks:
-            result = task.result()
-            if not result.success:
+        for publisher, result_or_exc in zip(pending_publishers, results, strict=True):
+            if isinstance(result_or_exc, Exception):
+                logger.exception(
+                    "publish_vertical.unexpected_publish_error",
+                    platform=publisher.platform_name,
+                    error=str(result_or_exc),
+                )
+                continue
+            if not result_or_exc.success:
                 continue
             self.persist_publisher_release(
                 release_store=release_store,
                 publisher=publisher,
-                result=result,
+                result=result_or_exc,
                 publisher_client_identity=publisher_client_identity,
             )
 

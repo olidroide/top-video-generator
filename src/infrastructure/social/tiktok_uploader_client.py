@@ -78,12 +78,12 @@ class TikTokUploaderClient:
         tiktok_uploader_class = self._resolve_uploader_class()
 
         try:
-            return tiktok_uploader_class(cookies=cookies, browser=self._tiktok_browser)
+            return tiktok_uploader_class(cookies=cookies, browser=self._tiktok_browser, headless=True)
         except TypeError:
             try:
-                return tiktok_uploader_class(cookies=cookies)
+                return tiktok_uploader_class(cookies=cookies, headless=True)
             except TypeError:
-                return tiktok_uploader_class(cookies)
+                return tiktok_uploader_class(cookies=cookies)
 
     @staticmethod
     def _resolve_uploader_class() -> type[Any]:
