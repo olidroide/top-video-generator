@@ -149,7 +149,15 @@ class PublishVerticalUseCase:
                 if publisher.platform_name == Platform.TIKTOK:
                     from src.adapters.tiktok_integration_checker import TikTokIntegrationChecker
 
-                    checker = TikTokIntegrationChecker()
+                    try:
+                        checker = TikTokIntegrationChecker()
+                    except Exception:  # noqa: BLE001
+                        logger.warning("publish_vertical.tiktok_skipped_settings_unavailable")
+                        return PublishingResult(
+                            platform=publisher.platform_name,
+                            success=False,
+                            error="TikTok settings unavailable",
+                        )
                     if not checker.is_configured:
                         return PublishingResult(
                             platform=publisher.platform_name,

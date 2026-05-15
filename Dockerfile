@@ -86,8 +86,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
     fontconfig
 
 # Install Playwright browser binaries required by tiktok-uploader.
-RUN --mount=type=cache,target=/ms-playwright \
-    /app/.venv/bin/playwright install --with-deps chromium
+RUN /app/.venv/bin/playwright install --with-deps chromium
 
 # Install project-provided fonts in standard locations and expose predictable paths
 COPY ./src/resources/fonts/* /usr/share/fonts/truetype/custom/

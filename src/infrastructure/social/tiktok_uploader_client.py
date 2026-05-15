@@ -44,6 +44,12 @@ class TikTokUploaderClient:
                 "TikTok cookies are not configured. Set TOP_MUSIC_TIKTOK_COOKIES_FILE or reconnect TikTok credentials."
             )
 
+        if not self._has_valid_session(cookies):
+            raise RuntimeError(
+                "TikTok session expired. Cookies file exists but sessionid is missing or invalid. "
+                "Re-export cookies from a logged-in TikTok browser session."
+            )
+
         uploader = self._build_uploader(cookies)
         upload_result = self._call_upload(uploader, file_path=file_path, caption=caption)
 
@@ -68,6 +74,26 @@ class TikTokUploaderClient:
             # During migration we allow existing auth token field to hold cookie payload.
             return auth.token
         return None
+
+    @staticmethod
+    def _has_valid_session(cookies_source: str) -> bool:
+        """Check if cookies file contains a non-empty sessionid cookie."""
+        try:
+            cookie_path = Path(cookies_source)
+            if not cookie_path.exists():
+                return False
+            content = cookie_path.read_text()
+            sessionid_col = 5
+            value_col = 6
+            for line in content.splitlines():
+                parts = line.split("\t")
+                if len(parts) > value_col and parts[sessionid_col] == "sessionid" and parts[value_col].strip():
+                    return True
+            logger.warning("tiktok.sessionid_missing_in_cookies")
+            return False
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("tiktok.session_check_failed", error=str(exc))
+            return False
 
     def _build_uploader(self, cookies: str) -> Any:
         if not is_tiktok_uploader_available():
