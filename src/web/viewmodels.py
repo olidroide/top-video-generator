@@ -351,6 +351,53 @@ def build_admin_health_view_model(health: dict[str, Any]) -> AdminHealthViewMode
 
 
 @dataclass(frozen=True)
+class AdminMetricItemViewModel:
+    """Presentation model for a single admin metric row."""
+
+    key: str
+    label: str
+    count: int
+    errors: int
+    error_rate_label: str
+
+
+@dataclass(frozen=True)
+class AdminMetricsPanelViewModel:
+    """Presentation model for the admin metrics section."""
+
+    metrics: tuple[AdminMetricItemViewModel, ...]
+
+
+def _format_error_rate(*, count: int, errors: int) -> str:
+    total = count + errors
+    if total == 0:
+        return "0%"
+    return f"{(errors / total) * 100:.1f}%"
+
+
+def build_admin_metrics_view_model(raw_metrics: Mapping[str, int]) -> AdminMetricsPanelViewModel:
+    """Build the metrics section view model from in-memory counters."""
+    metrics: list[AdminMetricItemViewModel] = []
+    for key, label in (
+        ("fetch", "Fetch"),
+        ("processing", "Processing"),
+        ("upload", "Upload"),
+    ):
+        count = int(raw_metrics.get(f"{key}_count", 0))
+        errors = int(raw_metrics.get(f"{key}_errors", 0))
+        metrics.append(
+            AdminMetricItemViewModel(
+                key=key,
+                label=label,
+                count=count,
+                errors=errors,
+                error_rate_label=_format_error_rate(count=count, errors=errors),
+            )
+        )
+    return AdminMetricsPanelViewModel(metrics=tuple(metrics))
+
+
+@dataclass(frozen=True)
 class AdminTaskViewModel:
     """Presentation model for a single admin task status."""
 

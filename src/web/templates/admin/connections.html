@@ -76,4 +76,22 @@
 
   {% include "admin/_tasks_status.html" with context %}
 
+  {# ── Runtime Metrics ── #}
+  <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
+    <h2 class="section-title">Runtime Metrics</h2>
+
+    <button
+      class="n-btn n-btn--outline n-btn--compact"
+      hx-get="/admin/metrics/status"
+      hx-target="#metrics-grid"
+      hx-swap="outerHTML"
+      aria-label="Refresh runtime metrics"
+    >
+      <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+      Refresh
+    </button>
+  </div>
+
+  {% include "admin/_metrics_status.html" with context %}
+
 {% endblock %}

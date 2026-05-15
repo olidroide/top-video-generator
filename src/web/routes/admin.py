@@ -24,11 +24,12 @@ from src.web.dependencies import (
     get_setup_page_use_case,
 )
 from src.web.routes import ops as ops_routes
-from src.web.state import get_app_version, logger, templates
+from src.web.state import get_app_version, logger, metrics_state, templates
 from src.web.viewmodels import (
     AdminConnectionsViewModel,
     build_admin_connections_view_model,
     build_admin_health_view_model,
+    build_admin_metrics_view_model,
     get_platform_connection_view_model,
 )
 
@@ -173,6 +174,7 @@ async def admin_connections(
 
     tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
     ctx["tasks"] = tasks_vm
+    ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_state)
 
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
@@ -272,6 +274,19 @@ async def admin_tasks_status(
         request=request,
         name="admin/_tasks_status.html",
         context={"request": request, "tasks": tasks_vm},
+    )
+
+
+@router.get("/metrics/status", response_class=HTMLResponse)
+async def admin_metrics_status(request: Request) -> Response:
+    """HTMX partial — returns the #metrics-grid fragment with in-memory counters."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_metrics_status.html",
+        context={"request": request, "metrics_vm": build_admin_metrics_view_model(metrics_state)},
     )
 
 

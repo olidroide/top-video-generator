@@ -1,15 +1,15 @@
-"""Operational routes such as health and metrics."""
+"""Operational routes such as health checks."""
 
 import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from src.config.settings import AppSettings
 from src.web.dependencies import AppSettingsDep, TimeSeriesRepositoryDep
-from src.web.state import HealthCheck, MetricsResponse, metrics_state
+from src.web.state import HealthCheck
 
 router = APIRouter()
 
@@ -74,22 +74,3 @@ async def health_check(timeseries_repo: TimeSeriesRepositoryDep, settings: AppSe
 
     overall_status = "healthy" if all(check["status"] == "ok" for check in checks.values()) else "unhealthy"
     return HealthCheck(status=overall_status, checks=checks)
-
-
-@router.get("/metrics")
-async def metrics() -> MetricsResponse:
-    """Metrics endpoint for monitoring."""
-    return MetricsResponse(**metrics_state)
-
-
-@router.post("/metrics/increment/{metric_name}")
-async def increment_metric(metric_name: str, error: bool = False) -> dict[str, str]:
-    """Internal endpoint to increment metrics (used by background tasks)."""
-    allowed_metrics = {name.rsplit("_", maxsplit=1)[0] for name in metrics_state}
-    if metric_name not in allowed_metrics:
-        raise HTTPException(status_code=400, detail=f"Invalid metric: {metric_name}")
-
-    key = f"{metric_name}_errors" if error else f"{metric_name}_count"
-    if key in metrics_state:
-        metrics_state[key] += 1
-    return {"status": "ok"}

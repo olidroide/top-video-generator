@@ -11,7 +11,7 @@ from src.config.settings import AppSettings
 from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
 from src.web.dependencies import get_check_platform_connection_use_case, get_setup_page_use_case
 from src.web.main import create_app
-from src.web.state import get_app_version
+from src.web.state import get_app_version, metrics_state
 
 
 @dataclass
@@ -197,6 +197,64 @@ def test_admin_health_status_returns_partial(monkeypatch) -> None:
     assert health_response.status_code == 200
     assert "health-checks" in health_response.text
     assert "Database accessible" in health_response.text
+
+
+def test_admin_metrics_status_requires_authenticated_session() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        response = client.get("/admin/metrics/status")
+
+    assert response.status_code == 403
+
+
+def test_admin_metrics_status_returns_partial_when_authenticated(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    previous_metrics = dict(metrics_state)
+    metrics_state["fetch_count"] = 10
+    metrics_state["fetch_errors"] = 2
+
+    try:
+        with TestClient(app) as client:
+            login_response = client.post(
+                "/admin/login",
+                data={"password": "admin-pass"},
+                follow_redirects=False,
+            )
+            response = client.get("/admin/metrics/status")
+    finally:
+        metrics_state.clear()
+        metrics_state.update(previous_metrics)
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert "metrics-grid" in response.text
+    assert "FETCH" in response.text
+    assert "COUNT" in response.text
+    assert "ERROR RATE" in response.text
+
+
+def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        dashboard_response = client.get("/admin")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert dashboard_response.status_code == 200
+    assert "Runtime Metrics" in dashboard_response.text
+    assert 'hx-get="/admin/metrics/status"' in dashboard_response.text
 
 
 def test_admin_task_trigger_requires_authenticated_session() -> None:

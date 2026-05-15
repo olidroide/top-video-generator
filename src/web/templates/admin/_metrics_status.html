@@ -1,0 +1,32 @@
+{#
+  HTMX partial — returned by GET /admin/metrics/status
+  Replaces #metrics-grid via hx-swap="outerHTML"
+#}
+<div id="metrics-grid" class="platforms-grid" role="region" aria-label="Runtime metrics">
+  {% for metric in metrics_vm.metrics %}
+    <article class="platform-card" aria-label="{{ metric.label }} metric card">
+      <div class="card-head">
+        <span class="platform-label">{{ metric.label | upper }}</span>
+      </div>
+
+      <hr aria-hidden="true">
+
+      <div class="card-body">
+        <div class="data-row">
+          <span class="data-key">COUNT</span>
+          <span class="data-val">{{ metric.count }}</span>
+        </div>
+
+        <div class="data-row">
+          <span class="data-key">ERRORS</span>
+          <span class="data-val">{{ metric.errors }}</span>
+        </div>
+
+        <div class="data-row">
+          <span class="data-key">ERROR RATE</span>
+          <span class="data-val">{{ metric.error_rate_label }}</span>
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+</div>

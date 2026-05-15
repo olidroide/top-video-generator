@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from src.config.settings import AppSettings
 from src.web.dependencies import get_timeseries_repo
 from src.web.main import create_app
-from src.web.state import metrics_state
 
 app = create_app(AppSettings(yt_search_region_code="ES"))
 
@@ -36,20 +35,10 @@ def test_health_returns_structured_checks() -> None:
     assert set(body["checks"].keys()) == {"ffmpeg", "templates", "database"}
 
 
-def test_metrics_increment_updates_known_metric() -> None:
-    metrics_state["fetch_count"] = 0
-
+def test_metrics_routes_are_not_exposed() -> None:
     with TestClient(app) as client:
-        response = client.post("/metrics/increment/fetch")
+        read_response = client.get("/metrics")
+        write_response = client.post("/metrics/increment/fetch")
 
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-    assert metrics_state["fetch_count"] == 1
-
-
-def test_metrics_increment_invalid_metric_returns_400() -> None:
-    with TestClient(app) as client:
-        response = client.post("/metrics/increment/not-a-real-metric")
-
-    assert response.status_code == 400
-    assert "metric" in response.json()["detail"].lower()
+    assert read_response.status_code == 404
+    assert write_response.status_code == 404

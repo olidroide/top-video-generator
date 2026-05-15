@@ -39,15 +39,6 @@ class HealthCheck(BaseModel):
     checks: dict[str, dict[str, str]]
 
 
-class MetricsResponse(BaseModel):
-    fetch_count: int
-    fetch_errors: int
-    upload_count: int
-    upload_errors: int
-    processing_count: int
-    processing_errors: int
-
-
 async def request_had_any_credentials(request: Request) -> bool:
     return bool(
         request.session.get("yt_credentials")
