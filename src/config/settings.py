@@ -89,6 +89,8 @@ class AppSettings(BaseSettings):
     db_video_file: str = "db/db_video.json"
     db_auth_file: str = "db/db_auth.json"
     db_release_file: str = "db/db_release.json"
+    operational_metrics_retention_days: int = 90
+    operational_metrics_window_hours: int = 24
     # Deprecated legacy shared store path. Keep for backward compatibility only.
     db_data_file: str = "db/db_data.json"
 

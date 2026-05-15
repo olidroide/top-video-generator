@@ -17,6 +17,7 @@ from src.application.publish_vertical_use_case import (
 from src.config.settings import AppSettings, get_app_settings
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
+from src.infrastructure.storage.operational_metrics_repository import OperationalMetricsRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
@@ -95,55 +96,72 @@ async def main_async() -> None:
 
 
 async def _run_vertical_publish_job(settings: AppSettings) -> None:
-    day = datetime.datetime.now(UTC).date()
-
-    # Build dependencies
-    timeseries_repo, video_repo, release_repo = _build_repositories(settings)
-    job = _build_job_dependencies(timeseries_repo, video_repo, release_repo, settings)
-
-    # Build job context
-    job_context = await job.publish_vertical_use_case.build_job_context(
-        release_store=job.release_repo,
-        publishers=job.publishers,
-        fetch_top_videos_use_case=job.fetch_videos_use_case,
-        day=day,
-        spotify_playlist_original=settings.spotify_playlist_original,
-        is_spotify_configured=settings.is_spotify_configured,
+    metrics_db_path = (
+        settings.db_timeseries_file if settings.is_production_env else f"{settings.db_timeseries_file}.test"
+    )
+    metrics_repo = OperationalMetricsRepository(
+        metrics_db_path,
+        retention_days=settings.operational_metrics_retention_days,
     )
 
-    if not job_context.has_any_work:
-        logger.info("publish_vertical.already_completed", day=str(day))
-        return
+    try:
+        day = datetime.datetime.now(UTC).date()
 
-    # Publish Spotify playlist if needed
-    await job.publish_vertical_use_case.maybe_update_spotify_original_playlist(
-        release_store=job.release_repo,
-        spotify_playlist_updater=job.spotify_playlist_updater,
-        spotify_release_pending=job_context.spotify_release_pending,
-        spotify_playlist_original=settings.spotify_playlist_original,
-        spotify_user_id=settings.spotify_user_id,
-        video_list=job_context.video_list,
-    )
+        # Build dependencies
+        timeseries_repo, video_repo, release_repo = _build_repositories(settings)
+        job = _build_job_dependencies(timeseries_repo, video_repo, release_repo, settings)
 
-    if not job_context.pending_publishers:
-        logger.info("publish_vertical.no_pending_publishers", day=str(day))
-        return
+        # Build job context
+        job_context = await job.publish_vertical_use_case.build_job_context(
+            release_store=job.release_repo,
+            publishers=job.publishers,
+            fetch_top_videos_use_case=job.fetch_videos_use_case,
+            day=day,
+            spotify_playlist_original=settings.spotify_playlist_original,
+            is_spotify_configured=settings.is_spotify_configured,
+        )
 
-    # Publish pending vertical videos
-    await job.publish_vertical_use_case.publish_pending_vertical_videos(
-        release_store=job.release_repo,
-        publish_executor=job.video_publish_executor,
-        vertical_video_pipeline=job.vertical_video_pipeline,
-        pending_publishers=job_context.pending_publishers,
-        video_list=job_context.video_list,
-        publisher_client_identity=PublisherClientIdentity(
-            youtube_client_id=settings.yt_auth_user_id,
-            instagram_client_id=settings.instagram_client_username,
-            tiktok_client_id=settings.tiktok_user_openid,
-        ),
-        yt_title_template=settings.yt_title_template,
-        yt_description_template=settings.yt_description_template,
-    )
+        if not job_context.has_any_work:
+            logger.info("publish_vertical.already_completed", day=str(day))
+            metrics_repo.record_metric_event(stage="processing", is_error=False)
+            return
+
+        # Publish Spotify playlist if needed
+        await job.publish_vertical_use_case.maybe_update_spotify_original_playlist(
+            release_store=job.release_repo,
+            spotify_playlist_updater=job.spotify_playlist_updater,
+            spotify_release_pending=job_context.spotify_release_pending,
+            spotify_playlist_original=settings.spotify_playlist_original,
+            spotify_user_id=settings.spotify_user_id,
+            video_list=job_context.video_list,
+        )
+
+        if not job_context.pending_publishers:
+            logger.info("publish_vertical.no_pending_publishers", day=str(day))
+            metrics_repo.record_metric_event(stage="processing", is_error=False)
+            return
+
+        # Publish pending vertical videos
+        await job.publish_vertical_use_case.publish_pending_vertical_videos(
+            release_store=job.release_repo,
+            publish_executor=job.video_publish_executor,
+            vertical_video_pipeline=job.vertical_video_pipeline,
+            pending_publishers=job_context.pending_publishers,
+            video_list=job_context.video_list,
+            publisher_client_identity=PublisherClientIdentity(
+                youtube_client_id=settings.yt_auth_user_id,
+                instagram_client_id=settings.instagram_client_username,
+                tiktok_client_id=settings.tiktok_user_openid,
+            ),
+            yt_title_template=settings.yt_title_template,
+            yt_description_template=settings.yt_description_template,
+        )
+        metrics_repo.record_metric_event(stage="processing", is_error=False)
+    except Exception:
+        metrics_repo.record_metric_event(stage="processing", is_error=True)
+        raise
+    finally:
+        metrics_repo.close()
 
 
 def main() -> None:

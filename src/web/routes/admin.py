@@ -17,6 +17,7 @@ from src.application.trigger_admin_task_use_case import TriggerAdminTaskRequest
 from src.domain.models import IntegrationCheckResult, IntegrationPlatform
 from src.web.dependencies import (
     CheckPlatformConnectionUseCaseDep,
+    GetOperationalMetricsUseCaseDep,
     TimeSeriesRepositoryDep,
     TriggerAdminTaskUseCaseDep,
     get_release_repo,
@@ -24,7 +25,7 @@ from src.web.dependencies import (
     get_setup_page_use_case,
 )
 from src.web.routes import ops as ops_routes
-from src.web.state import get_app_version, logger, metrics_state, templates
+from src.web.state import get_app_version, logger, templates
 from src.web.viewmodels import (
     AdminConnectionsViewModel,
     build_admin_connections_view_model,
@@ -151,6 +152,7 @@ async def admin_logout(request: Request) -> Response:
 async def admin_connections(
     request: Request,
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
+    metrics_use_case: GetOperationalMetricsUseCaseDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
     timeseries_repo: TimeSeriesRepositoryDep,
     release_repo: Annotated[Any, Depends(get_release_repo)],
@@ -174,7 +176,7 @@ async def admin_connections(
 
     tasks_vm = build_admin_tasks_view_model(timeseries_repo, release_repo)
     ctx["tasks"] = tasks_vm
-    ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_state)
+    ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_use_case.execute().to_dict())
 
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
@@ -278,15 +280,21 @@ async def admin_tasks_status(
 
 
 @router.get("/metrics/status", response_class=HTMLResponse)
-async def admin_metrics_status(request: Request) -> Response:
-    """HTMX partial — returns the #metrics-grid fragment with in-memory counters."""
+async def admin_metrics_status(
+    request: Request,
+    metrics_use_case: GetOperationalMetricsUseCaseDep,
+) -> Response:
+    """HTMX partial — returns the #metrics-grid fragment with persisted counters."""
     if not _is_admin(request):
         return HTMLResponse(status_code=403, content="")
 
     return templates.TemplateResponse(
         request=request,
         name="admin/_metrics_status.html",
-        context={"request": request, "metrics_vm": build_admin_metrics_view_model(metrics_state)},
+        context={
+            "request": request,
+            "metrics_vm": build_admin_metrics_view_model(metrics_use_case.execute().to_dict()),
+        },
     )
 
 

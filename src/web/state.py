@@ -23,16 +23,6 @@ def get_app_version() -> str:
         return "0.0.0"
 
 
-metrics_state = {
-    "fetch_count": 0,
-    "fetch_errors": 0,
-    "upload_count": 0,
-    "upload_errors": 0,
-    "processing_count": 0,
-    "processing_errors": 0,
-}
-
-
 class HealthCheck(BaseModel):
     status: str
     version: str = Field(default_factory=get_app_version)

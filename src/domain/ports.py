@@ -64,6 +64,20 @@ class TimeSeriesReader(Protocol):
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]: ...
 
 
+class OperationalMetricsWriter(Protocol):
+    def record_metric_event(
+        self,
+        *,
+        stage: str,
+        is_error: bool,
+        event_time: datetime | None = None,
+    ) -> None: ...
+
+
+class OperationalMetricsReader(Protocol):
+    def get_metric_counts(self, *, start_time: datetime, end_time: datetime) -> dict[str, dict[str, int]]: ...
+
+
 class VideoMetadataReader(Protocol):
     def get(self, video_id: str) -> CanonicalVideo | None: ...
 

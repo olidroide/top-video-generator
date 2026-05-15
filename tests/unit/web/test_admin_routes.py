@@ -6,12 +6,17 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
+from src.application.get_operational_metrics_use_case import OperationalMetricsResult
 from src.application.get_setup_page_use_case import GetSetupPageResult
 from src.config.settings import AppSettings
 from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
-from src.web.dependencies import get_check_platform_connection_use_case, get_setup_page_use_case
+from src.web.dependencies import (
+    get_check_platform_connection_use_case,
+    get_operational_metrics_use_case,
+    get_setup_page_use_case,
+)
 from src.web.main import create_app
-from src.web.state import get_app_version, metrics_state
+from src.web.state import get_app_version
 
 
 @dataclass
@@ -27,6 +32,14 @@ class _CheckPlatformConnectionUseCaseStub:
     result: IntegrationCheckResult
 
     async def execute(self, _request: object) -> IntegrationCheckResult:
+        return self.result
+
+
+@dataclass
+class _OperationalMetricsUseCaseStub:
+    result: OperationalMetricsResult
+
+    def execute(self) -> OperationalMetricsResult:
         return self.result
 
 
@@ -211,22 +224,26 @@ def test_admin_metrics_status_requires_authenticated_session() -> None:
 def test_admin_metrics_status_returns_partial_when_authenticated(monkeypatch) -> None:
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_operational_metrics_use_case] = lambda: _OperationalMetricsUseCaseStub(
+        OperationalMetricsResult(
+            fetch_count=10,
+            fetch_errors=2,
+            upload_count=3,
+            upload_errors=1,
+            processing_count=5,
+            processing_errors=0,
+        )
+    )
 
-    previous_metrics = dict(metrics_state)
-    metrics_state["fetch_count"] = 10
-    metrics_state["fetch_errors"] = 2
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.get("/admin/metrics/status")
 
-    try:
-        with TestClient(app) as client:
-            login_response = client.post(
-                "/admin/login",
-                data={"password": "admin-pass"},
-                follow_redirects=False,
-            )
-            response = client.get("/admin/metrics/status")
-    finally:
-        metrics_state.clear()
-        metrics_state.update(previous_metrics)
+    app.dependency_overrides.clear()
 
     assert login_response.status_code == 303
     assert response.status_code == 200

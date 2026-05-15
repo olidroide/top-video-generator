@@ -9,6 +9,7 @@ from src.application.authorize_use_case import AuthorizeUseCase
 from src.application.check_platform_connection_use_case import CheckPlatformConnectionUseCase
 from src.application.fetch_top_videos_use_case import FetchTopVideosUseCase
 from src.application.get_admin_task_status_use_case import GetAdminTaskStatusUseCase
+from src.application.get_operational_metrics_use_case import GetOperationalMetricsUseCase
 from src.application.get_setup_page_use_case import GetSetupPageUseCase
 from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashboardUseCase
 from src.application.trigger_admin_task_use_case import TriggerAdminTaskUseCase
@@ -16,11 +17,15 @@ from src.config.settings import AppSettings, get_app_settings
 from src.domain.models import SpotifyAuth, YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
 from src.domain.ports import IntegrationChecker, OAuthProvider
+from src.domain.ports import OperationalMetricsReader as OperationalMetricsRepositoryPort
 from src.domain.ports import ReleaseDateValidator as ReleaseRepositoryPort
 from src.domain.ports import TimeSeriesReader as TimeSeriesRepositoryPort
 from src.domain.ports import VideoMetadataReader as VideoRepositoryPort
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
+from src.infrastructure.storage.operational_metrics_repository import (
+    OperationalMetricsRepository as TinyFluxOperationalMetricsRepository,
+)
 from src.infrastructure.storage.release_repository import ReleaseRepository as TinyDbReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository as TinyDbTimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository as TinyDbVideoRepository
@@ -66,6 +71,16 @@ def get_timeseries_repo(settings: Annotated[AppSettings, Depends(get_settings)])
 
 def get_video_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> VideoRepositoryPort:
     return TinyDbVideoRepository(Path(settings.db_video_file))
+
+
+def get_operational_metrics_repo(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> OperationalMetricsRepositoryPort:
+    db_path = settings.db_timeseries_file if settings.is_production_env else f"{settings.db_timeseries_file}.test"
+    return TinyFluxOperationalMetricsRepository(
+        db_path,
+        retention_days=settings.operational_metrics_retention_days,
+    )
 
 
 def get_authorize_use_case(
@@ -125,6 +140,16 @@ def get_admin_task_status_use_case(
     return GetAdminTaskStatusUseCase(timeseries_repo, release_repo)
 
 
+def get_operational_metrics_use_case(
+    metrics_repo: Annotated[OperationalMetricsRepositoryPort, Depends(get_operational_metrics_repo)],
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> GetOperationalMetricsUseCase:
+    return GetOperationalMetricsUseCase(
+        metrics_repo,
+        window_hours=settings.operational_metrics_window_hours,
+    )
+
+
 def get_trigger_admin_task_use_case() -> TriggerAdminTaskUseCase:
     return TriggerAdminTaskUseCase()
 
@@ -146,3 +171,7 @@ TimeSeriesRepositoryDep = Annotated[TimeSeriesRepositoryPort, Depends(get_timese
 VideoRepositoryDep = Annotated[VideoRepositoryPort, Depends(get_video_repo)]
 GetAdminTaskStatusUseCaseDep = Annotated[GetAdminTaskStatusUseCase, Depends(get_admin_task_status_use_case)]
 TriggerAdminTaskUseCaseDep = Annotated[TriggerAdminTaskUseCase, Depends(get_trigger_admin_task_use_case)]
+GetOperationalMetricsUseCaseDep = Annotated[
+    GetOperationalMetricsUseCase,
+    Depends(get_operational_metrics_use_case),
+]

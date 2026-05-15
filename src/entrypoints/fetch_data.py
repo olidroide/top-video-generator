@@ -6,6 +6,7 @@ from pathlib import Path
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_data_use_case import FetchDataUseCase
 from src.config.settings import AppSettings, get_app_settings
+from src.infrastructure.storage.operational_metrics_repository import OperationalMetricsRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.execution_lock import FileExecutionLock
@@ -31,6 +32,10 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
     youtube_source = YouTubeSource(settings=settings)
     video_repo = VideoRepository(db_video_file)
     timeseries_repo = TimeSeriesRepository(str(db_timeseries_file))
+    metrics_repo = OperationalMetricsRepository(
+        str(db_timeseries_file),
+        retention_days=settings.operational_metrics_retention_days,
+    )
 
     fetch_data_use_case = FetchDataUseCase(
         youtube_source=youtube_source,
@@ -39,7 +44,14 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
         settings=settings,
     )
 
-    await fetch_data_use_case.execute()
+    try:
+        await fetch_data_use_case.execute()
+        metrics_repo.record_metric_event(stage="fetch", is_error=False)
+    except Exception:
+        metrics_repo.record_metric_event(stage="fetch", is_error=True)
+        raise
+    finally:
+        metrics_repo.close()
 
 
 def main() -> None:
