@@ -185,6 +185,24 @@ class TestPasswordAuth:
         assert result is False
         fake_client.dump_settings.assert_not_called()
 
+    def test_password_login_succeeds_when_session_persist_fails(self, tmp_path) -> None:
+        """Should still return True when login succeeds but dump_settings fails."""
+        fake_client = MagicMock()
+        session_file = tmp_path / "instagram_session.json"
+        fake_client.login.return_value = True
+        fake_client.dump_settings.side_effect = PermissionError("Read-only file system")
+
+        result = _try_auth_with_password(
+            fake_client,
+            username="test_user",
+            password="test_pass",
+            settings_file_path=session_file,
+        )
+
+        assert result is True
+        fake_client.login.assert_called_once_with("test_user", "test_pass")
+        fake_client.dump_settings.assert_called_once_with(session_file)
+
 
 class TestSessionPersistenceFlow:
     """Integration tests for session persistence flow."""

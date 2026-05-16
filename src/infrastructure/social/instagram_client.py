@@ -156,7 +156,14 @@ def _reauth_with_password(
     try:
         logger.info("instagram_client.password_reauth_started")
         instagram_client_instance.login(username, password)
-        instagram_client_instance.dump_settings(settings_file_path)
+        try:
+            instagram_client_instance.dump_settings(settings_file_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "instagram_client.session_persist_failed",
+                error=str(exc),
+                session_file=str(settings_file_path),
+            )
         logger.info("instagram_client.password_reauth_succeeded", session_file=str(settings_file_path))
         return True
     except Exception as exc:  # noqa: BLE001
@@ -180,7 +187,14 @@ def _try_auth_with_password(
         )
         result = instagram_client_instance.login(username, password)
         if result:
-            instagram_client_instance.dump_settings(settings_file_path)
+            try:
+                instagram_client_instance.dump_settings(settings_file_path)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "instagram_client.session_persist_failed",
+                    error=str(exc),
+                    session_file=str(settings_file_path),
+                )
             logger.info("instagram_client.password_login_succeeded", session_file=str(settings_file_path))
             return True
 
@@ -275,7 +289,10 @@ def _get_instagram_client() -> Any:
             password_auth_tried=True,
             password_auth_succeeded=login_via_pw,
         )
-        raise InstagramLoginError("Couldn't login user with either password or session")
+        raise InstagramLoginError(
+            "Couldn't login user with either password or session. "
+            f"Verify credentials and ensure session file is writable: {settings_file_path}"
+        )
 
     logger.info(
         "instagram_client.connection_bootstrap_succeeded",

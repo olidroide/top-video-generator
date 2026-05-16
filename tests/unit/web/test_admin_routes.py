@@ -117,6 +117,16 @@ def _build_spotify_reauth_check_result() -> IntegrationCheckResult:
     )
 
 
+def _build_instagram_verified_check_result() -> IntegrationCheckResult:
+    return IntegrationCheckResult(
+        platform=IntegrationPlatform.INSTAGRAM,
+        status=IntegrationCheckStatus.OK,
+        is_configured=True,
+        is_publish_target=True,
+        message="Instagram session verified.",
+    )
+
+
 def test_admin_index_redirects_to_login_when_session_missing(monkeypatch) -> None:
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
@@ -264,6 +274,70 @@ def test_admin_publisher_toggle_requires_authenticated_session() -> None:
         response = client.post("/admin/publishers/spotify/toggle")
 
     assert response.status_code == 403
+
+
+def test_admin_publishers_status_shows_instagram_check_auth_button(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_publisher_state_repo] = lambda: _PublisherStateStub(
+        enabled_by_slug={
+            "youtube": True,
+            "tiktok": True,
+            "instagram": True,
+            "spotify": True,
+        }
+    )
+    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.get("/admin/publishers/status")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert 'hx-post="/admin/publishers/instagram/check-auth"' in response.text
+    assert "Check auth" in response.text
+
+
+def test_admin_publisher_check_auth_returns_single_card_fragment(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_publisher_state_repo] = lambda: _PublisherStateStub(
+        enabled_by_slug={
+            "youtube": True,
+            "tiktok": True,
+            "instagram": True,
+            "spotify": True,
+        }
+    )
+    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+    app.dependency_overrides[get_check_platform_connection_use_case] = lambda: _CheckPlatformConnectionUseCaseStub(
+        _build_instagram_verified_check_result()
+    )
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/publishers/instagram/check-auth")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert "publisher-card-instagram" in response.text
+    assert "AUTH CHECK" in response.text
+    assert "VERIFIED" in response.text
+    assert "Instagram session verified." in response.text
+    assert "publisher-card-youtube" not in response.text
 
 
 def test_admin_publisher_toggle_returns_404_for_invalid_slug(monkeypatch) -> None:

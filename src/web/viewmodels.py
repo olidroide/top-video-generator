@@ -604,6 +604,11 @@ class PublisherViewModel:
     last_publish_label: str
     last_error: str | None
     card_class: str
+    can_run_auth_check: bool = False
+    auth_check_action_label: str | None = None
+    auth_check_label: str | None = None
+    auth_check_state: str | None = None
+    auth_check_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -638,12 +643,14 @@ def build_admin_publishers_view_model(
     state_reader: Any,
     release_store: Any,
     settings: Any,
+    check_results: Mapping[str, IntegrationCheckResult] | None = None,
 ) -> AdminPublishersViewModel:
     """Build publishers section from DB state + release store + settings."""
     from datetime import UTC, datetime
 
     now = datetime.now(UTC)
     publishers: list[PublisherViewModel] = []
+    checks = dict(check_results or {})
 
     platform_configs = [
         {
@@ -676,6 +683,7 @@ def build_admin_publishers_view_model(
         slug = cfg["slug"]
         enabled = state_reader.is_enabled(slug)
         oauth_configured = cfg["configured"]
+        check_result = checks.get(slug)
 
         latest_release = release_store.get_latest_release(platform=slug, release_kind="DAILY_VERTICAL")
         if latest_release and latest_release.published_at:
@@ -707,6 +715,35 @@ def build_admin_publishers_view_model(
                 last_publish_label=last_label,
                 last_error=None,
                 card_class=card_class,
+                can_run_auth_check=slug == "instagram" and oauth_configured,
+                auth_check_action_label="Check auth" if slug == "instagram" else None,
+                auth_check_label=(
+                    "VERIFIED"
+                    if check_result and check_result.status == IntegrationCheckStatus.OK
+                    else (
+                        "ERROR"
+                        if check_result and check_result.status == IntegrationCheckStatus.ERROR
+                        else (
+                            "NOT CONFIGURED"
+                            if check_result and check_result.status == IntegrationCheckStatus.NOT_CONFIGURED
+                            else None
+                        )
+                    )
+                ),
+                auth_check_state=(
+                    "on"
+                    if check_result and check_result.status == IntegrationCheckStatus.OK
+                    else (
+                        "off"
+                        if check_result and check_result.status == IntegrationCheckStatus.ERROR
+                        else (
+                            "na"
+                            if check_result and check_result.status == IntegrationCheckStatus.NOT_CONFIGURED
+                            else None
+                        )
+                    )
+                ),
+                auth_check_message=check_result.message if check_result else None,
             )
         )
 

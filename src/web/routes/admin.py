@@ -562,3 +562,41 @@ async def toggle_publisher(
         name="admin/_publisher_card.html",
         context={"request": request, "pub": publisher},
     )
+
+
+@router.post("/publishers/{slug}/check-auth", response_class=HTMLResponse)
+async def check_publisher_auth(
+    request: Request,
+    slug: str,
+    publisher_state: PublisherStateDep,
+    release_repo: ReleaseRepositoryDep,
+    check_use_case: CheckPlatformConnectionUseCaseDep,
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Response:
+    """HTMX endpoint — check auth status for a publisher and return single card."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+    if slug not in _VALID_PUBLISHER_SLUGS:
+        return HTMLResponse(status_code=404, content="")
+
+    integration_platform = _parse_integration_platform(slug)
+    if integration_platform is None:
+        return HTMLResponse(status_code=404, content="")
+
+    check_result = await check_use_case.execute(CheckPlatformConnectionRequest(platform=integration_platform))
+
+    publishers = build_admin_publishers_view_model(
+        state_reader=publisher_state,
+        release_store=release_repo,
+        settings=settings,
+        check_results={slug: check_result},
+    )
+    publisher = next((pub for pub in publishers.publishers if pub.slug == slug), None)
+    if publisher is None:
+        return HTMLResponse(status_code=404, content="")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_publisher_card.html",
+        context={"request": request, "pub": publisher},
+    )

@@ -35,6 +35,25 @@
   <hr aria-hidden="true">
 
   <div class="card-foot">
+    {% if pub.slug == 'instagram' %}
+      <button
+        {% if not pub.can_run_auth_check %}disabled{% endif %}
+        class="secondary outline"
+        hx-post="/admin/publishers/{{ pub.slug }}/check-auth"
+        hx-target="#publisher-card-{{ pub.slug }}"
+        hx-swap="outerHTML"
+        hx-indicator="#check-auth-spinner-{{ pub.slug }}"
+        aria-label="{{ pub.auth_check_action_label }} for {{ pub.name }}"
+      >
+        {{ pub.auth_check_action_label }}
+        <i
+          id="check-auth-spinner-{{ pub.slug }}"
+          class="fas fa-sync-alt htmx-indicator n-spin platform-card__check-spinner"
+          aria-hidden="true"
+        ></i>
+      </button>
+    {% endif %}
+
     <label class="n-toggle-label" aria-label="Toggle {{ pub.name }} publisher">
       <input
         type="checkbox"
@@ -54,4 +73,20 @@
       <i class="fas fa-circle-notch n-spin"></i>
     </span>
   </div>
+
+  {% if pub.auth_check_label %}
+    <hr aria-hidden="true">
+    <div class="card-body">
+      <div class="data-row">
+        <span class="data-key">AUTH CHECK</span>
+        <span class="n-status" aria-label="Auth check: {{ pub.auth_check_label }}">
+          <span class="n-status__dot n-status__dot--{{ pub.auth_check_state }}" aria-hidden="true"></span>
+          <span class="n-status__label--{{ pub.auth_check_state }}">{{ pub.auth_check_label }}</span>
+        </span>
+      </div>
+      {% if pub.auth_check_message %}
+        <p class="data-note" style="margin-top:.5rem;">{{ pub.auth_check_message }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
 </article>
