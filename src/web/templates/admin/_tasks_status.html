@@ -1,82 +1,69 @@
 {% set ns = namespace(first_card=true) %}
-<div id="tasks-grid" role="region" aria-label="Task Operations">
-  {% if tasks.any_running %}
-    <div style="grid-column: 1 / -1; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: var(--pico-border-radius); border: 1px solid rgba(59, 130, 246, 0.3);">
-      <span style="font-size: 0.85em; color: #2563EB;">
-        <i class="fas fa-circle-notch n-spin" style="margin-right: 0.4rem;"></i>
-        Task running—logs available below
-      </span>
-    </div>
-  {% endif %}
+<div id="tasks-grid" class="tasks-section" role="region" aria-label="Task Operations">
+  <div class="platforms-grid tasks-grid__cards" role="list" aria-label="Task cards">
+    {% if tasks.any_running %}
+      <div class="n-task-banner tasks-grid__fullrow" role="status" aria-live="polite">
+        <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i>
+        Task running - logs available below
+      </div>
+    {% endif %}
 
   {% for task in tasks.tasks %}
     {# First card — always applicable (Fetch Data) #}
     {% if ns.first_card %}
       <article
-        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
-        style="
-          {% if task.is_running %}
-            --pico-card-background-color: #EFF6FF;
-            --pico-card-border-color: #3B82F6;
-          {% elif task.older_than_24h %}
-            --pico-card-background-color: #FEF3C7;
-            --pico-card-border-color: #F59E0B;
-          {% endif %}
-        "
+        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
+        role="listitem"
       >
-        <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+        <div class="card-head">
+          <h3 class="task-card__title">
             {{ task.name }}
             {% if task.is_running %}
-              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
-                <i class="fas fa-circle-notch n-spin"></i> Running
+              <span class="task-running-badge">
+                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
               </span>
             {% endif %}
           </h3>
-        </header>
+        </div>
 
-        <section style="margin-bottom: var(--pico-spacing);">
-          <p style="margin: 0; font-size: 0.9em;">
-            <strong>Last Run:</strong> {{ task.last_run_label }}
+        <div class="card-body task-card__stack">
+          <p class="task-value">
+            <span class="task-label">Last Run:</span> {{ task.last_run_label }}
           </p>
           {% if task.last_status %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
-              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            <p class="task-value task-card__row">
+              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
             </p>
           {% endif %}
           {% if task.last_error %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
-              <strong>Last Error:</strong> {{ task.last_error }}
+            <p class="task-value task-value--error task-card__row">
+              <span class="task-label">Last Error:</span> {{ task.last_error }}
             </p>
           {% endif %}
           {% if task.hours_since is not none %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+            <p class="task-value task-value--muted task-card__row">
               {{ task.hours_since }} hours ago
             </p>
           {% endif %}
-          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
-            Source: {{ task.source }}
+          <p class="task-value task-value--muted task-card__row">
+            <span class="task-label">Source:</span> {{ task.source }}
             {% if task.name == "Fetch Data" %}
-              <span style="display: block; margin-top: 0.25rem; color: #D97706;">
-                <em>Persisted from task execution events</em>
-              </span>
+              <span class="task-source-note">Persisted from task execution events</span>
             {% endif %}
           </p>
-        </section>
+        </div>
 
         {% if task.warning_message and task.older_than_24h %}
-          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
-            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
-              ⚠ {{ task.warning_message }}
-            </p>
-          </section>
+          <div class="n-task-warning">
+            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
+          </div>
         {% endif %}
 
         {% if task.is_running %}
-          <div id="task-logs-{{ task.name|lower|replace(' ', '-') }}" style="margin-bottom: var(--pico-spacing);"></div>
+          <div id="task-logs-{{ task.name|lower|replace(' ', '-') }}" class="task-card__logs-slot"></div>
         {% endif %}
 
-        <footer>
+        <div class="card-foot task-card__actions">
           <button
             class="n-btn"
             hx-post="/admin/tasks/fetch/trigger"
@@ -100,13 +87,13 @@
               title="View live task logs"
               aria-label="View task logs"
             >
-              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
               <span class="htmx-indicator" aria-hidden="true">
                 <i class="fas fa-circle-notch n-spin"></i>
               </span>
             </button>
           {% endif %}
-        </footer>
+        </div>
       </article>
 
       {% set ns.first_card = false %}
@@ -114,73 +101,63 @@
     {# Daily vertical card #}
     {% elif task.name == "Daily Vertical Videos" %}
       <article
-        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
-        style="
-          {% if task.is_running %}
-            --pico-card-background-color: #EFF6FF;
-            --pico-card-border-color: #3B82F6;
-          {% elif task.older_than_24h %}
-            --pico-card-background-color: #FEF3C7;
-            --pico-card-border-color: #F59E0B;
-          {% endif %}
-        "
+        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
+        role="listitem"
       >
-        <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+        <div class="card-head">
+          <h3 class="task-card__title">
             {{ task.name }}
             {% if task.is_running %}
-              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
-                <i class="fas fa-circle-notch n-spin"></i> Running
+              <span class="task-running-badge">
+                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
               </span>
             {% endif %}
           </h3>
-        </header>
+        </div>
 
-        <section style="margin-bottom: var(--pico-spacing);">
-          <p style="margin: 0; font-size: 0.9em;">
-            <strong>Last Publish:</strong> {{ task.last_run_label }}
+        <div class="card-body task-card__stack">
+          <p class="task-value">
+            <span class="task-label">Last Publish:</span> {{ task.last_run_label }}
           </p>
           {% if task.last_status %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
-              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            <p class="task-value task-card__row">
+              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
             </p>
           {% endif %}
           {% if task.last_error %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
-              <strong>Last Error:</strong> {{ task.last_error }}
+            <p class="task-value task-value--error task-card__row">
+              <span class="task-label">Last Error:</span> {{ task.last_error }}
             </p>
           {% endif %}
           {% if task.hours_since is not none %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+            <p class="task-value task-value--muted task-card__row">
               {{ task.hours_since }} hours ago
             </p>
           {% endif %}
-          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
-            Source: {{ task.source }}
-            <span style="display: block; margin-top: 0.25rem; color: #D97706;"><em>Persisted from task execution events</em></span>
+          <p class="task-value task-value--muted task-card__row">
+            <span class="task-label">Source:</span> {{ task.source }}
+            <span class="task-source-note">Persisted from task execution events</span>
           </p>
           {% if task.detail_rows %}
-            <div style="margin-top: var(--pico-spacing); padding-top: var(--pico-spacing); border-top: 1px dashed #ddd;">
+            <div class="task-detail-row">
               {% for row in task.detail_rows %}
-                <p style="margin: 0 0 0.35rem 0; font-size: 0.83em; color: #555;">{{ row }}</p>
+                <p class="task-detail-text">{{ row }}</p>
               {% endfor %}
             </div>
           {% endif %}
-        </section>
+        </div>
 
         {% if task.warning_message and task.older_than_24h %}
-          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
-            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
-              ⚠ {{ task.warning_message }}
-            </p>
-          </section>
+          <div class="n-task-warning">
+            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
+          </div>
         {% endif %}
 
         {% if task.is_running %}
-          <div id="task-logs-daily-vertical" style="margin-bottom: var(--pico-spacing);"></div>
+          <div id="task-logs-daily-vertical" class="task-card__logs-slot"></div>
         {% endif %}
 
-        <div class="card-foot">
+        <div class="card-foot task-card__actions">
           <button
             class="n-btn"
             hx-post="/admin/tasks/daily/trigger"
@@ -204,7 +181,7 @@
               title="View live task logs"
               aria-label="View task logs"
             >
-              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
               <span class="htmx-indicator" aria-hidden="true">
                 <i class="fas fa-circle-notch n-spin"></i>
               </span>
@@ -219,7 +196,7 @@
             title="Verify latest published videos are live"
             aria-label="Verify published videos"
           >
-            <i class="fas fa-check-circle refresh-action__icon"></i> Verify Published
+            <i class="fas fa-check-circle refresh-action__icon" aria-hidden="true"></i> Verify Published
             <span class="htmx-indicator" aria-hidden="true">
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
@@ -228,73 +205,61 @@
       </article>
 
       {# Verification results container #}
-      <div id="verification-results-container" style="grid-column: 1 / -1;"></div>
+      <div id="verification-results-container" class="tasks-grid__fullrow"></div>
 
     {# Weekly horizontal — YouTube only #}
     {% elif task.name == "Weekly Horizontal (YouTube)" %}
       <article
-        class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
-        style="
-          {% if task.is_running %}
-            --pico-card-background-color: #EFF6FF;
-            --pico-card-border-color: #3B82F6;
-          {% elif task.older_than_24h %}
-            --pico-card-background-color: #FEF3C7;
-            --pico-card-border-color: #F59E0B;
-          {% endif %}
-        "
+        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
+        role="listitem"
       >
-        <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+        <div class="card-head">
+          <h3 class="task-card__title">
             {{ task.name }}
             {% if task.is_running %}
-              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
-                <i class="fas fa-circle-notch n-spin"></i> Running
+              <span class="task-running-badge">
+                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
               </span>
             {% endif %}
           </h3>
-        </header>
+        </div>
 
-        <section style="margin-bottom: var(--pico-spacing);">
-          <p style="margin: 0; font-size: 0.9em;">
-            <strong>Last Publish:</strong> {{ task.last_run_label }}
+        <div class="card-body task-card__stack">
+          <p class="task-value">
+            <span class="task-label">Last Publish:</span> {{ task.last_run_label }}
           </p>
           {% if task.last_status %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #444;">
-              <strong>Last Status:</strong> {{ task.last_status|upper }}
+            <p class="task-value task-card__row">
+              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
             </p>
           {% endif %}
           {% if task.last_error %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #B91C1C;">
-              <strong>Last Error:</strong> {{ task.last_error }}
+            <p class="task-value task-value--error task-card__row">
+              <span class="task-label">Last Error:</span> {{ task.last_error }}
             </p>
           {% endif %}
           {% if task.hours_since is not none %}
-            <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #666;">
+            <p class="task-value task-value--muted task-card__row">
               {{ task.hours_since }} hours ago
             </p>
           {% endif %}
-          <p style="margin: var(--pico-spacing) 0 0 0; font-size: 0.85em; color: #999;">
-            Source: {{ task.source }}
-            <span style="display: block; margin-top: 0.25rem; color: #D97706;">
-              <em>YouTube-only, persisted from task execution events</em>
-            </span>
+          <p class="task-value task-value--muted task-card__row">
+            <span class="task-label">Source:</span> {{ task.source }}
+            <span class="task-source-note">YouTube-only, persisted from task execution events</span>
           </p>
-        </section>
+        </div>
 
         {% if task.warning_message and task.older_than_24h %}
-          <section style="margin-bottom: var(--pico-spacing); padding: var(--pico-spacing); background: rgba(245, 158, 11, 0.1); border-radius: var(--pico-border-radius);">
-            <p style="margin: 0; font-size: 0.85em; color: #D97706;">
-              ⚠ {{ task.warning_message }}
-            </p>
-          </section>
+          <div class="n-task-warning">
+            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
+          </div>
         {% endif %}
 
         {% if task.is_running %}
-          <div id="task-logs-weekly-horizontal" style="margin-bottom: var(--pico-spacing);"></div>
+          <div id="task-logs-weekly-horizontal" class="task-card__logs-slot"></div>
         {% endif %}
 
-        <footer>
+        <div class="card-foot task-card__actions">
           <button
             class="n-btn"
             hx-post="/admin/tasks/weekly/trigger"
@@ -318,38 +283,39 @@
               title="View live task logs"
               aria-label="View task logs"
             >
-              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
               <span class="htmx-indicator" aria-hidden="true">
                 <i class="fas fa-circle-notch n-spin"></i>
               </span>
             </button>
           {% endif %}
-        </footer>
+        </div>
       </article>
 
     {# Other platforms (not applicable) #}
     {% elif not task.applicable %}
-      <article class="platform-card" style="--pico-card-background-color: #F3F4F6; --pico-card-border-color: #D1D5DB;">
-        <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
-        </header>
+      <article class="platform-card task-card platform-card--inactive" role="listitem">
+        <div class="card-head">
+          <h3 class="task-card__title">{{ task.name }}</h3>
+        </div>
 
-        <section>
-          <p style="margin: 0; font-size: 0.9em; color: #666;">
+        <div class="card-body">
+          <p class="task-value task-value--muted">
             <em>{{ task.warning_message }}</em>
           </p>
-        </section>
+        </div>
       </article>
 
     {% endif %}
   {% endfor %}
 
   {# HTMX feedback region for async messages #}
-  <div
-    id="tasks-feedback"
-    aria-live="polite"
-    aria-atomic="true"
-    role="status"
-    class="n-task-feedback-placeholder"
-  ></div>
+    <div
+      id="tasks-feedback"
+      aria-live="polite"
+      aria-atomic="true"
+      role="status"
+      class="n-task-feedback-placeholder tasks-grid__fullrow"
+    ></div>
+  </div>
 </div>

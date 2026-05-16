@@ -63,6 +63,20 @@ def check_database(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
         return {"status": "error", "message": f"Database error: {exc}"}
 
 
+def check_timeseries_freshness(timeseries_repo: TimeSeriesRepositoryDep) -> dict[str, str]:
+    """Check if timeseries data is fresh (last point within 24h)."""
+    try:
+        last_ts = timeseries_repo.get_last_timestamp()
+        if last_ts is None:
+            return {"status": "warning", "message": "No timeseries data recorded"}
+        age = datetime.now(UTC) - last_ts
+        if age > timedelta(hours=24):
+            return {"status": "warning", "message": f"Last data point {age.days}d ago"}
+        return {"status": "ok", "message": "Timeseries data fresh"}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "message": f"Timeseries check error: {exc}"}
+
+
 @router.get("/health")
 async def health_check(timeseries_repo: TimeSeriesRepositoryDep, settings: AppSettingsDep) -> HealthCheck:
     """Health check endpoint for monitoring."""

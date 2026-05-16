@@ -1,0 +1,38 @@
+<article
+  id="connector-card-{{ conn.slug }}"
+  class="platform-card {% if conn.is_configured %}platform-card--connected{% else %}platform-card--unconfigured{% endif %}"
+  role="listitem"
+  aria-label="{{ conn.name }} data connector"
+>
+  <div class="card-head">
+    <span class="platform-label">
+      <i class="{{ conn.icon_class }}" aria-hidden="true" style="color:var(--pico-muted-color);width:1rem;text-align:center;"></i>
+      {{ conn.name | upper }}
+    </span>
+    <div class="connector-badges">
+      <span class="n-source-type-badge">{{ conn.source_type }}</span>
+      <span class="n-status" aria-label="Status: {{ conn.status_label }}">
+        <span class="n-status__dot n-status__dot--{{ conn.status_state }}" aria-hidden="true"></span>
+        <span class="n-status__label--{{ conn.status_state }}">{{ conn.status_label }}</span>
+      </span>
+    </div>
+  </div>
+
+  <hr aria-hidden="true">
+
+  <div class="card-body">
+    {% if not conn.is_configured and conn.status_label == "COMING SOON" %}
+      <div class="data-row">
+        <span class="data-val" style="color:var(--pico-muted-color);">Support coming in a future release.</span>
+      </div>
+    {% elif not conn.is_configured %}
+      <div class="data-row">
+        <span class="data-val" style="color:var(--pico-muted-color);">Missing configuration. Set env vars to enable.</span>
+      </div>
+    {% else %}
+      <div class="data-row">
+        <span class="data-val" style="color:var(--n-green);">Connector active and ready.</span>
+      </div>
+    {% endif %}
+  </div>
+</article>

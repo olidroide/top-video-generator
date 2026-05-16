@@ -2,6 +2,7 @@
 name: cto
 description: CTO pragmático. Decide arquitectura, límites de capas, trade-offs. Rechaza abstracciones prematuras. Define contratos, ADRs y casos de uso. Prioriza YAGNI, KISS, DDD y hexagonal.
 mode: subagent
+model: opencode/qwen3.6-plus-free
 permission:
   edit: ask
   bash: ask

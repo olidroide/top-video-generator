@@ -16,6 +16,8 @@ from src.web.dependencies import (
     get_admin_task_status_use_case,
     get_check_platform_connection_use_case,
     get_operational_metrics_use_case,
+    get_publisher_state_repo,
+    get_release_repo,
     get_setup_page_use_case,
 )
 from src.web.main import create_app
@@ -55,6 +57,22 @@ class _AdminTaskStatusUseCaseStub:
 
     def get_task_started_at(self, _task_method: str) -> float | None:
         return None
+
+
+@dataclass
+class _PublisherStateStub:
+    enabled_by_slug: dict[str, bool]
+
+    def is_enabled(self, platform: str) -> bool:
+        return self.enabled_by_slug.get(platform, True)
+
+    def set_enabled(self, platform: str, enabled: bool) -> None:
+        self.enabled_by_slug[platform] = enabled
+
+
+class _ReleaseRepoStub:
+    def get_latest_release(self, *, platform: str, release_kind: str):
+        _ = platform, release_kind
 
 
 def _build_setup_result() -> GetSetupPageResult:
@@ -145,7 +163,7 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
     assert login_response.status_code == 303
     assert login_response.headers["location"] == "/admin"
     assert dashboard_response.status_code == 200
-    assert "Platform Connections" in dashboard_response.text
+    assert "Data Connectors" in dashboard_response.text
     assert f"v{get_app_version()}" in dashboard_response.text
 
 
@@ -206,6 +224,66 @@ def test_admin_connection_check_returns_single_card_partial(monkeypatch) -> None
     assert "Spotify account access verified." in check_response.text
     rendered_label = next(label for label in ("Check publish", "Check connection") if label in check_response.text)
     assert check_response.text.rindex(rendered_label) < check_response.text.index("platform-card__check-spinner")
+
+
+def test_admin_publisher_toggle_returns_single_publisher_card_fragment(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    publisher_state = _PublisherStateStub(
+        enabled_by_slug={
+            "youtube": True,
+            "tiktok": True,
+            "instagram": True,
+            "spotify": True,
+        }
+    )
+    app.dependency_overrides[get_publisher_state_repo] = lambda: publisher_state
+    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        toggle_response = client.post("/admin/publishers/spotify/toggle")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert toggle_response.status_code == 200
+    assert "publisher-card-spotify" in toggle_response.text
+    assert "publishers-grid" not in toggle_response.text
+    assert "publisher-card-tiktok" not in toggle_response.text
+
+
+def test_admin_publisher_toggle_requires_authenticated_session() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        response = client.post("/admin/publishers/spotify/toggle")
+
+    assert response.status_code == 403
+
+
+def test_admin_publisher_toggle_returns_404_for_invalid_slug(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_publisher_state_repo] = lambda: _PublisherStateStub(enabled_by_slug={})
+    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/publishers/not-a-slug/toggle")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 404
 
 
 def test_admin_health_status_returns_partial(monkeypatch) -> None:

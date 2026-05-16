@@ -19,6 +19,8 @@ from src.domain.models import SpotifyAuth, YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
 from src.domain.ports import IntegrationChecker, OAuthProvider
 from src.domain.ports import OperationalMetricsReader as OperationalMetricsRepositoryPort
+from src.domain.ports import PublisherStateReader as PublisherStatePort
+from src.domain.ports import PublisherStateWriter as PublisherStateWriterPort
 from src.domain.ports import ReleaseDateValidator as ReleaseRepositoryPort
 from src.domain.ports import TaskRunStateReader as TaskRunStateRepositoryPort
 from src.domain.ports import TaskRunStateWriter as TaskRunStateWriterPort
@@ -28,6 +30,9 @@ from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
 from src.infrastructure.storage.operational_metrics_repository import (
     OperationalMetricsRepository as TinyFluxOperationalMetricsRepository,
+)
+from src.infrastructure.storage.publisher_state_repository import (
+    PublisherStateRepository as TinyDbPublisherStateRepository,
 )
 from src.infrastructure.storage.release_repository import ReleaseRepository as TinyDbReleaseRepository
 from src.infrastructure.storage.task_run_state_repository import (
@@ -69,6 +74,13 @@ def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> Au
 
 def get_release_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> ReleaseRepositoryPort:
     return TinyDbReleaseRepository(settings.db_release_file)
+
+
+def get_publisher_state_repo(
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> PublisherStatePort:
+    db_path = settings.db_release_file.replace("db_release", "db_publishers")
+    return TinyDbPublisherStateRepository(db_path)
 
 
 def get_timeseries_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> TimeSeriesRepositoryPort:
@@ -184,6 +196,8 @@ CheckPlatformConnectionUseCaseDep = Annotated[
     CheckPlatformConnectionUseCase, Depends(get_check_platform_connection_use_case)
 ]
 ReleaseRepositoryDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
+PublisherStateDep = Annotated[PublisherStatePort, Depends(get_publisher_state_repo)]
+PublisherStateWriterDep = Annotated[PublisherStateWriterPort, Depends(get_publisher_state_repo)]
 ReleaseReadPortDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
 SpotifyProviderDep = Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)]
 YouTubeProviderDep = Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)]

@@ -1,0 +1,14 @@
+{#
+  HTMX partial — returned by GET /admin/publishers/status
+  Replaces #publishers-grid via hx-swap="outerHTML"
+#}
+<div
+  id="publishers-grid"
+  class="platforms-grid"
+  role="list"
+  aria-label="Publishers"
+>
+  {% for pub in publishers.publishers %}
+    {% include "admin/_publisher_card.html" %}
+  {% endfor %}
+</div>

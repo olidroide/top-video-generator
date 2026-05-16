@@ -102,6 +102,9 @@ def test_build_admin_tasks_view_model_daily_failed_recommends_retry_and_shows_de
     assert any(row.startswith("Last processed video:") for row in daily_task.detail_rows)
     assert any("Artifact path: videos/20260515/20260515_vertical_format.mp4" in row for row in daily_task.detail_rows)
     assert any(row.startswith("YOUTUBE:") for row in daily_task.detail_rows)
+    assert any(row.startswith("INSTAGRAM:") for row in daily_task.detail_rows)
+    assert any(row == "TIKTOK: Never" for row in daily_task.detail_rows)
+    assert any(row == "SPOTIFY: Never" for row in daily_task.detail_rows)
 
 
 def test_build_admin_tasks_view_model_running_methods_shows_is_running() -> None:

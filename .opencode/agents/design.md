@@ -2,6 +2,7 @@
 name: design
 description: Especialista en SSR con Jinja2, HTMX, PicoCSS y Atomic Design. Construye componentes reutilizables, templates modulares y progressive enhancement. No introduce SPAs innecesarias.
 mode: subagent
+model: opencode/glm-4.7-free
 permission:
   edit: ask
   bash: ask

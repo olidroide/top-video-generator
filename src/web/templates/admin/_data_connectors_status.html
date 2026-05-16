@@ -1,0 +1,14 @@
+{#
+  HTMX partial — returned by GET /admin/connectors/status
+  Replaces #connectors-grid via hx-swap="outerHTML"
+#}
+<div
+  id="connectors-grid"
+  class="platforms-grid"
+  role="list"
+  aria-label="Data connectors"
+>
+  {% for conn in connectors.connectors %}
+    {% include "admin/_data_connector_card.html" %}
+  {% endfor %}
+</div>

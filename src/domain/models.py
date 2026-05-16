@@ -32,6 +32,11 @@ class IntegrationPlatform(StrEnum):
     SPOTIFY = "spotify"
 
 
+class DataSourceType(StrEnum):
+    VIDEOS = "videos"
+    MOVIES = "movies"
+
+
 class IntegrationCheckStatus(StrEnum):
     OK = "ok"
     ERROR = "error"

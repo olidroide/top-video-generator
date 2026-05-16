@@ -20,6 +20,15 @@
   --n-font-mono: 'Space Mono', 'Courier New', monospace;
   --n-green:     #22c55e;
   --n-gray:      #888;
+
+  --n-task-gap: 1rem;
+  --n-task-row-gap: 0.7rem;
+  --n-task-running-bg: #eef6ff;
+  --n-task-running-border: #3b82f6;
+  --n-task-running-fg: #1d4ed8;
+  --n-task-stale-bg: #fff7e5;
+  --n-task-stale-border: #f59e0b;
+  --n-task-stale-fg: #b45309;
 }
 
 /* ── Dot-matrix background texture ─────────────────── */
@@ -174,7 +183,7 @@ header nav button.secondary {
 /* Pico's .grid doesn't support minmax; use own grid     */
 .platforms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--pico-spacing);
 }
 
@@ -219,15 +228,16 @@ article.platform-card--unconfigured {
 .card-body {
   flex: 1;
   margin-bottom: var(--pico-spacing);
+  padding: 0 0.25rem;
 }
 
 .data-row {
   display: flex;
   gap: 0.5rem;
   font-family: var(--n-font-mono);
-  font-size: 0.63rem;
-  line-height: 1.6;
-  overflow: hidden;
+  font-size: 0.73rem;
+  line-height: 1.5;
+  flex-wrap: wrap;
 }
 
 .data-key {
@@ -240,9 +250,8 @@ article.platform-card--unconfigured {
 
 .data-val {
   color: var(--pico-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   flex: 1;
 }
 
@@ -412,6 +421,19 @@ article.platform-card--unconfigured {
   border: 1px dashed var(--pico-muted-border-color);
 }
 
+.n-task-feedback--requested {
+  color: var(--pico-color);
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px dashed rgba(59, 130, 246, 0.34);
+}
+
+.n-task-feedback__hint {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--pico-muted-color);
+  font-size: 0.84em;
+}
+
 /* ── Theme toggle (floating on login page) ──────────── */
 .theme-toggle-float {
   position: fixed;
@@ -465,14 +487,212 @@ button.htmx-request .refresh-action__icon {
   display: inline-block;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .n-spin,
+  button.htmx-request .refresh-action__icon {
+    animation: none;
+  }
+}
+
 /* ── Responsive ─────────────────────────────────────── */
 @media (max-width: 640px) {
+  .platforms-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  .task-card__actions > button,
+  .task-card__actions > a[role="button"] {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Mobile extra-small screens ────────────────────── */
+@media (max-width: 480px) {
   .platforms-grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* ── Task log panel ─────────────────────────────────── */
+/* ── Terminal log viewer ────────────────────────────── */
+.n-log-viewer {
+  max-height: min(400px, 40vh);
+  overflow-y: auto;
+  background: #1E1E1E;
+  color: #D4D4D4;
+  padding: 0.6rem 0.75rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.6em;
+  line-height: 1.45;
+  margin: 0;
+  tab-size: 2;
+}
+
+.n-log-viewer .log-line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.n-log-viewer .log-line--error::before {
+  content: "ERR  ";
+  color: #F87171;
+  font-weight: 700;
+}
+.n-log-viewer .log-line--warning::before {
+  content: "WARN ";
+  color: #FBBF24;
+  font-weight: 700;
+}
+.n-log-viewer .log-line--info::before {
+  content: "INFO ";
+  color: #6B7280;
+  font-weight: 700;
+}
+.n-log-viewer .log-line--debug::before {
+  content: "DBG  ";
+  color: #34D399;
+  font-weight: 700;
+}
+
+.n-log-viewer .log-line--error {
+  color: #FCA5A5;
+  background: rgba(248, 113, 113, 0.08);
+}
+.n-log-viewer .log-line--warning {
+  color: #FCD34D;
+}
+
+.n-log-summary {
+  cursor: pointer;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  color: var(--pico-muted-color);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.n-log-summary--active { color: #2563EB; }
+.n-log-summary--complete { color: var(--pico-muted-color); }
+
+/* ── Task status components ─────────────────────────── */
+.tasks-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tasks-grid__cards {
+  gap: var(--n-task-gap);
+}
+
+.tasks-grid__fullrow {
+  grid-column: 1 / -1;
+}
+
+.n-task-banner {
+  margin-bottom: 0;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--n-task-running-fg);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.n-task-warning {
+  margin-bottom: var(--pico-spacing);
+  padding: var(--pico-spacing);
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  border: 1px dashed rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.08);
+  color: #D97706;
+}
+
+article.platform-card--running {
+  --pico-card-background-color: var(--n-task-running-bg);
+  --pico-card-border-color: var(--n-task-running-border);
+}
+article.platform-card--stale {
+  --pico-card-background-color: var(--n-task-stale-bg);
+  --pico-card-border-color: var(--n-task-stale-border);
+}
+article.platform-card--inactive {
+  --pico-card-background-color: #f3f4f6;
+  --pico-card-border-color: #d1d5db;
+}
+
+.task-card__title {
+  margin: 0;
+  font-family: var(--n-font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.task-card__stack {
+  display: grid;
+  gap: var(--n-task-row-gap);
+}
+
+.task-card__row {
+  margin: 0;
+}
+
+.task-card__logs-slot {
+  margin-bottom: var(--pico-spacing);
+}
+
+.task-card__actions {
+  margin-top: 0.15rem;
+}
+
+.task-label {
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  color: var(--pico-muted-color);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.task-value {
+  font-size: 0.85rem;
+  margin: 0;
+}
+.task-value--error {
+  color: var(--n-accent);
+}
+.task-value--muted {
+  color: var(--pico-muted-color);
+}
+.task-running-badge {
+  font-family: var(--n-font-mono);
+  font-size: 0.6em;
+  color: var(--n-task-running-fg);
+  margin-left: 0.5rem;
+}
+.task-detail-row {
+  margin-top: var(--pico-spacing);
+  padding-top: var(--pico-spacing);
+  border-top: 1px dashed var(--pico-muted-border-color);
+}
+.task-detail-text {
+  font-size: 0.83em;
+  color: #555;
+  margin: 0 0 0.35rem 0;
+}
+.task-source-note {
+  display: block;
+  margin-top: 0.25rem;
+  color: #D97706;
+  font-style: italic;
+}
+
+/* ── Task log panel (legacy, replaced by .n-log-viewer) */
 .task-logs-panel pre {
   max-height: min(400px, 40vh);
   overflow-y: auto;
@@ -488,3 +708,111 @@ button.htmx-request .refresh-action__icon {
 .log-line--error { color: #F87171; }
 .log-line--warning { color: #FBBF24; }
 .log-line--info { color: #D4D4D4; }
+
+/* ── Publisher toggle switch ───────────────────────── */
+.n-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.n-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.n-toggle-track {
+  position: relative;
+  display: block;
+  width: 2.5rem;
+  height: 1.25rem;
+  background: var(--pico-muted-color);
+  border-radius: 999px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.n-toggle-track::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.95rem;
+  height: 0.95rem;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.n-toggle:checked + .n-toggle-track {
+  background: var(--n-green);
+}
+
+.n-toggle:checked + .n-toggle-track::before {
+  transform: translateX(1.25rem);
+}
+
+/* ── Publisher card states ─────────────────────────── */
+article.platform-card--active {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+article.platform-card--disabled {
+  opacity: 0.7;
+  border-color: var(--pico-muted-border-color);
+}
+
+article.platform-card--needs-auth {
+  border-color: rgba(252, 43, 76, 0.3);
+}
+
+article.platform-card--inactive {
+  opacity: 0.5;
+  border-color: var(--pico-muted-border-color);
+}
+
+/* ── Publisher badge ───────────────────────────────── */
+.n-publisher-badge {
+  font-family: var(--n-font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+.badge--active {
+  color: var(--n-green);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.badge--disabled {
+  color: var(--pico-muted-color);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.badge--na {
+  color: var(--n-accent);
+  background: rgba(252, 43, 76, 0.08);
+}
+
+/* ── Data connector badges ─────────────────────────── */
+.connector-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.n-source-type-badge {
+  font-family: var(--n-font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.3rem;
+  border: 1px dashed var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+  border-radius: 2px;
+}

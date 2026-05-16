@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
-from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus
+from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, Platform
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -467,8 +467,6 @@ def build_admin_tasks_view_model(
     """
     from datetime import UTC, datetime
 
-    from src.domain.models import Platform
-
     now = datetime.now(UTC)
     latest_status = task_status.latest_status_by_method
     latest_errors = task_status.latest_error_by_method
@@ -511,8 +509,8 @@ def build_admin_tasks_view_model(
     latest_artifact_path = task_status.latest_video_artifact_path
     latest_artifact_ts = task_status.latest_video_artifact_timestamp
     platform_rows = tuple(
-        f"{platform}: {build_time_label(ts)}"
-        for platform, ts in sorted(task_status.daily_publish_timestamps_by_platform.items(), key=lambda row: row[0])
+        f"{platform.value}: {build_time_label(task_status.daily_publish_timestamps_by_platform.get(platform.value))}"
+        for platform in Platform
     )
     artifact_rows = (
         (
@@ -592,3 +590,160 @@ def build_admin_tasks_view_model(
         tasks=tuple(tasks),
         any_running=any(t.is_running for t in tasks),
     )
+
+
+@dataclass(frozen=True)
+class PublisherViewModel:
+    """Presentation model for a single publisher card."""
+
+    slug: str
+    name: str
+    icon_class: str
+    enabled: bool
+    oauth_configured: bool
+    last_publish_label: str
+    last_error: str | None
+    card_class: str
+
+
+@dataclass(frozen=True)
+class AdminPublishersViewModel:
+    """Presentation model for the admin publishers section."""
+
+    publishers: tuple[PublisherViewModel, ...]
+
+
+@dataclass(frozen=True)
+class DataSourceViewModel:
+    """Presentation model for a single data source card."""
+
+    slug: str
+    name: str
+    icon_class: str
+    source_type: str
+    is_configured: bool
+    status_label: str
+    status_state: str
+
+
+@dataclass(frozen=True)
+class AdminDataConnectorsViewModel:
+    """Presentation model for the admin data connectors section."""
+
+    connectors: tuple[DataSourceViewModel, ...]
+
+
+def build_admin_publishers_view_model(
+    *,
+    state_reader: Any,
+    release_store: Any,
+    settings: Any,
+) -> AdminPublishersViewModel:
+    """Build publishers section from DB state + release store + settings."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    publishers: list[PublisherViewModel] = []
+
+    platform_configs = [
+        {
+            "slug": "youtube",
+            "name": "YouTube",
+            "icon_class": "fab fa-youtube",
+            "configured": bool(settings.yt_client_secret_file),
+        },
+        {
+            "slug": "tiktok",
+            "name": "TikTok",
+            "icon_class": "fab fa-tiktok",
+            "configured": bool(settings.tiktok_cookies_file or settings.tiktok_user_openid),
+        },
+        {
+            "slug": "instagram",
+            "name": "Instagram",
+            "icon_class": "fab fa-instagram",
+            "configured": bool(settings.instagram_client_username and settings.instagram_client_password),
+        },
+        {
+            "slug": "spotify",
+            "name": "Spotify",
+            "icon_class": "fab fa-spotify",
+            "configured": bool(settings.spotify_client_id and settings.spotify_client_secret),
+        },
+    ]
+
+    for cfg in platform_configs:
+        slug = cfg["slug"]
+        enabled = state_reader.is_enabled(slug)
+        oauth_configured = cfg["configured"]
+
+        latest_release = release_store.get_latest_release(platform=slug, release_kind="DAILY_VERTICAL")
+        if latest_release and latest_release.published_at:
+            ts = latest_release.published_at
+            hours = (now.timestamp() - ts) / _SECONDS_PER_HOUR
+            if hours < _HOURS_PER_DAY:
+                last_label = build_time_label(ts)
+            else:
+                last_label = datetime.fromtimestamp(ts, tz=UTC).isoformat(timespec="minutes")
+        else:
+            last_label = "Never"
+
+        if not oauth_configured and not enabled:
+            card_class = "platform-card--inactive"
+        elif not oauth_configured:
+            card_class = "platform-card--needs-auth"
+        elif not enabled:
+            card_class = "platform-card--disabled"
+        else:
+            card_class = "platform-card--active"
+
+        publishers.append(
+            PublisherViewModel(
+                slug=slug,
+                name=cfg["name"],
+                icon_class=cfg["icon_class"],
+                enabled=enabled,
+                oauth_configured=oauth_configured,
+                last_publish_label=last_label,
+                last_error=None,
+                card_class=card_class,
+            )
+        )
+
+    return AdminPublishersViewModel(publishers=tuple(publishers))
+
+
+def build_admin_data_connectors_view_model(
+    *,
+    settings: Any,
+) -> AdminDataConnectorsViewModel:
+    """Build data connectors section from settings."""
+    connectors: list[DataSourceViewModel] = []
+
+    if settings.yt_search_region_code:
+        configured = bool(settings.yt_client_secret_file)
+        connectors.append(
+            DataSourceViewModel(
+                slug="youtube",
+                name="YouTube",
+                icon_class="fab fa-youtube",
+                source_type="videos",
+                is_configured=configured,
+                status_label="CONNECTED" if configured else "NOT CONFIGURED",
+                status_state="on" if configured else "na",
+            )
+        )
+
+    connectors.append(
+        DataSourceViewModel(
+            slug="themoviedb",
+            name="TheMovieDB",
+            icon_class="fas fa-film",
+            source_type="movies",
+            is_configured=False,
+            status_label="COMING SOON",
+            status_state="na",
+        )
+    )
+
+    return AdminDataConnectorsViewModel(connectors=tuple(connectors))

@@ -20,6 +20,9 @@ from src.web.dependencies import (
     CheckPlatformConnectionUseCaseDep,
     GetAdminTaskStatusUseCaseDep,
     GetOperationalMetricsUseCaseDep,
+    PublisherStateDep,
+    PublisherStateWriterDep,
+    ReleaseRepositoryDep,
     TimeSeriesRepositoryDep,
     TriggerAdminTaskUseCaseDep,
     VerifyPublishedVideosUseCaseDep,
@@ -31,8 +34,10 @@ from src.web.state import get_app_version, logger, templates
 from src.web.viewmodels import (
     AdminConnectionsViewModel,
     build_admin_connections_view_model,
+    build_admin_data_connectors_view_model,
     build_admin_health_view_model,
     build_admin_metrics_view_model,
+    build_admin_publishers_view_model,
     get_platform_connection_view_model,
 )
 
@@ -156,6 +161,8 @@ async def admin_connections(
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
     metrics_use_case: GetOperationalMetricsUseCaseDep,
     task_status_use_case: GetAdminTaskStatusUseCaseDep,
+    publisher_state: PublisherStateDep,
+    release_repo: ReleaseRepositoryDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
     timeseries_repo: TimeSeriesRepositoryDep,
 ) -> Response:
@@ -168,17 +175,24 @@ async def admin_connections(
         "ffmpeg": ops_routes.check_ffmpeg(),
         "templates": ops_routes.check_templates(settings),
         "database": ops_routes.check_database(timeseries_repo),
+        "timeseries": ops_routes.check_timeseries_freshness(timeseries_repo),
     }
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
     health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
     ctx["health_vm"] = build_admin_health_view_model(health)
 
-    # Build tasks panel view model
     from src.web.viewmodels import build_admin_tasks_view_model
 
     tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
     ctx["tasks"] = tasks_vm
     ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_use_case.execute().to_dict())
+
+    ctx["connectors"] = build_admin_data_connectors_view_model(settings=settings)
+    ctx["publishers"] = build_admin_publishers_view_model(
+        state_reader=publisher_state,
+        release_store=release_repo,
+        settings=settings,
+    )
 
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
@@ -249,6 +263,7 @@ async def admin_health_status(
         "ffmpeg": ops_routes.check_ffmpeg(),
         "templates": ops_routes.check_templates(settings),
         "database": ops_routes.check_database(timeseries_repo),
+        "timeseries": ops_routes.check_timeseries_freshness(timeseries_repo),
     }
     overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
     health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
@@ -420,3 +435,85 @@ def _read_log_lines(log_path: Path, since_timestamp: float | None) -> list[dict[
     from src.shared.log_utils import read_log_lines_since
 
     return read_log_lines_since(log_path, since_timestamp, max_lines=80)
+
+
+@router.get("/connectors/status", response_class=HTMLResponse)
+async def admin_connectors_status(
+    request: Request,
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Response:
+    """HTMX partial — returns the #connectors-grid fragment."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+    connectors = build_admin_data_connectors_view_model(settings=settings)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_data_connectors_status.html",
+        context={"request": request, "connectors": connectors},
+    )
+
+
+@router.get("/publishers/status", response_class=HTMLResponse)
+async def admin_publishers_status(
+    request: Request,
+    publisher_state: PublisherStateDep,
+    release_repo: ReleaseRepositoryDep,
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Response:
+    """HTMX partial — returns the #publishers-grid fragment."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+    publishers = build_admin_publishers_view_model(
+        state_reader=publisher_state,
+        release_store=release_repo,
+        settings=settings,
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_publishers_status.html",
+        context={"request": request, "publishers": publishers},
+    )
+
+
+_VALID_PUBLISHER_SLUGS = {"youtube", "tiktok", "instagram", "spotify"}
+
+
+@router.post("/publishers/{slug}/toggle", response_class=HTMLResponse)
+async def toggle_publisher(
+    request: Request,
+    slug: str,
+    publisher_state: PublisherStateDep,
+    publisher_state_writer: PublisherStateWriterDep,
+    release_repo: ReleaseRepositoryDep,
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Response:
+    """HTMX endpoint — toggle publisher enabled state."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+    if slug not in _VALID_PUBLISHER_SLUGS:
+        return HTMLResponse(status_code=404, content="")
+
+    current_enabled = publisher_state.is_enabled(slug)
+    next_enabled = not current_enabled
+    publisher_state_writer.set_enabled(slug, next_enabled)
+    logger.info(
+        "admin.publisher_toggled",
+        slug=slug,
+        enabled=next_enabled,
+        remote=request.client.host if request.client else "unknown",
+    )
+
+    publishers = build_admin_publishers_view_model(
+        state_reader=publisher_state,
+        release_store=release_repo,
+        settings=settings,
+    )
+    publisher = next((pub for pub in publishers.publishers if pub.slug == slug), None)
+    if publisher is None:
+        return HTMLResponse(status_code=404, content="")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_publisher_card.html",
+        context={"request": request, "pub": publisher},
+    )

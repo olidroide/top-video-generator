@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,8 +14,6 @@ if TYPE_CHECKING:
     from src.domain.ports import ReleaseStore, TaskRunStateReader
 
 logger = get_logger(__name__)
-
-_QUEUED_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -110,15 +107,10 @@ class GetAdminTaskStatusUseCase:
 
         latest_artifact_path, latest_artifact_timestamp = self._resolve_latest_video_artifact()
 
-        now = datetime.now(UTC)
-        now_ts = now.timestamp()
         running_methods: set[str] = set()
         for task_method in TaskMethod:
-            queued_event = self._task_run_state_reader.get_latest_task_event(
-                task_method=task_method,
-                status=TaskRunStatus.QUEUED,
-            )
-            if queued_event is not None and (now_ts - queued_event.event_at.timestamp()) < _QUEUED_TTL_SECONDS:
+            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
+            if latest is not None and latest.status == TaskRunStatus.QUEUED:
                 running_methods.add(task_method.value)
 
         logger.debug(
@@ -176,10 +168,7 @@ class GetAdminTaskStatusUseCase:
             method = TaskMethod(task_method)
         except ValueError:
             return None
-        queued_event = self._task_run_state_reader.get_latest_task_event(
-            task_method=method,
-            status=TaskRunStatus.QUEUED,
-        )
-        if queued_event is None:
+        latest = self._task_run_state_reader.get_latest_task_event(task_method=method)
+        if latest is None or latest.status != TaskRunStatus.QUEUED:
             return None
-        return queued_event.event_at.timestamp()
+        return latest.event_at.timestamp()

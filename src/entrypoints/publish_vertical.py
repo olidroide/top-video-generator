@@ -18,6 +18,7 @@ from src.config.settings import AppSettings, get_app_settings
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.operational_metrics_repository import OperationalMetricsRepository
+from src.infrastructure.storage.publisher_state_repository import PublisherStateRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
@@ -67,7 +68,11 @@ def _build_job_dependencies(
     settings: AppSettings,
 ) -> VerticalPublishJobContext:
     """Factory: build all adapters, use cases, and orchestration dependencies."""
-    publishers = build_publishers()
+    db_publishers_file = settings.db_release_file.replace("db_release", "db_publishers")
+    if not settings.is_production_env:
+        db_publishers_file += ".test"
+    state_reader = PublisherStateRepository(db_publishers_file)
+    publishers = build_publishers(state_reader)
     publish_vertical_use_case = PublishVerticalUseCase()
     spotify_playlist_updater = SpotifyPlaylistUpdaterAdapter(SpotifyClient())
     vertical_video_pipeline = VerticalVideoPipelineAdapter(settings)

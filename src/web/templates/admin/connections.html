@@ -1,25 +1,22 @@
 {% extends "admin/base.html" %}
 
-{% block title %}Connections{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block page_content %}
 
-  {# ── Section header with HTMX refresh trigger ── #}
+  {# ── Data Connectors ── #}
   <div class="section-header">
-    <h2 class="section-title">Platform Connections</h2>
+    <h2 class="section-title">Data Connectors</h2>
 
     <div class="section-actions">
-      <span class="section-meta">
-        {{ vm.connected_count }}/{{ vm.total_count }} CONNECTED
-      </span>
+      <span class="section-meta">{{ connectors.connectors|length }} sources</span>
 
-      {# HTMX: on-demand refresh, replaces #connections-grid outerHTML #}
       <button
         class="n-btn n-btn--outline n-btn--compact"
-        hx-get="/admin/connections/status"
-        hx-target="#connections-grid"
+        hx-get="/admin/connectors/status"
+        hx-target="#connectors-grid"
         hx-swap="outerHTML"
-        aria-label="Refresh connection status"
+        aria-label="Refresh connector status"
       >
         <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
         Refresh
@@ -27,28 +24,21 @@
     </div>
   </div>
 
-  {# ── Connections grid — swapped by HTMX ── #}
-  {% include "admin/_connections_status.html" %}
+  {% include "admin/_data_connectors_status.html" with context %}
 
-  {# ── System Health ── #}
+  {# ── Publishers ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
-    <h2 class="section-title">System Health</h2>
+    <h2 class="section-title">Publishers</h2>
 
     <div class="section-actions">
-      <span class="section-meta">v{{ health_vm.version }} &nbsp;&#183;&nbsp;
-        {% if health_vm.overall == 'healthy' %}
-          <span style="color: var(--n-green);">HEALTHY</span>
-        {% else %}
-          <span style="color: var(--n-accent);">UNHEALTHY</span>
-        {% endif %}
-      </span>
+      <span class="section-meta">{{ publishers.publishers|length }} platforms</span>
 
       <button
         class="n-btn n-btn--outline n-btn--compact"
-        hx-get="/admin/health/status"
-        hx-target="#health-checks"
+        hx-get="/admin/publishers/status"
+        hx-target="#publishers-grid"
         hx-swap="outerHTML"
-        aria-label="Refresh system health"
+        aria-label="Refresh publisher status"
       >
         <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
         Refresh
@@ -56,7 +46,7 @@
     </div>
   </div>
 
-  {% include "admin/_health_status.html" with context %}
+  {% include "admin/_publishers_status.html" with context %}
 
   {# ── Task Operations ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
@@ -93,5 +83,33 @@
   </div>
 
   {% include "admin/_metrics_status.html" with context %}
+
+  {# ── System Health (footer) ── #}
+  <div class="admin-footer">
+    <div class="section-header" style="border-bottom: none; margin-bottom: var(--pico-spacing);">
+      <h2 class="section-title">System Health</h2>
+
+      <span class="section-meta">v{{ health_vm.version }} &nbsp;&#183;&nbsp;
+        {% if health_vm.overall == 'healthy' %}
+          <span style="color: var(--n-green);">HEALTHY</span>
+        {% else %}
+          <span style="color: var(--n-accent);">UNHEALTHY</span>
+        {% endif %}
+      </span>
+
+      <button
+        class="n-btn n-btn--outline n-btn--compact"
+        hx-get="/admin/health/status"
+        hx-target="#health-checks"
+        hx-swap="outerHTML"
+        aria-label="Refresh system health"
+      >
+        <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
+        Refresh
+      </button>
+    </div>
+
+    {% include "admin/_health_status.html" with context %}
+  </div>
 
 {% endblock %}

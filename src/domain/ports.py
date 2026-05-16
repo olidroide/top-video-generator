@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
     from .models import (
         CanonicalVideo,
+        DataSourceType,
         IntegrationCheckResult,
         IntegrationPlatform,
         Platform,
@@ -183,3 +184,26 @@ class VideoVerifier(Protocol):
     def platform_name(self) -> str: ...
 
     async def verify(self, release_id: str) -> VideoVerificationResult: ...
+
+
+class DataSource(Protocol):
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def source_type(self) -> DataSourceType: ...
+
+    @property
+    def is_configured(self) -> bool: ...
+
+    async def check_connection(self) -> IntegrationCheckResult: ...
+
+
+class PublisherStateReader(Protocol):
+    def is_enabled(self, platform: str) -> bool: ...
+
+    def get_all(self) -> dict[str, bool]: ...
+
+
+class PublisherStateWriter(Protocol):
+    def set_enabled(self, platform: str, enabled: bool) -> None: ...

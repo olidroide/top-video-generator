@@ -1,0 +1,57 @@
+{% set status_state = 'on' if pub.oauth_configured else 'na' %}
+{% set status_badge = 'ACTIVE' if pub.enabled else ('DISABLED' if pub.oauth_configured else 'NO CREDENTIALS') %}
+{% set badge_class = 'badge--active' if pub.enabled else ('badge--disabled' if pub.oauth_configured else 'badge--na') %}
+
+<article
+  id="publisher-card-{{ pub.slug }}"
+  class="platform-card {{ pub.card_class }}"
+  role="listitem"
+  aria-label="{{ pub.name }} publisher"
+>
+  <div class="card-head">
+    <span class="platform-label">
+      <i class="{{ pub.icon_class }}" aria-hidden="true" style="color:var(--pico-muted-color);width:1rem;text-align:center;"></i>
+      {{ pub.name | upper }}
+    </span>
+    <span class="n-status" aria-label="Status: {{ status_badge }}">
+      <span class="n-status__dot n-status__dot--{{ status_state }}" aria-hidden="true"></span>
+      <span class="n-publisher-badge {{ badge_class }}">{{ status_badge }}</span>
+    </span>
+  </div>
+
+  <hr aria-hidden="true">
+
+  <div class="card-body">
+    <div class="data-row">
+      <span class="data-key">CREDENTIALS</span>
+      <span class="data-val">{{ "Configured" if pub.oauth_configured else "Not configured" }}</span>
+    </div>
+    <div class="data-row">
+      <span class="data-key">LAST PUBLISH</span>
+      <span class="data-val">{{ pub.last_publish_label }}</span>
+    </div>
+  </div>
+
+  <hr aria-hidden="true">
+
+  <div class="card-foot">
+    <label class="n-toggle-label" aria-label="Toggle {{ pub.name }} publisher">
+      <input
+        type="checkbox"
+        class="n-toggle"
+        role="switch"
+        aria-checked="{{ pub.enabled | lower }}"
+        hx-post="/admin/publishers/{{ pub.slug }}/toggle"
+        hx-target="#publisher-card-{{ pub.slug }}"
+        hx-swap="outerHTML"
+        hx-indicator="#toggle-spinner-{{ pub.slug }}"
+        {% if pub.enabled %}checked{% endif %}
+      />
+      <span class="n-toggle-track"></span>
+    </label>
+
+    <span id="toggle-spinner-{{ pub.slug }}" class="htmx-indicator" aria-hidden="true">
+      <i class="fas fa-circle-notch n-spin"></i>
+    </span>
+  </div>
+</article>
