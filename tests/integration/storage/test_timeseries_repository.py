@@ -64,6 +64,22 @@ class TestAddVideoPoint:
         assert len(repo.get_all_points_by_video("v2")) == 1
         assert len(repo.get_all_points_by_video("v999")) == 0
 
+    def test_get_all_points_by_video_ignores_non_video_measurements(self, repo: TimeSeriesRepository) -> None:
+        repo.add_video_point(make_point(video_id="v1"))
+        repo._db.insert(
+            Point(
+                measurement="Task run state",
+                time=datetime(2026, 3, 31, 12, 30, 0, tzinfo=UTC),
+                tags={"video_id": "v1", "task_method": "fetch"},
+                fields={"count": 1},
+            )
+        )
+
+        results = repo.get_all_points_by_video("v1")
+
+        assert len(results) == 1
+        assert results[0].measurement == "Video visualizations"
+
 
 class TestGetVideoPointsByDateRange:
     def test_returns_points_within_range(self, repo: TimeSeriesRepository) -> None:
@@ -149,6 +165,25 @@ class TestGetVideoPointsByDateRange:
         with pytest.raises(ValueError, match="missing time"):
             TimeSeriesRepository._map_point(point)
 
+    def test_ignores_non_video_measurements_in_range(self, repo: TimeSeriesRepository) -> None:
+        t_inside = datetime(2026, 3, 31, 12, 0, 0, tzinfo=UTC)
+        repo.add_video_point(make_point(video_id="v1", dt=t_inside))
+        repo._db.insert(
+            Point(
+                measurement="Operational metrics",
+                time=datetime(2026, 3, 31, 12, 15, 0, tzinfo=UTC),
+                tags={"stage": "fetch", "outcome": "success"},
+                fields={"count": 1},
+            )
+        )
+
+        start = datetime(2026, 3, 30, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 4, 1, 0, 0, 0, tzinfo=UTC)
+        results = repo.get_video_points_by_date_range(start, end)
+
+        assert len(results) == 1
+        assert results[0].video_id == "v1"
+
 
 class TestGetLastTimestamp:
     def test_returns_none_when_empty(self, repo: TimeSeriesRepository) -> None:
@@ -163,3 +198,21 @@ class TestGetLastTimestamp:
         last = repo.get_last_timestamp()
         assert last is not None
         assert last.date() == t2.date()
+
+    def test_ignores_non_video_measurements_for_last_timestamp(self, repo: TimeSeriesRepository) -> None:
+        t_video = datetime(2026, 3, 31, 0, 0, 0, tzinfo=UTC)
+        t_non_video = datetime(2026, 3, 31, 12, 0, 0, tzinfo=UTC)
+        repo.add_video_point(make_point(dt=t_video))
+        repo._db.insert(
+            Point(
+                measurement="Task run state",
+                time=t_non_video,
+                tags={"task_method": "daily", "status": "success"},
+                fields={"count": 1},
+            )
+        )
+
+        last = repo.get_last_timestamp()
+
+        assert last is not None
+        assert last == t_video

@@ -16,15 +16,15 @@ from src.shared.utils import resolve_project_path
 logger = get_logger(__name__)
 
 
-async def main_async() -> None:
+async def main_async(*, force_fetch: bool = False) -> None:
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "fetch_data") as execution_lock:
         if not execution_lock.acquired:
             return
-        await _run_fetch_data_job(settings)
+        await _run_fetch_data_job(settings, force_fetch=force_fetch)
 
 
-async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
+async def _run_fetch_data_job(settings: AppSettings | None = None, *, force_fetch: bool = False) -> None:
     settings = settings if settings is not None else get_app_settings()
     db_video_file = resolve_project_path(settings.db_video_file)
     db_timeseries_file = resolve_project_path(settings.db_timeseries_file)
@@ -42,6 +42,7 @@ async def _run_fetch_data_job(settings: AppSettings | None = None) -> None:
         video_repo=video_repo,
         timeseries_repo=timeseries_repo,
         settings=settings,
+        force_fetch=force_fetch,
     )
 
     try:

@@ -83,7 +83,7 @@ class TimeSeriesRepository:
             List of Point objects from TinyFlux (raw).
         """
         query = TagQuery().video_id == video_id
-        return self._db.search(query)
+        return [point for point in self._db.search(query) if self._is_video_measurement(point)]
 
     def get_last_timestamp(self) -> datetime | None:
         """
@@ -95,7 +95,11 @@ class TimeSeriesRepository:
         points = self._db.search(TimeQuery() >= self._MIN_TIME, sorted=True)
         if not points:
             return None
-        return points[-1].time.astimezone(UTC)
+        for point in reversed(points):
+            if point.time is None or not self._is_video_measurement(point):
+                continue
+            return point.time.astimezone(UTC)
+        return None
 
     def get_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[Point]:
         """
@@ -108,8 +112,14 @@ class TimeSeriesRepository:
         Returns:
             List of Point objects matching the time range.
         """
-        query = (TimeQuery() > start_time) & (TimeQuery() < end_time)
-        return self._db.search(query)
+        start_utc = start_time.astimezone(UTC)
+        end_utc = end_time.astimezone(UTC)
+        query = (TimeQuery() > start_utc) & (TimeQuery() < end_utc)
+        return [point for point in self._db.search(query) if self._is_video_measurement(point)]
+
+    def _is_video_measurement(self, point: Point) -> bool:
+        """Check whether a TinyFlux point belongs to video timeseries."""
+        return point.measurement == self._MEASUREMENT
 
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]:
         """Retrieve points within a time range, mapped to VideoPoint models."""

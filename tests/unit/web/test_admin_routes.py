@@ -433,8 +433,8 @@ def test_admin_task_trigger_returns_400_for_invalid_method(monkeypatch) -> None:
 def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeypatch) -> None:
     from src.entrypoints import fetch_data
 
-    async def _fake_fetch_main_async() -> None:
-        return None
+    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> None:
+        del force_fetch
 
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     monkeypatch.setattr(fetch_data, "main_async", _fake_fetch_main_async)
@@ -456,6 +456,34 @@ def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeyp
     assert 'id="tasks-feedback"' in response.text
     assert "Requested:" in response.text
     assert "Task &#39;fetch&#39; scheduled. Background execution will begin shortly." in response.text
+
+
+def test_admin_task_trigger_force_fetch_query_param(monkeypatch) -> None:
+    from src.entrypoints import fetch_data
+
+    received_force: list[bool] = []
+
+    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> None:
+        received_force.append(force_fetch)
+
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    monkeypatch.setattr(fetch_data, "main_async", _fake_fetch_main_async)
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/fetch/trigger?force=true")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert received_force == [True]
 
 
 def test_admin_connection_check_instagram_not_configured_aligns_card_state(monkeypatch) -> None:

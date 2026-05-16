@@ -66,11 +66,11 @@
         <div class="card-foot task-card__actions">
           <button
             class="n-btn"
-            hx-post="/admin/tasks/fetch/trigger"
+            hx-post="/admin/tasks/fetch/trigger?force=true"
             hx-target="#tasks-feedback"
             hx-swap="outerHTML"
             hx-confirm="This task can take several minutes. Continue?"
-            title="Manually trigger fetch from YouTube"
+            title="Manually trigger fetch from YouTube and overwrite current snapshot"
             aria-label="Trigger fetch task"
           >
             {{ task.action_label }}

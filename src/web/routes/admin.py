@@ -320,6 +320,7 @@ async def trigger_admin_task(
     method: str,
     background_tasks: BackgroundTasks,
     trigger_use_case: TriggerAdminTaskUseCaseDep,
+    force: bool = False,
 ) -> Response:
     """HTMX endpoint — validates and triggers a background task (fetch/daily/weekly)."""
     if not _is_admin(request):
@@ -351,7 +352,10 @@ async def trigger_admin_task(
     if method == "fetch":
         from src.entrypoints.fetch_data import main_async as fetch_main_async
 
-        background_tasks.add_task(_run_with_task_tracking, "fetch", fetch_main_async)
+        async def _run_fetch_task() -> None:
+            await fetch_main_async(force_fetch=force)
+
+        background_tasks.add_task(_run_with_task_tracking, "fetch", _run_fetch_task)
     elif method == "daily":
         from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 

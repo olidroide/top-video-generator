@@ -157,6 +157,68 @@ class TestFetchDataUseCase:
         fetch_data_use_case.youtube_source.fetch_trending_videos.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_execute_force_fetch_bypasses_time_window(
+        self,
+        mock_youtube_source: YouTubeSource,
+        mock_video_repo: VideoRepository,
+        mock_timeseries_repo: TimeSeriesRepository,
+        mock_settings: AppSettings,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        recent_time = datetime.now(UTC) - timedelta(hours=1)
+        points_added: list[object] = []
+
+        class _TimeseriesRepoStub:
+            def __init__(self, _path: str) -> None:
+                return
+
+            def get_last_timestamp(self) -> datetime:
+                return recent_time
+
+            def get_video_points_by_date_range(self, _from_dt: datetime, _until_dt: datetime) -> list:
+                return []
+
+            def add_video_point(self, video_point: object) -> None:
+                points_added.append(video_point)
+
+        class _VideoRepoStub:
+            def __init__(self, _path: str) -> None:
+                return
+
+            def upsert(self, _video: CanonicalVideo) -> None:
+                return
+
+        canonical = CanonicalVideo(
+            video_id="forced123",
+            title="Forced Video",
+            channel_name="Channel",
+            views=100,
+            likes=10,
+            description="desc",
+            duration_seconds=60,
+        )
+
+        mock_youtube_source.fetch_trending_videos = AsyncMock(return_value=[SimpleNamespace(video_id="forced123")])
+        mock_youtube_source.fetch_video_details_batch = AsyncMock(return_value=[canonical])
+
+        monkeypatch.setattr("src.application.fetch_data_use_case.TimeSeriesRepository", _TimeseriesRepoStub)
+        monkeypatch.setattr("src.application.fetch_data_use_case.VideoRepository", _VideoRepoStub)
+
+        use_case = FetchDataUseCase(
+            youtube_source=mock_youtube_source,
+            video_repo=mock_video_repo,
+            timeseries_repo=mock_timeseries_repo,
+            settings=mock_settings,
+            force_fetch=True,
+        )
+
+        result = await use_case.execute()
+
+        assert len(result) == 1
+        mock_youtube_source.fetch_trending_videos.assert_awaited_once()
+        assert points_added
+
+    @pytest.mark.asyncio
     async def test_is_passed_enough_time_from_last_fetch_no_timestamp(self) -> None:
         """Test time check when no timestamp exists."""
         use_case = FetchDataUseCase(

@@ -28,11 +28,13 @@ class FetchDataUseCase:
         video_repo: VideoRepository,
         timeseries_repo: TimeSeriesRepository,
         settings: AppSettings | None = None,
+        force_fetch: bool = False,
     ) -> None:
         self.youtube_source = youtube_source
         self.video_repo = video_repo
         self.timeseries_repo = timeseries_repo
         self.settings = settings
+        self.force_fetch = force_fetch
 
     async def execute(self) -> list[VideoPoint]:
         """Execute the fetch data workflow.
@@ -49,9 +51,12 @@ class FetchDataUseCase:
         video_repo = VideoRepository(Path(db_video_file))
         timeseries_repo = TimeSeriesRepository(db_timeseries_file)
 
-        if not await self._is_passed_enough_time_from_last_fetch(timeseries_repo):
+        if not self.force_fetch and not await self._is_passed_enough_time_from_last_fetch(timeseries_repo):
             logger.debug("Not enough time elapsed since last fetch")
             return []
+
+        if self.force_fetch:
+            logger.info("fetch_data.manual_force_enabled")
 
         last_timestamp = timeseries_repo.get_last_timestamp()
         if last_timestamp:
