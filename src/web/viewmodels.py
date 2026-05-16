@@ -413,6 +413,7 @@ class AdminTaskViewModel:
     last_error: str | None
     action_label: str
     detail_rows: tuple[str, ...] = ()
+    is_running: bool = False
 
 
 @dataclass(frozen=True)
@@ -420,6 +421,7 @@ class AdminTasksPanelViewModel:
     """Presentation model for the admin tasks panel."""
 
     tasks: tuple[AdminTaskViewModel, ...]
+    any_running: bool = False
 
 
 def build_time_label(timestamp: float | None) -> str:
@@ -471,6 +473,8 @@ def build_admin_tasks_view_model(
     latest_status = task_status.latest_status_by_method
     latest_errors = task_status.latest_error_by_method
 
+    running_methods = task_status.running_methods
+
     fetch_last_float = task_status.fetch_last_timestamp
     fetch_hours = (now.timestamp() - fetch_last_float) / _SECONDS_PER_HOUR if fetch_last_float else None
     fetch_older_than_24h = fetch_hours is not None and fetch_hours >= _HOURS_PER_DAY
@@ -494,6 +498,7 @@ def build_admin_tasks_view_model(
         last_status=fetch_status,
         last_error=fetch_error,
         action_label="Retry Fetch" if fetch_failed else "Trigger Fetch",
+        is_running="fetch" in running_methods,
     )
 
     daily_timestamp = task_status.daily_last_timestamp
@@ -536,6 +541,7 @@ def build_admin_tasks_view_model(
         last_error=daily_error,
         action_label="Retry Daily" if daily_failed else "Trigger Daily",
         detail_rows=artifact_rows + platform_rows,
+        is_running="daily" in running_methods,
     )
 
     # Weekly horizontal YouTube
@@ -561,6 +567,7 @@ def build_admin_tasks_view_model(
         last_status=weekly_status,
         last_error=weekly_error,
         action_label="Retry Weekly" if weekly_failed else "Trigger Weekly",
+        is_running="weekly" in running_methods,
     )
 
     tasks: list[AdminTaskViewModel] = [daily_task_vm, daily_publish_task_vm, weekly_yt_task_vm]
@@ -581,4 +588,7 @@ def build_admin_tasks_view_model(
         )
         tasks.append(task_vm)
 
-    return AdminTasksPanelViewModel(tasks=tuple(tasks))
+    return AdminTasksPanelViewModel(
+        tasks=tuple(tasks),
+        any_running=any(t.is_running for t in tasks),
+    )

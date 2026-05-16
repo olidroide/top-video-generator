@@ -102,3 +102,38 @@ def test_build_admin_tasks_view_model_daily_failed_recommends_retry_and_shows_de
     assert any(row.startswith("Last processed video:") for row in daily_task.detail_rows)
     assert any("Artifact path: videos/20260515/20260515_vertical_format.mp4" in row for row in daily_task.detail_rows)
     assert any(row.startswith("YOUTUBE:") for row in daily_task.detail_rows)
+
+
+def test_build_admin_tasks_view_model_running_methods_shows_is_running() -> None:
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        latest_status_by_method={"fetch": "queued"},
+        running_methods={"fetch"},
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+    fetch_task = _task("Fetch Data", tasks_vm)
+    daily_task = _task("Daily Vertical Videos", tasks_vm)
+
+    assert fetch_task.is_running is True
+    assert daily_task.is_running is False
+    assert tasks_vm.any_running is True
+
+
+def test_build_admin_tasks_view_model_no_running_tasks() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=now.timestamp(),
+        daily_last_timestamp=now.timestamp(),
+        weekly_last_timestamp=None,
+        latest_status_by_method={"fetch": "success", "daily": "success"},
+        running_methods=set(),
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+
+    assert tasks_vm.any_running is False
+    for task in tasks_vm.tasks:
+        assert task.is_running is False

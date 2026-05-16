@@ -1,19 +1,38 @@
 {% set ns = namespace(first_card=true) %}
 <div id="tasks-grid" role="region" aria-label="Task Operations">
+  {% if tasks.any_running %}
+    <div style="grid-column: 1 / -1; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: var(--pico-border-radius); border: 1px solid rgba(59, 130, 246, 0.3);">
+      <span style="font-size: 0.85em; color: #2563EB;">
+        <i class="fas fa-circle-notch n-spin" style="margin-right: 0.4rem;"></i>
+        Task running—logs available below
+      </span>
+    </div>
+  {% endif %}
+
   {% for task in tasks.tasks %}
     {# First card — always applicable (Fetch Data) #}
     {% if ns.first_card %}
       <article
         class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
         style="
-          {% if task.older_than_24h %}
+          {% if task.is_running %}
+            --pico-card-background-color: #EFF6FF;
+            --pico-card-border-color: #3B82F6;
+          {% elif task.older_than_24h %}
             --pico-card-background-color: #FEF3C7;
             --pico-card-border-color: #F59E0B;
           {% endif %}
         "
       >
         <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+            {{ task.name }}
+            {% if task.is_running %}
+              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
+                <i class="fas fa-circle-notch n-spin"></i> Running
+              </span>
+            {% endif %}
+          </h3>
         </header>
 
         <section style="margin-bottom: var(--pico-spacing);">
@@ -53,13 +72,17 @@
           </section>
         {% endif %}
 
+        {% if task.is_running %}
+          <div id="task-logs-{{ task.name|lower|replace(' ', '-') }}" style="margin-bottom: var(--pico-spacing);"></div>
+        {% endif %}
+
         <footer>
           <button
             class="n-btn"
             hx-post="/admin/tasks/fetch/trigger"
             hx-target="#tasks-feedback"
             hx-swap="outerHTML"
-            hx-disabled-elt="this"
+            hx-confirm="This task can take several minutes. Continue?"
             title="Manually trigger fetch from YouTube"
             aria-label="Trigger fetch task"
           >
@@ -68,6 +91,21 @@
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
           </button>
+          {% if task.is_running %}
+            <button
+              class="n-btn n-btn--outline"
+              hx-get="/admin/tasks/logs/fetch"
+              hx-target="#task-logs-fetch-data"
+              hx-swap="innerHTML"
+              title="View live task logs"
+              aria-label="View task logs"
+            >
+              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <span class="htmx-indicator" aria-hidden="true">
+                <i class="fas fa-circle-notch n-spin"></i>
+              </span>
+            </button>
+          {% endif %}
         </footer>
       </article>
 
@@ -78,14 +116,24 @@
       <article
         class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
         style="
-          {% if task.older_than_24h %}
+          {% if task.is_running %}
+            --pico-card-background-color: #EFF6FF;
+            --pico-card-border-color: #3B82F6;
+          {% elif task.older_than_24h %}
             --pico-card-background-color: #FEF3C7;
             --pico-card-border-color: #F59E0B;
           {% endif %}
         "
       >
         <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+            {{ task.name }}
+            {% if task.is_running %}
+              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
+                <i class="fas fa-circle-notch n-spin"></i> Running
+              </span>
+            {% endif %}
+          </h3>
         </header>
 
         <section style="margin-bottom: var(--pico-spacing);">
@@ -128,13 +176,17 @@
           </section>
         {% endif %}
 
+        {% if task.is_running %}
+          <div id="task-logs-daily-vertical" style="margin-bottom: var(--pico-spacing);"></div>
+        {% endif %}
+
         <div class="card-foot">
           <button
             class="n-btn"
             hx-post="/admin/tasks/daily/trigger"
             hx-target="#tasks-feedback"
             hx-swap="outerHTML"
-            hx-disabled-elt="this"
+            hx-confirm="This task can take several minutes. Continue?"
             title="Manually trigger daily vertical publish"
             aria-label="Trigger daily task"
           >
@@ -143,6 +195,21 @@
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
           </button>
+          {% if task.is_running %}
+            <button
+              class="n-btn n-btn--outline"
+              hx-get="/admin/tasks/logs/daily"
+              hx-target="#task-logs-daily-vertical"
+              hx-swap="innerHTML"
+              title="View live task logs"
+              aria-label="View task logs"
+            >
+              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <span class="htmx-indicator" aria-hidden="true">
+                <i class="fas fa-circle-notch n-spin"></i>
+              </span>
+            </button>
+          {% endif %}
           <button
             class="n-btn n-btn--outline"
             hx-get="/admin/verify"
@@ -168,14 +235,24 @@
       <article
         class="platform-card {% if task.older_than_24h %}card-warning{% endif %}"
         style="
-          {% if task.older_than_24h %}
+          {% if task.is_running %}
+            --pico-card-background-color: #EFF6FF;
+            --pico-card-border-color: #3B82F6;
+          {% elif task.older_than_24h %}
             --pico-card-background-color: #FEF3C7;
             --pico-card-border-color: #F59E0B;
           {% endif %}
         "
       >
         <header>
-          <h3 style="margin: 0 0 var(--pico-spacing) 0;">{{ task.name }}</h3>
+          <h3 style="margin: 0 0 var(--pico-spacing) 0;">
+            {{ task.name }}
+            {% if task.is_running %}
+              <span style="font-size: 0.7em; color: #2563EB; margin-left: 0.5rem;">
+                <i class="fas fa-circle-notch n-spin"></i> Running
+              </span>
+            {% endif %}
+          </h3>
         </header>
 
         <section style="margin-bottom: var(--pico-spacing);">
@@ -213,13 +290,17 @@
           </section>
         {% endif %}
 
+        {% if task.is_running %}
+          <div id="task-logs-weekly-horizontal" style="margin-bottom: var(--pico-spacing);"></div>
+        {% endif %}
+
         <footer>
           <button
             class="n-btn"
             hx-post="/admin/tasks/weekly/trigger"
             hx-target="#tasks-feedback"
             hx-swap="outerHTML"
-            hx-disabled-elt="this"
+            hx-confirm="This task can take several minutes. Continue?"
             title="Manually trigger weekly horizontal publish"
             aria-label="Trigger weekly task"
           >
@@ -228,6 +309,21 @@
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
           </button>
+          {% if task.is_running %}
+            <button
+              class="n-btn n-btn--outline"
+              hx-get="/admin/tasks/logs/weekly"
+              hx-target="#task-logs-weekly-horizontal"
+              hx-swap="innerHTML"
+              title="View live task logs"
+              aria-label="View task logs"
+            >
+              <i class="fas fa-file-alt" style="margin-right: 0.3rem;"></i> View Logs
+              <span class="htmx-indicator" aria-hidden="true">
+                <i class="fas fa-circle-notch n-spin"></i>
+              </span>
+            </button>
+          {% endif %}
         </footer>
       </article>
 

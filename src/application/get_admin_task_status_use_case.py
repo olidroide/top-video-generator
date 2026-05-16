@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
     from src.domain.ports import ReleaseStore, TaskRunStateReader
 
 logger = get_logger(__name__)
+
+_QUEUED_TTL_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,9 @@ class TaskStatusResult:
 
     latest_video_artifact_timestamp: float | None = None
     """Filesystem mtime (unix seconds) for latest generated mp4 artifact, if any."""
+
+    running_methods: set[str] = field(default_factory=set)
+    """Methods whose latest status is 'queued' (task is currently executing)."""
 
 
 class GetAdminTaskStatusUseCase:
@@ -104,6 +110,17 @@ class GetAdminTaskStatusUseCase:
 
         latest_artifact_path, latest_artifact_timestamp = self._resolve_latest_video_artifact()
 
+        now = datetime.now(UTC)
+        now_ts = now.timestamp()
+        running_methods: set[str] = set()
+        for task_method in TaskMethod:
+            queued_event = self._task_run_state_reader.get_latest_task_event(
+                task_method=task_method,
+                status=TaskRunStatus.QUEUED,
+            )
+            if queued_event is not None and (now_ts - queued_event.event_at.timestamp()) < _QUEUED_TTL_SECONDS:
+                running_methods.add(task_method.value)
+
         logger.debug(
             "admin_task_status_fetched",
             fetch_last_timestamp=fetch_last.event_at.timestamp() if fetch_last else None,
@@ -113,6 +130,7 @@ class GetAdminTaskStatusUseCase:
             methods_with_errors=len(latest_error_by_method),
             daily_publish_platforms=len(daily_publish_timestamps_by_platform),
             latest_video_artifact_path=latest_artifact_path,
+            running_methods=list(running_methods),
         )
 
         return TaskStatusResult(
@@ -124,6 +142,7 @@ class GetAdminTaskStatusUseCase:
             daily_publish_timestamps_by_platform=daily_publish_timestamps_by_platform,
             latest_video_artifact_path=latest_artifact_path,
             latest_video_artifact_timestamp=latest_artifact_timestamp,
+            running_methods=running_methods,
         )
 
     def _resolve_latest_video_artifact(self) -> tuple[str | None, float | None]:
@@ -150,3 +169,17 @@ class GetAdminTaskStatusUseCase:
         if not candidates:
             return None
         return max(candidates, key=lambda path: path.stat().st_mtime)
+
+    def get_task_started_at(self, task_method: str) -> float | None:
+        """Return the unix timestamp when the task was queued (start of current run)."""
+        try:
+            method = TaskMethod(task_method)
+        except ValueError:
+            return None
+        queued_event = self._task_run_state_reader.get_latest_task_event(
+            task_method=method,
+            status=TaskRunStatus.QUEUED,
+        )
+        if queued_event is None:
+            return None
+        return queued_event.event_at.timestamp()

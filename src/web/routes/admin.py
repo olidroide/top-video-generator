@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
 from urllib.parse import parse_qs
 
@@ -371,3 +372,51 @@ async def admin_verify_published(
         name="admin/_verification_results.html",
         context={"request": request, "report": report},
     )
+
+
+@router.get("/tasks/logs/{method}", response_class=HTMLResponse)
+async def admin_task_logs(
+    request: Request,
+    method: str,
+    task_status_use_case: GetAdminTaskStatusUseCaseDep,
+    settings: Annotated[AppSettings, Depends(get_settings)],
+) -> Response:
+    """HTMX partial — returns live log lines for a running task."""
+    if not _is_admin(request):
+        return HTMLResponse(status_code=403, content="")
+
+    valid_methods = {"fetch", "daily", "weekly"}
+    if method not in valid_methods:
+        return HTMLResponse(status_code=404, content="")
+
+    log_path = Path(settings.log_file_path)
+    if not log_path.is_file():  # noqa: ASYNC240
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/_task_logs.html",
+            context={"request": request, "method": method, "lines": [], "task_complete": True},
+        )
+
+    task_started_at = task_status_use_case.get_task_started_at(method)
+    latest_status = task_status_use_case.execute().latest_status_by_method.get(method)
+    task_complete = latest_status not in ("queued", None)
+
+    lines = _read_log_lines(log_path, task_started_at)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/_task_logs.html",
+        context={
+            "request": request,
+            "method": method,
+            "lines": lines,
+            "task_complete": task_complete,
+        },
+    )
+
+
+def _read_log_lines(log_path: Path, since_timestamp: float | None) -> list[dict[str, str]]:
+    """Delegate to shared log utils."""
+    from src.shared.log_utils import read_log_lines_since
+
+    return read_log_lines_since(log_path, since_timestamp, max_lines=80)

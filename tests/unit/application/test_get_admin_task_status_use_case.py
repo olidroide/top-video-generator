@@ -76,6 +76,13 @@ class TestGetAdminTaskStatusUseCase:
                 event_at=now,
                 error_message="boom",
             ),
+            (TaskMethod.FETCH, TaskRunStatus.QUEUED): None,
+            (TaskMethod.DAILY, TaskRunStatus.QUEUED): TaskRunState(
+                task_method=TaskMethod.DAILY,
+                status=TaskRunStatus.QUEUED,
+                event_at=now,
+            ),
+            (TaskMethod.WEEKLY, TaskRunStatus.QUEUED): None,
         }
 
         def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
@@ -146,3 +153,94 @@ class TestGetAdminTaskStatusUseCase:
         assert result.latest_video_artifact_path is not None
         assert result.latest_video_artifact_path.endswith("20260515_vertical_format.mp4")
         assert result.latest_video_artifact_timestamp is not None
+
+    def test_running_methods_includes_recent_queued_only(
+        self,
+        use_case: GetAdminTaskStatusUseCase,
+        task_run_state_reader_mock: MagicMock,
+        release_store_mock: MagicMock,
+    ) -> None:
+        now = datetime.now(UTC)
+        from datetime import timedelta
+
+        recent_queued = TaskRunState(
+            task_method=TaskMethod.FETCH,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(seconds=60),
+        )
+        stale_queued = TaskRunState(
+            task_method=TaskMethod.DAILY,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(minutes=10),
+        )
+        success_weekly = TaskRunState(
+            task_method=TaskMethod.WEEKLY,
+            status=TaskRunStatus.SUCCESS,
+            event_at=now - timedelta(hours=1),
+        )
+
+        def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
+            if status is TaskRunStatus.QUEUED:
+                if task_method == TaskMethod.FETCH:
+                    return recent_queued
+                if task_method == TaskMethod.DAILY:
+                    return stale_queued
+                return None
+            if task_method == TaskMethod.WEEKLY:
+                return success_weekly
+            return None
+
+        task_run_state_reader_mock.get_latest_task_event.side_effect = _side_effect
+        release_store_mock.get_latest_release.return_value = None
+
+        result = use_case.execute()
+
+        assert "fetch" in result.running_methods
+        assert "daily" not in result.running_methods
+        assert "weekly" not in result.running_methods
+
+    def test_get_task_started_at_returns_queued_timestamp(
+        self,
+        use_case: GetAdminTaskStatusUseCase,
+        task_run_state_reader_mock: MagicMock,
+    ) -> None:
+        now = datetime.now(UTC)
+        from datetime import timedelta
+
+        queued_event = TaskRunState(
+            task_method=TaskMethod.FETCH,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(seconds=30),
+        )
+        success_event = TaskRunState(
+            task_method=TaskMethod.FETCH,
+            status=TaskRunStatus.SUCCESS,
+            event_at=now,
+        )
+
+        def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
+            if status is TaskRunStatus.QUEUED:
+                return queued_event
+            return success_event
+
+        task_run_state_reader_mock.get_latest_task_event.side_effect = _side_effect
+
+        result = use_case.get_task_started_at("fetch")
+
+        assert result is not None
+        assert result == pytest.approx(queued_event.event_at.timestamp(), abs=1)
+
+    def test_get_task_started_at_returns_none_for_invalid_method(
+        self,
+        use_case: GetAdminTaskStatusUseCase,
+    ) -> None:
+        assert use_case.get_task_started_at("invalid") is None
+
+    def test_get_task_started_at_returns_none_when_no_queued_event(
+        self,
+        use_case: GetAdminTaskStatusUseCase,
+        task_run_state_reader_mock: MagicMock,
+    ) -> None:
+        task_run_state_reader_mock.get_latest_task_event.return_value = None
+
+        assert use_case.get_task_started_at("fetch") is None

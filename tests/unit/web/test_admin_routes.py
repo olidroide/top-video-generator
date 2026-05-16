@@ -53,6 +53,9 @@ class _AdminTaskStatusUseCaseStub:
     def execute(self) -> TaskStatusResult:
         return self.result
 
+    def get_task_started_at(self, _task_method: str) -> float | None:
+        return None
+
 
 def _build_setup_result() -> GetSetupPageResult:
     return GetSetupPageResult(
@@ -436,3 +439,57 @@ def test_admin_connection_check_spotify_reauth_required(monkeypatch) -> None:
     assert "platform-card-spotify" in check_response.text
     assert "REAUTH REQUIRED" in check_response.text
     assert "Reconnect Spotify from Setup." in check_response.text
+
+
+def test_admin_tasks_status_shows_running_indicator(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_admin_task_status_use_case] = lambda: _AdminTaskStatusUseCaseStub(
+        TaskStatusResult(
+            fetch_last_timestamp=None,
+            daily_last_timestamp=None,
+            weekly_last_timestamp=None,
+            latest_status_by_method={"fetch": "queued"},
+            running_methods={"fetch"},
+        )
+    )
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.get("/admin/tasks/status")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert "Running" in response.text
+    assert "Task running" in response.text
+
+
+def test_admin_task_logs_requires_authenticated_session() -> None:
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        response = client.get("/admin/tasks/logs/daily")
+
+    assert response.status_code == 403
+
+
+def test_admin_task_logs_returns_404_for_invalid_method(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.get("/admin/tasks/logs/not-a-method")
+
+    assert login_response.status_code == 303
+    assert response.status_code == 404

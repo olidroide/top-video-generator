@@ -65,6 +65,7 @@ class FileExecutionLock:
             self._handle.close()
             self._handle = None
             self.acquired = False
+            self._path.unlink(missing_ok=True)
 
     def _write_metadata(self) -> None:
         if self._handle is None:
@@ -81,3 +82,17 @@ class FileExecutionLock:
             )
         )
         self._handle.flush()
+
+    @staticmethod
+    def read_lock_state(path: str | os.PathLike[str]) -> dict | None:
+        """Read lock metadata without acquiring. Returns None if no lock held."""
+        lock_path = Path(path)
+        if not lock_path.exists():
+            return None
+        try:
+            content = lock_path.read_text(encoding="utf-8").strip()
+            if not content:
+                return None
+            return json.loads(content)
+        except (json.JSONDecodeError, OSError):
+            return None

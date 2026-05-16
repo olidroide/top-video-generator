@@ -1,0 +1,28 @@
+<div
+  id="task-logs-{{ method }}"
+  class="task-logs-panel"
+  {% if not task_complete %}hx-get="/admin/tasks/logs/{{ method }}" hx-trigger="every 2s" hx-target="#task-logs-{{ method }}" hx-swap="outerHTML"{% endif %}
+>
+  {% if lines %}
+    <details open>
+      <summary style="cursor: pointer; font-size: 0.85em; color: #666; margin-bottom: 0.5rem;">
+        <i class="fas fa-terminal" style="margin-right: 0.3rem;"></i>
+        Live logs — {{ lines|length }} lines
+        {% if not task_complete %}
+          <span style="color: #2563EB; margin-left: 0.5rem;">
+            <i class="fas fa-circle-notch n-spin"></i> refreshing
+          </span>
+        {% else %}
+          <span style="color: #6B7280; margin-left: 0.5rem;">(complete)</span>
+        {% endif %}
+      </summary>
+      <pre>{% for line in lines %}<span class="log-line log-line--{{ line.level }}">{{ line.text }}</span>
+{% endfor %}</pre>
+    </details>
+  {% else %}
+    <p style="font-size: 0.85em; color: #999; margin: 0;">
+      <i class="fas fa-info-circle" style="margin-right: 0.3rem;"></i>
+      No log entries yet for this task
+    </p>
+  {% endif %}
+</div>

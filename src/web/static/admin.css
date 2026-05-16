@@ -471,3 +471,20 @@ button.htmx-request .refresh-action__icon {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Task log panel ─────────────────────────────────── */
+.task-logs-panel pre {
+  max-height: min(400px, 40vh);
+  overflow-y: auto;
+  background: #1E1E1E;
+  color: #D4D4D4;
+  padding: 0.75rem;
+  border-radius: var(--pico-border-radius);
+  font-size: 0.78em;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.log-line--error { color: #F87171; }
+.log-line--warning { color: #FBBF24; }
+.log-line--info { color: #D4D4D4; }
