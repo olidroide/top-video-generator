@@ -66,7 +66,6 @@ jobs:
             type=gha,scope=top-video-generator
           cache-to: type=gha,scope=top-video-generator,mode=max
           provenance: mode=max
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true
 
       - name: Build summary
         run: |

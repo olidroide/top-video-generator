@@ -312,7 +312,7 @@ class TestPublishVerticalUseCase:
         fetch_use_case.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_publish_pending_vertical_videos_persists_only_successful_results(self) -> None:
+    async def test_publish_pending_vertical_videos_persists_only_successful_results(self, monkeypatch) -> None:
         class _ReleaseStoreFake:
             def __init__(self) -> None:
                 self.saved: list[Release] = []
@@ -356,6 +356,31 @@ class TestPublishVerticalUseCase:
                     return PublishingResult(platform=Platform.TIKTOK, success=False, error="fail")
                 return PublishingResult(platform=publisher.platform_name, success=True, published_id="ok")
 
+        # Mock TikTokIntegrationChecker to bypass settings validation in tests
+        from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
+
+        ok_result = IntegrationCheckResult(
+            platform=IntegrationPlatform.TIKTOK,
+            status=IntegrationCheckStatus.OK,
+            is_configured=True,
+            is_publish_target=True,
+            message="OK",
+        )
+
+        class _FakeTikTokChecker:
+            @property
+            def is_configured(self) -> bool:
+                return True
+
+            async def check_connection(self) -> IntegrationCheckResult:
+                return ok_result
+
+        monkeypatch.setenv("TOP_MUSIC_YT_SEARCH_REGION_CODE", "US")
+        monkeypatch.setattr(
+            "src.adapters.tiktok_integration_checker.TikTokIntegrationChecker",
+            _FakeTikTokChecker,
+        )
+
         use_case = PublishVerticalUseCase()
         release_store = _ReleaseStoreFake()
         pipeline = _VerticalPipelineFake()
@@ -391,7 +416,7 @@ class TestPublishVerticalUseCase:
         assert release_store.saved[0].platform == Platform.YOUTUBE.value
 
     @pytest.mark.asyncio
-    async def test_publish_pending_vertical_videos_isolates_publisher_exceptions(self) -> None:
+    async def test_publish_pending_vertical_videos_isolates_publisher_exceptions(self, monkeypatch) -> None:
         class _ReleaseStoreFake:
             def __init__(self) -> None:
                 self.saved: list[Release] = []
@@ -431,6 +456,31 @@ class TestPublishVerticalUseCase:
                 if publisher.platform_name == Platform.TIKTOK:
                     raise RuntimeError("upload exploded")
                 return PublishingResult(platform=publisher.platform_name, success=True, published_id="ok")
+
+        # Mock TikTokIntegrationChecker to bypass settings validation in tests
+        from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
+
+        ok_result = IntegrationCheckResult(
+            platform=IntegrationPlatform.TIKTOK,
+            status=IntegrationCheckStatus.OK,
+            is_configured=True,
+            is_publish_target=True,
+            message="OK",
+        )
+
+        class _FakeTikTokChecker:
+            @property
+            def is_configured(self) -> bool:
+                return True
+
+            async def check_connection(self) -> IntegrationCheckResult:
+                return ok_result
+
+        monkeypatch.setenv("TOP_MUSIC_YT_SEARCH_REGION_CODE", "US")
+        monkeypatch.setattr(
+            "src.adapters.tiktok_integration_checker.TikTokIntegrationChecker",
+            _FakeTikTokChecker,
+        )
 
         use_case = PublishVerticalUseCase()
         release_store = _ReleaseStoreFake()
