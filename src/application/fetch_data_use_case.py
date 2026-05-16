@@ -94,6 +94,16 @@ class FetchDataUseCase:
             current_timeseries_videos_fetched.append(last_video_point)
 
         scored_points = score_and_rank_video_points(current_timeseries_videos_fetched, last_timeseries_videos_fetched)
+        zero_score_count = sum(1 for point in scored_points if (point.score or 0) <= 0)
+        zero_growth_count = sum(1 for point in scored_points if (point.views_growth or 0) <= 0)
+
+        logger.info(
+            "fetch_data.scoring_summary",
+            total=len(scored_points),
+            zero_score_count=zero_score_count,
+            zero_growth_count=zero_growth_count,
+        )
+
         for video_point in scored_points:
             timeseries_repo.add_video_point(video_point=video_point)
 
@@ -101,7 +111,7 @@ class FetchDataUseCase:
             "Finish fetch YT Data",
             count=len(current_timeseries_videos_fetched),
         )
-        return current_timeseries_videos_fetched
+        return scored_points
 
     def _get_settings(self) -> AppSettings:
         """Get application settings."""

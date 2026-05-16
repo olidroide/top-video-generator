@@ -1,5 +1,6 @@
 """Generate and publish daily vertical videos."""
 
+import argparse
 import asyncio
 import datetime
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from src.shared.execution_lock import FileExecutionLock
 from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
+
+_VALID_PUBLISHER_SLUGS: frozenset[str] = frozenset({"instagram", "youtube", "tiktok"})
 
 
 @dataclass(frozen=True)
@@ -66,13 +69,14 @@ def _build_job_dependencies(
     video_repo: VideoRepository,
     release_repo: ReleaseRepository,
     settings: AppSettings,
+    target_platforms: set[str] | None = None,
 ) -> VerticalPublishJobContext:
     """Factory: build all adapters, use cases, and orchestration dependencies."""
     db_publishers_file = settings.db_release_file.replace("db_release", "db_publishers")
     if not settings.is_production_env:
         db_publishers_file += ".test"
     state_reader = PublisherStateRepository(db_publishers_file)
-    publishers = build_publishers(state_reader)
+    publishers = build_publishers(state_reader, target_platforms=target_platforms)
     publish_vertical_use_case = PublishVerticalUseCase()
     spotify_playlist_updater = SpotifyPlaylistUpdaterAdapter(SpotifyClient())
     vertical_video_pipeline = VerticalVideoPipelineAdapter(settings)
@@ -92,15 +96,30 @@ def _build_job_dependencies(
     )
 
 
-async def main_async() -> None:
+def _normalize_target_publishers(target_publishers: tuple[str, ...] | None) -> set[str] | None:
+    if not target_publishers:
+        return None
+
+    normalized = {slug.strip().lower() for slug in target_publishers if slug.strip()}
+    invalid = normalized - _VALID_PUBLISHER_SLUGS
+    if invalid:
+        invalid_text = ", ".join(sorted(invalid))
+        valid_text = ", ".join(sorted(_VALID_PUBLISHER_SLUGS))
+        msg = f"Invalid publisher slug(s): {invalid_text}. Valid values: {valid_text}"
+        raise ValueError(msg)
+    return normalized
+
+
+async def main_async(*, target_publishers: tuple[str, ...] | None = None) -> None:
+    target_platforms = _normalize_target_publishers(target_publishers)
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "vertical_publish") as execution_lock:
         if not execution_lock.acquired:
             return
-        await _run_vertical_publish_job(settings)
+        await _run_vertical_publish_job(settings, target_platforms=target_platforms)
 
 
-async def _run_vertical_publish_job(settings: AppSettings) -> None:
+async def _run_vertical_publish_job(settings: AppSettings, *, target_platforms: set[str] | None = None) -> None:
     metrics_db_path = (
         settings.db_timeseries_file if settings.is_production_env else f"{settings.db_timeseries_file}.test"
     )
@@ -114,7 +133,13 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
 
         # Build dependencies
         timeseries_repo, video_repo, release_repo = _build_repositories(settings)
-        job = _build_job_dependencies(timeseries_repo, video_repo, release_repo, settings)
+        job = _build_job_dependencies(
+            timeseries_repo,
+            video_repo,
+            release_repo,
+            settings,
+            target_platforms=target_platforms,
+        )
 
         # Build job context
         job_context = await job.publish_vertical_use_case.build_job_context(
@@ -169,11 +194,25 @@ async def _run_vertical_publish_job(settings: AppSettings) -> None:
         metrics_repo.close()
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Entry point for publish-vertical command."""
+    parser = argparse.ArgumentParser(description="Generate and publish daily vertical videos")
+    parser.add_argument(
+        "--publisher",
+        dest="publishers",
+        action="append",
+        help="Target publisher slug (instagram|youtube|tiktok). Repeat flag or use comma-separated values.",
+    )
+    args, _ = parser.parse_known_args(argv)
+
+    publisher_args = args.publishers or []
+    target_publishers: list[str] = []
+    for value in publisher_args:
+        target_publishers.extend([item.strip() for item in value.split(",") if item.strip()])
+
     settings = get_app_settings()
     setup_logging(settings.log_file_path)
-    asyncio.run(main_async())
+    asyncio.run(main_async(target_publishers=tuple(target_publishers) or None))
 
 
 if __name__ == "__main__":

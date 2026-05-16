@@ -7,19 +7,24 @@ from src.shared.logging import get_logger
 logger = get_logger(__name__)
 
 
-def build_publishers(state_reader: PublisherStateReader | None = None) -> list[VideoPublisher]:
+def build_publishers(
+    state_reader: PublisherStateReader | None = None,
+    target_platforms: set[str] | None = None,
+) -> list[VideoPublisher]:
     publishers: list[VideoPublisher] = [
         InstagramPublisher(),
         YouTubePublisher(),
         TikTokPublisher(),
     ]
+    target_slugs = {slug.lower() for slug in target_platforms} if target_platforms else None
     enabled = []
     skipped = []
     for p in publishers:
         platform_key = p.platform_name.value.lower()
         settings_enabled = p.is_enabled
         admin_enabled = state_reader.is_enabled(platform_key) if state_reader else True
-        if settings_enabled and admin_enabled:
+        target_enabled = target_slugs is None or platform_key in target_slugs
+        if settings_enabled and admin_enabled and target_enabled:
             enabled.append(p)
         else:
             skipped.append(p)

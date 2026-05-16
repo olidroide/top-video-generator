@@ -11,7 +11,7 @@ import pytest
 from src.adapters.youtube_source import YouTubeSource
 from src.application.fetch_data_use_case import FetchDataUseCase
 from src.config.settings import AppSettings
-from src.domain.models import CanonicalVideo
+from src.domain.models import CanonicalVideo, VideoPoint
 from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
 from src.infrastructure.storage.video_repository import VideoRepository
 
@@ -68,7 +68,7 @@ class TestFetchDataUseCase:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test that execute returns video points and calls dependencies correctly."""
-        points_added: list[object] = []
+        points_added: list[VideoPoint] = []
 
         class _TimeseriesRepoStub:
             def __init__(self, _path: str) -> None:
@@ -80,7 +80,7 @@ class TestFetchDataUseCase:
             def get_video_points_by_date_range(self, _from_dt: datetime, _until_dt: datetime) -> list:
                 return []
 
-            def add_video_point(self, video_point: object) -> None:
+            def add_video_point(self, video_point: VideoPoint) -> None:
                 points_added.append(video_point)
 
         class _VideoRepoStub:
@@ -114,6 +114,10 @@ class TestFetchDataUseCase:
         mock_youtube_source.fetch_trending_videos.assert_called_once()
         mock_youtube_source.fetch_video_details_batch.assert_called_once()
         assert points_added
+        assert all(point.score is not None and point.score >= 1 for point in points_added)
+        assert all(point.views_growth is not None and point.views_growth > 0 for point in points_added)
+        assert all(point.score is not None and point.score >= 1 for point in result)
+        assert all(point.views_growth is not None and point.views_growth > 0 for point in result)
 
     @pytest.mark.asyncio
     async def test_execute_respects_time_window(
@@ -166,7 +170,7 @@ class TestFetchDataUseCase:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         recent_time = datetime.now(UTC) - timedelta(hours=1)
-        points_added: list[object] = []
+        points_added: list[VideoPoint] = []
 
         class _TimeseriesRepoStub:
             def __init__(self, _path: str) -> None:
@@ -178,7 +182,7 @@ class TestFetchDataUseCase:
             def get_video_points_by_date_range(self, _from_dt: datetime, _until_dt: datetime) -> list:
                 return []
 
-            def add_video_point(self, video_point: object) -> None:
+            def add_video_point(self, video_point: VideoPoint) -> None:
                 points_added.append(video_point)
 
         class _VideoRepoStub:
@@ -217,6 +221,10 @@ class TestFetchDataUseCase:
         assert len(result) == 1
         mock_youtube_source.fetch_trending_videos.assert_awaited_once()
         assert points_added
+        assert result[0].score == 1
+        assert result[0].views_growth == canonical.views
+        assert points_added[0].score == 1
+        assert points_added[0].views_growth == canonical.views
 
     @pytest.mark.asyncio
     async def test_is_passed_enough_time_from_last_fetch_no_timestamp(self) -> None:

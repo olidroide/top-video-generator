@@ -91,12 +91,16 @@ def _configure_http_noise_reduction_for_development(settings: AppSettings) -> No
 
 def _load_session(instagram_client_instance: Any, settings_file_path: Path) -> Any:
     try:
+        if not settings_file_path.exists():
+            logger.info("instagram_client.session_file_not_found", session_file=str(settings_file_path))
+            return None
+
         logger.info("instagram_client.session_load_started", session_file=str(settings_file_path))
         session = instagram_client_instance.load_settings(settings_file_path)
-        logger.info("instagram_client.session_load_finished", has_session=bool(session))
+        logger.info("instagram_client.session_load_succeeded", has_session=bool(session))
         return session
     except Exception as exc:  # noqa: BLE001
-        logger.info("instagram_client.session_load_failed", error=str(exc))
+        logger.warning("instagram_client.session_load_failed", error=str(exc), session_file=str(settings_file_path))
         return None
 
 
@@ -110,37 +114,53 @@ def _try_auth_with_session(
     password: str | None,
     login_required_exception: type[Exception],
 ) -> bool:
+    """Validate loaded session and optionally re-authenticate if expired."""
     if not session:
         logger.info("instagram_client.session_missing_or_empty", session_file=str(settings_file_path))
         return False
 
+    # In dev mode with certifi, assume session is valid
+    if _should_skip_session_timeline_probe(settings):
+        logger.info("instagram_client.session_timeline_probe_skipped_for_development")
+        return True
+
+    # Validate session by checking timeline feed
+    logger.info("instagram_client.session_auth_started")
     try:
-        logger.info("instagram_client.session_login_started")
-        instagram_client_instance.set_settings(session)
-        instagram_client_instance.login(username, password)
-        logger.info("instagram_client.session_login_succeeded")
-
-        if _should_skip_session_timeline_probe(settings):
-            logger.info("instagram_client.session_timeline_probe_skipped_for_development")
-            return True
-
-        try:
-            logger.info("instagram_client.session_timeline_probe_started")
-            instagram_client_instance.get_timeline_feed()
-            logger.info("instagram_client.session_timeline_probe_succeeded")
-            return True
-        except login_required_exception:
-            logger.info("Session is invalid, need to login via username and password")
-            old_session = instagram_client_instance.get_settings()
-            instagram_client_instance.set_settings({})
-            instagram_client_instance.set_uuids(old_session["uuids"])
-            logger.info("instagram_client.session_relogin_started")
-            instagram_client_instance.login(username, password)
-            instagram_client_instance.dump_settings(settings_file_path)
-            logger.info("instagram_client.session_relogin_succeeded")
-            return True
+        logger.info("instagram_client.session_validation_started")
+        instagram_client_instance.get_timeline_feed()
+        logger.info("instagram_client.session_validation_succeeded")
+        return True
+    except login_required_exception as exc:
+        # Session expired, need to re-authenticate
+        logger.info("instagram_client.session_expired_reauth_required", reason=str(exc))
+        return _reauth_with_password(
+            instagram_client_instance,
+            username=username,
+            password=password,
+            settings_file_path=settings_file_path,
+        )
     except Exception as exc:  # noqa: BLE001
-        logger.info("instagram_client.session_login_failed", error=str(exc))
+        logger.warning("instagram_client.session_auth_failed", error=str(exc))
+        return False
+
+
+def _reauth_with_password(
+    instagram_client_instance: Any,
+    *,
+    username: str | None,
+    password: str | None,
+    settings_file_path: Path,
+) -> bool:
+    """Re-authenticate with password after session expires."""
+    try:
+        logger.info("instagram_client.password_reauth_started")
+        instagram_client_instance.login(username, password)
+        instagram_client_instance.dump_settings(settings_file_path)
+        logger.info("instagram_client.password_reauth_succeeded", session_file=str(settings_file_path))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("instagram_client.password_reauth_failed", error=str(exc))
         return False
 
 
@@ -151,13 +171,15 @@ def _try_auth_with_password(
     password: str | None,
     settings_file_path: Path,
 ) -> bool:
+    """Authenticate with password when no valid session exists."""
     try:
         logger.info(
             "instagram_client.password_login_started",
             username=username,
             reason="session_unavailable_or_failed",
         )
-        if instagram_client_instance.login(username, password):
+        result = instagram_client_instance.login(username, password)
+        if result:
             instagram_client_instance.dump_settings(settings_file_path)
             logger.info("instagram_client.password_login_succeeded", session_file=str(settings_file_path))
             return True
@@ -165,7 +187,14 @@ def _try_auth_with_password(
         logger.warning("instagram_client.password_login_returned_false")
         return False
     except Exception as exc:  # noqa: BLE001
-        logger.info("instagram_client.password_login_failed", error=str(exc))
+        # Log the full exception type for diagnostics
+        exc_type = type(exc).__name__
+        logger.warning(
+            "instagram_client.password_login_failed",
+            error=str(exc),
+            error_type=exc_type,
+            session_file=str(settings_file_path),
+        )
         return False
 
 
@@ -197,8 +226,16 @@ def _get_instagram_client() -> Any:
         "instagram_client.client_initialized",
         ssl_mode=ssl_mode,
         session_file=str(settings_file_path),
+        session_file_exists=settings_file_path.exists(),
     )
+
     session = _load_session(instagram_client_instance, settings_file_path)
+    logger.info(
+        "instagram_client.session_load_completed",
+        session_exists=bool(session),
+        session_file=str(settings_file_path),
+    )
+
     login_via_session = _try_auth_with_session(
         instagram_client_instance,
         session=session,
@@ -208,6 +245,12 @@ def _get_instagram_client() -> Any:
         password=password,
         login_required_exception=login_required_exception,
     )
+    logger.info(
+        "instagram_client.session_auth_result",
+        success=login_via_session,
+        auth_method="session",
+    )
+
     login_via_pw = False
     if not login_via_session:
         login_via_pw = _try_auth_with_password(
@@ -216,13 +259,21 @@ def _get_instagram_client() -> Any:
             password=password,
             settings_file_path=settings_file_path,
         )
+        logger.info(
+            "instagram_client.password_auth_result",
+            success=login_via_pw,
+            auth_method="password",
+        )
 
     if not login_via_pw and not login_via_session:
         logger.error(
             "instagram_client.connection_bootstrap_failed",
             ssl_mode=ssl_mode,
-            used_session_path=bool(session),
-            used_password_path=not login_via_session,
+            session_was_available=bool(session),
+            session_auth_tried=True,
+            session_auth_succeeded=login_via_session,
+            password_auth_tried=True,
+            password_auth_succeeded=login_via_pw,
         )
         raise InstagramLoginError("Couldn't login user with either password or session")
 
@@ -230,6 +281,7 @@ def _get_instagram_client() -> Any:
         "instagram_client.connection_bootstrap_succeeded",
         ssl_mode=ssl_mode,
         authenticated_via="session" if login_via_session else "password",
+        session_file=str(settings_file_path),
     )
 
     return instagram_client_instance

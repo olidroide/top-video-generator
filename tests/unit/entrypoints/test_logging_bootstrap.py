@@ -59,11 +59,12 @@ def test_publish_vertical_main_bootstraps_logging() -> None:
             new=MagicMock(return_value=sentinel.publish_vertical_main_async),
         ) as main_async,
         patch("src.entrypoints.publish_vertical.asyncio.run") as asyncio_run,
+        patch("sys.argv", ["publish_vertical.py"]),
     ):
         publish_vertical_main()
 
     setup_logging.assert_called_once_with(settings.log_file_path)
-    main_async.assert_called_once_with()
+    main_async.assert_called_once_with(target_publishers=None)
     asyncio_run.assert_called_once_with(sentinel.publish_vertical_main_async)
 
 

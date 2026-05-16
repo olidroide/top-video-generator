@@ -114,3 +114,30 @@ def test_build_publishers_works_without_state_reader(monkeypatch) -> None:
     result = publisher_registry.build_publishers()
 
     assert len(result) == 3
+
+
+def test_build_publishers_filters_by_target_platforms(monkeypatch) -> None:
+    from src.infrastructure import publisher_registry
+
+    monkeypatch.setattr(
+        publisher_registry,
+        "InstagramPublisher",
+        lambda: FakePublisher(Platform.INSTAGRAM, True),
+    )
+    monkeypatch.setattr(
+        publisher_registry,
+        "TikTokPublisher",
+        lambda: FakePublisher(Platform.TIKTOK, True),
+    )
+    monkeypatch.setattr(
+        publisher_registry,
+        "YouTubePublisher",
+        lambda: FakePublisher(Platform.YOUTUBE, True),
+    )
+
+    result = publisher_registry.build_publishers(
+        _all_enabled_reader(),
+        target_platforms={"instagram"},
+    )
+
+    assert [publisher.platform_name for publisher in result] == [Platform.INSTAGRAM]

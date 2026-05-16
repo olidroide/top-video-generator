@@ -378,6 +378,8 @@ def test_admin_tasks_status_renders_retry_and_video_details(monkeypatch) -> None
     assert "challenge_required" in response.text
     assert "Last processed video:" in response.text
     assert "Artifact path: videos/20260515/20260515_vertical_format.mp4" in response.text
+    assert "Trigger Instagram" in response.text
+    assert 'hx-post="/admin/tasks/daily/trigger?publisher=instagram"' in response.text
 
 
 def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:
@@ -599,3 +601,71 @@ def test_admin_task_logs_returns_404_for_invalid_method(monkeypatch) -> None:
 
     assert login_response.status_code == 303
     assert response.status_code == 404
+
+
+def test_admin_task_trigger_daily_with_publisher_filter(monkeypatch) -> None:
+    from src.entrypoints import publish_vertical
+
+    received_targets: list[tuple[str, ...] | None] = []
+
+    async def _fake_publish_vertical_main_async(*, target_publishers: tuple[str, ...] | None = None) -> None:
+        received_targets.append(target_publishers)
+
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    monkeypatch.setattr(publish_vertical, "main_async", _fake_publish_vertical_main_async)
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/daily/trigger?publisher=instagram")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert received_targets == [("instagram",)]
+
+
+def test_admin_task_trigger_daily_rejects_invalid_publisher(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/daily/trigger?publisher=invalid")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 400
+    assert "Invalid publisher" in response.text
+
+
+def test_admin_task_trigger_fetch_rejects_publisher_filter(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass"},
+            follow_redirects=False,
+        )
+        response = client.post("/admin/tasks/fetch/trigger?publisher=instagram")
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 400
+    assert "only supported for daily task" in response.text

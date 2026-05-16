@@ -172,6 +172,23 @@
               <i class="fas fa-circle-notch n-spin"></i>
             </span>
           </button>
+          <button
+            class="n-btn n-btn--outline"
+            hx-post="/admin/tasks/daily/trigger?publisher=instagram"
+            hx-target="#tasks-feedback"
+            hx-swap="outerHTML"
+            hx-confirm="This will retry Daily Vertical for Instagram only. Continue?"
+            title="Manually trigger daily vertical publish for Instagram"
+            aria-label="Trigger daily task for Instagram"
+          >
+            Trigger Instagram
+            <span class="htmx-indicator" aria-hidden="true">
+              <i class="fas fa-circle-notch n-spin"></i>
+            </span>
+          </button>
+          <p class="task-value task-value--muted">
+            <span class="task-source-note">Instagram only</span>
+          </p>
           {% if task.is_running %}
             <button
               class="n-btn n-btn--outline"

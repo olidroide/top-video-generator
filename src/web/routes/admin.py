@@ -314,6 +314,48 @@ async def admin_metrics_status(
     )
 
 
+def _normalize_task_publisher(method: str, publisher: str | None) -> str | None:
+    normalized_publisher = publisher.lower() if publisher else None
+    if normalized_publisher and normalized_publisher not in _VALID_PUBLISHER_SLUGS:
+        msg = f"Invalid publisher '{publisher}'."
+        raise ValueError(msg)
+    if method != "daily" and normalized_publisher:
+        raise ValueError("'publisher' is only supported for daily task.")
+    if method == "daily" and normalized_publisher == "spotify":
+        raise ValueError("Spotify is not a daily video publisher.")
+    return normalized_publisher
+
+
+def _resolve_task_runner(
+    *,
+    method: str,
+    force: bool,
+    normalized_publisher: str | None,
+) -> tuple[str, Any]:
+    if method == "fetch":
+        from src.entrypoints.fetch_data import main_async as fetch_main_async
+
+        async def _run_fetch_task() -> None:
+            await fetch_main_async(force_fetch=force)
+
+        return ("fetch", _run_fetch_task)
+    if method == "daily":
+        from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
+
+        async def _run_daily_task() -> None:
+            await publish_vertical_main_async(
+                target_publishers=(normalized_publisher,) if normalized_publisher else None,
+            )
+
+        return ("daily", _run_daily_task)
+    if method == "weekly":
+        from src.entrypoints.publish_video import main_async as publish_weekly_main_async
+
+        return ("weekly", publish_weekly_main_async)
+    msg = f"Unsupported task method '{method}'"
+    raise ValueError(msg)
+
+
 @router.post("/tasks/{method}/trigger", response_class=HTMLResponse)
 async def trigger_admin_task(
     request: Request,
@@ -321,6 +363,7 @@ async def trigger_admin_task(
     background_tasks: BackgroundTasks,
     trigger_use_case: TriggerAdminTaskUseCaseDep,
     force: bool = False,
+    publisher: str | None = None,
 ) -> Response:
     """HTMX endpoint — validates and triggers a background task (fetch/daily/weekly)."""
     if not _is_admin(request):
@@ -349,21 +392,19 @@ async def trigger_admin_task(
             trigger_use_case.mark_failed(task_method=task_method, error_message=str(exc))
             raise
 
-    if method == "fetch":
-        from src.entrypoints.fetch_data import main_async as fetch_main_async
+    try:
+        normalized_publisher = _normalize_task_publisher(method, publisher)
+        run_task_method, task_fn = _resolve_task_runner(
+            method=method,
+            force=force,
+            normalized_publisher=normalized_publisher,
+        )
+    except ValueError as exc:
+        from starlette.responses import PlainTextResponse
 
-        async def _run_fetch_task() -> None:
-            await fetch_main_async(force_fetch=force)
+        return PlainTextResponse(content=f"Error: {exc}", status_code=400)
 
-        background_tasks.add_task(_run_with_task_tracking, "fetch", _run_fetch_task)
-    elif method == "daily":
-        from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
-
-        background_tasks.add_task(_run_with_task_tracking, "daily", publish_vertical_main_async)
-    elif method == "weekly":
-        from src.entrypoints.publish_video import main_async as publish_weekly_main_async
-
-        background_tasks.add_task(_run_with_task_tracking, "weekly", publish_weekly_main_async)
+    background_tasks.add_task(_run_with_task_tracking, run_task_method, task_fn)
 
     # Return feedback to HTMX
     return templates.TemplateResponse(
