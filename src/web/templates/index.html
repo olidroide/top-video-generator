@@ -72,6 +72,12 @@
         </div>
     </div>
 
+    {% if vm.error_message %}
+        <article class="message is-warning" id="timeseries-error">
+            <div class="message-body">{{ vm.error_message }}</div>
+        </article>
+    {% endif %}
+
     {% for video in vm.video_list %}
         <div class="block video-row" style="--my-color-var: url('{{ video.yt_video_thumbnail_url }}')">
             <div class="columns is-vcentered columns-video-row">

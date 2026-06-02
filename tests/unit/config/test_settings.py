@@ -173,3 +173,13 @@ def test_settings_require_youtube_region_code_and_log_error(
         "settings.missing_required_value",
         setting="TOP_MUSIC_YT_SEARCH_REGION_CODE",
     )
+
+
+def test_settings_accept_prod_alias_for_env() -> None:
+    settings = AppSettings(env="prod", yt_search_region_code="ES")
+    assert settings.env is Environment.PRODUCTION
+
+
+def test_settings_accept_dev_alias_for_env() -> None:
+    settings = AppSettings(env="dev", yt_search_region_code="ES")
+    assert settings.env is Environment.DEVELOPMENT

@@ -76,6 +76,7 @@ async def index(
         is_weekly=weekly is not None,
         yt_video_published=result.yt_video_published,
         credentials_owner=credentials_owner,
+        error_message=result.error_message,
     )
 
     return templates.TemplateResponse(
