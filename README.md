@@ -4,7 +4,7 @@ Generate automatically a video resume with the most view growing in a weekly/dai
 
 ## Architecture Overview
 
-This application fetches daily/weekly top YouTube music videos for a configured region (currently Bollywood/India), stores timeseries data and metadata, generates videos (horizontal and vertical formats), and publishes to YouTube, Instagram, TikTok, and Spotify playlists.
+This application fetches daily/weekly top YouTube music videos for a configured region (currently Bollywood/India), stores timeseries data and metadata, generates videos (horizontal and vertical formats), and publishes to YouTube, Instagram, and TikTok.
 
 The diagram below is intentionally high-level. Detailed layer boundaries, migration status, and architecture rules are maintained in `ARCHITECTURE.md`.
 
@@ -44,7 +44,6 @@ flowchart LR
         YT["YouTube"]:::platform
         IG["Instagram"]:::platform
         TT["TikTok"]:::platform
-        SP["Spotify"]:::platform
     end
 
     CORE(("Canonical Models\nDomain + Ports")):::domain
@@ -64,7 +63,6 @@ flowchart LR
     PUBLISH ==> YT
     PUBLISH ==> IG
     PUBLISH ==> TT
-    PUBLISH ==> SP
 
     style Ingestion fill:#E0F2FE,stroke:#0EA5E9,stroke-width:2px,color:#0C4A6E
     style Media fill:#FEF3C7,stroke:#F59E0B,stroke-width:2px,color:#451A03
@@ -95,7 +93,6 @@ Scoring note: ranking logic is canonically implemented in `src/domain/services/s
 #### 4. Platform Clients
 - **YouTube** (`src/infrastructure/youtube/yt_client.py`): OAuth2, video upload, playlist management
 - **TikTok** (`src/infrastructure/social/tiktok_client.py`): OAuth2, video upload with chunked transfer
-- **Spotify** (`src/infrastructure/social/spotify_client.py`): OAuth2, playlist management
 - **Instagram** (`src/infrastructure/social/instagram_client.py`): Session-based auth via instagrapi
 
 #### 5. Web Interface (`src/web/main.py`)
@@ -222,41 +219,6 @@ make quality
 # Run the full pre-push gate manually
 make pre-push-check
 ```
-
-### Optional Spotify Support
-
-Spotify support is now packaged as an optional extra instead of a mandatory base dependency.
-
-Use the default install if you do not need Spotify features:
-
-```bash
-uv sync --all-groups
-```
-
-Install the Spotify extra only when you want Spotify integration enabled:
-
-```bash
-uv sync --all-groups --extra spotify
-```
-
-If the Spotify extra is not installed, the application still starts normally, but Spotify-specific flows will fail with a clear installation hint when invoked.
-
-### Spotify OAuth Troubleshooting
-
-If the admin live check shows Spotify errors such as:
-
-- `refresh_token must be supplied`
-- `Only valid bearer authentication supported`
-
-your stored Spotify authorization is usually expired or revoked.
-
-What to do:
-
-1. Open the Setup page in the web app and reconnect Spotify.
-2. Run the Spotify live connection check again from Admin.
-3. Re-run the daily publish job after the check is `VERIFIED`.
-
-Runtime behavior: the vertical publish flow now skips Spotify playlist updates when authorization is invalid, so YouTube/TikTok/Instagram publishing continues.
 
 ### Optional TikTok Support
 

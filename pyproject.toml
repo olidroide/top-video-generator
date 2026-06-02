@@ -56,11 +56,6 @@ scheduler-run = "src.entrypoints.scheduler:main"
 instagram = [
   "instagrapi>=2.3.0,<2.6.7",
 ]
-spotify = [
-  "redis>=7.4.0,<8.0.0",
-  "spotipyfree>=1.1.0,<2.0.0",
-  "websockets>=15.0.0,<16.0.0",
-]
 tiktok = [
   "playwright>=1.58.0,<2.0.0",
   "tiktok-uploader",

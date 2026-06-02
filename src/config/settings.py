@@ -75,12 +75,6 @@ class AppSettings(BaseSettings):
     tiktok_cookies_file: str | None = None
     tiktok_browser: str = "chrome"
 
-    spotify_client_id: str | None = None
-    spotify_client_secret: str | None = None
-    spotify_redirect_uri: str | None = None
-    spotify_user_id: str | None = None
-    spotify_playlist_original: str | None = None
-
     instagram_client_username: str | None = None
     instagram_client_password: SecretStr | None = None
     instagram_client_session_file: str | None = None
@@ -136,10 +130,6 @@ class AppSettings(BaseSettings):
     @property
     def is_production_env(self) -> bool:
         return self.env == Environment.PRODUCTION
-
-    @property
-    def is_spotify_configured(self) -> bool:
-        return all([self.spotify_client_id, self.spotify_client_secret, self.spotify_user_id])
 
     @property
     def is_instagram_configured(self) -> bool:

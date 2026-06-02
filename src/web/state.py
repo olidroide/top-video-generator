@@ -39,8 +39,4 @@ class HealthCheck(BaseModel):
 
 
 async def request_had_any_credentials(request: Request) -> bool:
-    return bool(
-        request.session.get("yt_credentials")
-        or request.session.get("tiktok_credentials")
-        or request.session.get("spotify_credentials")
-    )
+    return bool(request.session.get("yt_credentials") or request.session.get("tiktok_credentials"))

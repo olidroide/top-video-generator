@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
+    from src.domain.models import TikTokAuth, YtAuth
     from src.domain.ports import AuthCredentialStore, OAuthProvider
 
 
@@ -16,10 +16,8 @@ class GetSetupPageRequest:
 
     yt_session_client_id: str | None = None
     tiktok_session_client_id: str | None = None
-    spotify_session_client_id: str | None = None
     yt_auth_user_id: str | None = None
     tiktok_user_openid: str | None = None
-    spotify_user_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -30,8 +28,6 @@ class GetSetupPageResult:
     yt_credentials: YtAuth | None
     tiktok_authentication_url: str | None
     tiktok_credentials: TikTokAuth | None
-    spotify_authentication_url: str | None
-    spotify_credentials: SpotifyAuth | None
     is_completed: bool
 
 
@@ -42,42 +38,31 @@ class GetSetupPageUseCase:
         self,
         auth_repo: AuthCredentialStore,
         yt_provider: OAuthProvider[YtAuth],
-        spotify_provider: OAuthProvider[SpotifyAuth],
     ) -> None:
         self._auth_repo = auth_repo
         self._yt_provider = yt_provider
-        self._spotify_provider = spotify_provider
 
     async def execute(self, request: GetSetupPageRequest) -> GetSetupPageResult:
         # Setup page shows session credentials when present, but completion requires
         # persisted credentials from configured user identifiers.
         yt_persisted_credentials = self._get_yt_credentials(request.yt_auth_user_id)
         tiktok_persisted_credentials = self._get_tiktok_credentials(request.tiktok_user_openid)
-        spotify_persisted_credentials = self._get_spotify_credentials(request.spotify_user_id)
 
         yt_credentials = self._get_yt_credentials(request.yt_session_client_id) or yt_persisted_credentials
         tiktok_credentials = (
             self._get_tiktok_credentials(request.tiktok_session_client_id) or tiktok_persisted_credentials
         )
-        spotify_credentials = (
-            self._get_spotify_credentials(request.spotify_session_client_id) or spotify_persisted_credentials
-        )
 
         yt_authentication_url = None if yt_credentials else await self._yt_provider.step_1_get_authentication_url()
         tiktok_authentication_url = None
-        spotify_authentication_url = (
-            None if spotify_credentials else await self._spotify_provider.step_1_get_authentication_url()
-        )
 
-        is_completed = bool(yt_persisted_credentials and tiktok_persisted_credentials and spotify_persisted_credentials)
+        is_completed = bool(yt_persisted_credentials and tiktok_persisted_credentials)
 
         return GetSetupPageResult(
             yt_authentication_url=yt_authentication_url,
             yt_credentials=yt_credentials,
             tiktok_authentication_url=tiktok_authentication_url,
             tiktok_credentials=tiktok_credentials,
-            spotify_authentication_url=spotify_authentication_url,
-            spotify_credentials=spotify_credentials,
             is_completed=is_completed,
         )
 
@@ -86,6 +71,3 @@ class GetSetupPageUseCase:
 
     def _get_tiktok_credentials(self, client_id: str | None) -> TikTokAuth | None:
         return self._auth_repo.get_tiktok_auth(client_id) if client_id else None
-
-    def _get_spotify_credentials(self, client_id: str | None) -> SpotifyAuth | None:
-        return self._auth_repo.get_spotify_auth(client_id) if client_id else None

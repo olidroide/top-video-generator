@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from src.domain.ports import (
         ReleaseStore,
-        SpotifyPlaylistUpdater,
         VerticalVideoPipeline,
         VideoPublisher,
         VideoPublishExecutor,
@@ -53,12 +52,11 @@ class VerticalPublishJobContext:
     """Runtime context resolved before executing side effects."""
 
     pending_publishers: tuple[VideoPublisher, ...]
-    spotify_release_pending: bool
     video_list: tuple[Video, ...]
 
     @property
     def has_any_work(self) -> bool:
-        return bool(self.pending_publishers) or self.spotify_release_pending
+        return bool(self.pending_publishers)
 
 
 @dataclass(frozen=True)
@@ -72,45 +70,6 @@ class PublisherClientIdentity:
 
 class PublishVerticalUseCase:
     """Prepare selected videos and publish copy for vertical publication."""
-
-    async def maybe_update_spotify_original_playlist(
-        self,
-        *,
-        release_store: ReleaseStore,
-        spotify_playlist_updater: SpotifyPlaylistUpdater,
-        spotify_release_pending: bool,
-        spotify_playlist_original: str | None,
-        spotify_user_id: str | None,
-        video_list: Sequence[Video],
-    ) -> None:
-        if not spotify_release_pending:
-            return
-
-        playlist_id = spotify_playlist_original
-        if not playlist_id:
-            return
-
-        try:
-            is_authorized = await spotify_playlist_updater.is_authorized()
-            if not is_authorized:
-                logger.warning(
-                    "publish_vertical.spotify_playlist_update_skipped_not_authorized",
-                    playlist_id=playlist_id,
-                )
-                return
-
-            yt_video_title_list = [video.title.split("|")[0].strip() for video in video_list if video.title]
-            await spotify_playlist_updater.update_original_playlist(
-                playlist_id=playlist_id,
-                song_title_list=yt_video_title_list,
-            )
-            self.persist_spotify_release(
-                release_store=release_store,
-                spotify_user_id=spotify_user_id,
-                spotify_playlist_original=spotify_playlist_original,
-            )
-        except Exception as exc:
-            logger.exception("publish_vertical.spotify_playlist_update_failed", error=str(exc))
 
     async def publish_pending_vertical_videos(
         self,
@@ -229,25 +188,16 @@ class PublishVerticalUseCase:
         publishers: Sequence[VideoPublisher],
         fetch_top_videos_use_case: FetchTopVideosUseCase,
         day: date,
-        spotify_playlist_original: str | None,
-        is_spotify_configured: bool,
     ) -> VerticalPublishJobContext:
         pending_publishers = self.pending_publishers(
             release_store=release_store,
             publishers=publishers,
             day=day,
         )
-        spotify_release_pending = self.is_spotify_release_pending(
-            release_store=release_store,
-            spotify_playlist_original=spotify_playlist_original,
-            is_spotify_configured=is_spotify_configured,
-            day=day,
-        )
 
-        if not pending_publishers and not spotify_release_pending:
+        if not pending_publishers:
             return VerticalPublishJobContext(
                 pending_publishers=(),
-                spotify_release_pending=False,
                 video_list=(),
             )
 
@@ -256,7 +206,6 @@ class PublishVerticalUseCase:
 
         return VerticalPublishJobContext(
             pending_publishers=pending_publishers,
-            spotify_release_pending=spotify_release_pending,
             video_list=result.videos,
         )
 
@@ -274,44 +223,6 @@ class PublishVerticalUseCase:
                 platform=publisher.platform_name.value,
                 release_date=day,
                 release_kind=ReleaseKind.DAILY_VERTICAL.value,
-            )
-        )
-
-    def is_spotify_release_pending(
-        self,
-        *,
-        release_store: ReleaseStore,
-        spotify_playlist_original: str | None,
-        is_spotify_configured: bool,
-        day: date,
-    ) -> bool:
-        if not (spotify_playlist_original and is_spotify_configured):
-            return False
-        return not release_store.is_release_at_date(
-            platform=Platform.SPOTIFY.value,
-            release_date=day,
-            release_kind=ReleaseKind.DAILY_VERTICAL.value,
-        )
-
-    def persist_spotify_release(
-        self,
-        *,
-        release_store: ReleaseStore,
-        spotify_user_id: str | None,
-        spotify_playlist_original: str | None,
-        now: datetime | None = None,
-    ) -> None:
-        if not spotify_playlist_original:
-            return
-
-        reference = now or datetime.now(UTC)
-        release_store.add_or_update_release(
-            Release(
-                platform=Platform.SPOTIFY.value,
-                client_id=spotify_user_id,
-                release_kind=ReleaseKind.DAILY_VERTICAL.value,
-                release_id=spotify_playlist_original,
-                published_at=reference.timestamp(),
             )
         )
 

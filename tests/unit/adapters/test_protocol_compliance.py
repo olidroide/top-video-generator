@@ -8,14 +8,13 @@ corresponding Protocol using static type assertions instead of runtime
 from typing import assert_type
 from unittest.mock import create_autospec
 
-from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
+from src.domain.models import TikTokAuth, YtAuth
 from src.domain.ports import (
     AuthCredentialStore,
     IntegrationChecker,
     OAuthProvider,
     ReleaseDateValidator,
     ReleaseStore,
-    SpotifyPlaylistUpdater,
     TimeSeriesReader,
     TrendingVideoFetcher,
     VerticalVideoPipeline,
@@ -69,13 +68,6 @@ def test_tiktok_integration_checker_implements_protocol() -> None:
     assert_type(checker, IntegrationChecker)
 
 
-def test_spotify_integration_checker_implements_protocol() -> None:
-    from src.adapters.spotify_integration_checker import SpotifyIntegrationChecker
-
-    checker: SpotifyIntegrationChecker = create_autospec(SpotifyIntegrationChecker, instance=True)
-    assert_type(checker, IntegrationChecker)
-
-
 def test_instagram_integration_checker_implements_protocol() -> None:
     from src.adapters.instagram_integration_checker import InstagramIntegrationChecker
 
@@ -97,13 +89,6 @@ def test_tiktok_client_implements_oauth_provider() -> None:
     assert_type(client, OAuthProvider[TikTokAuth])
 
 
-def test_spotify_client_implements_oauth_provider() -> None:
-    from src.infrastructure.social.spotify_client import SpotifyClient
-
-    client: SpotifyClient = create_autospec(SpotifyClient, instance=True)
-    assert_type(client, OAuthProvider[SpotifyAuth])
-
-
 def test_auth_repository_implements_protocol() -> None:
     from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
 
@@ -117,13 +102,6 @@ def test_release_repository_implements_protocol() -> None:
     release_repo: TinyDbReleaseRepository = create_autospec(TinyDbReleaseRepository, instance=True)
     assert_type(release_repo, ReleaseDateValidator)
     assert_type(release_repo, ReleaseStore)
-
-
-def test_spotify_playlist_updater_adapter_implements_protocol() -> None:
-    from src.adapters.spotify_playlist_updater import SpotifyPlaylistUpdaterAdapter
-
-    adapter: SpotifyPlaylistUpdaterAdapter = create_autospec(SpotifyPlaylistUpdaterAdapter, instance=True)
-    assert_type(adapter, SpotifyPlaylistUpdater)
 
 
 def test_vertical_video_pipeline_adapter_implements_protocol() -> None:

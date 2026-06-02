@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from tinydb import Query, TinyDB
 
-from src.domain.models import SpotifyAuth, TikTokAuth, YtAuth
+from src.domain.models import TikTokAuth, YtAuth
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
@@ -19,11 +19,10 @@ class AuthenticationRepository:
     """
     Manages OAuth2 authentication tokens for third-party integrations.
 
-    Platforms: Spotify, TikTok, YouTube
+    Platforms: TikTok, YouTube
     Storage: TinyDB (JSON)
     """
 
-    _TABLE_SPOTIFY = "spotify_auth"
     _TABLE_TIKTOK = "tiktok_auth"
     _TABLE_YT = "yt_auth"
 
@@ -31,32 +30,6 @@ class AuthenticationRepository:
         """Initialize repository with TinyDB backend."""
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = TinyDB(str(db_path))
-
-    # ========================================================================
-    # Spotify Authentication
-    # ========================================================================
-
-    def get_spotify_auth(self, client_id: str) -> SpotifyAuth | None:
-        """Retrieve Spotify auth by client_id."""
-        table = self._db.table(self._TABLE_SPOTIFY)
-        results = table.search(Query().client_id == client_id)
-        if not results:
-            return None
-        return SpotifyAuth.model_validate(results[0])
-
-    def update_spotify_auth(self, spotify_auth: SpotifyAuth) -> SpotifyAuth:
-        """Update Spotify auth for existing client."""
-        table = self._db.table(self._TABLE_SPOTIFY)
-        client_id = spotify_auth.client_id or ""
-        table.update(spotify_auth.model_dump(), Query().client_id == client_id)
-        return spotify_auth
-
-    def add_or_update_spotify_auth(self, spotify_auth: SpotifyAuth) -> SpotifyAuth:
-        """Insert or update Spotify auth (upsert)."""
-        client_id = spotify_auth.client_id or ""
-        table = self._db.table(self._TABLE_SPOTIFY)
-        table.upsert(spotify_auth.model_dump(), Query().client_id == client_id)
-        return spotify_auth
 
     # ========================================================================
     # TikTok Authentication

@@ -17,7 +17,7 @@ class _FakeChecker:
 
     @property
     def is_publish_target(self) -> bool:
-        return self._platform_name != IntegrationPlatform.SPOTIFY
+        return True
 
     async def check_connection(self):  # pragma: no cover - not used here
         raise NotImplementedError
@@ -30,11 +30,6 @@ def test_build_integration_checkers_returns_all_platforms(monkeypatch) -> None:
         integration_checker_registry,
         "InstagramIntegrationChecker",
         lambda: _FakeChecker(IntegrationPlatform.INSTAGRAM),
-    )
-    monkeypatch.setattr(
-        integration_checker_registry,
-        "SpotifyIntegrationChecker",
-        lambda: _FakeChecker(IntegrationPlatform.SPOTIFY),
     )
     monkeypatch.setattr(
         integration_checker_registry,
@@ -51,7 +46,6 @@ def test_build_integration_checkers_returns_all_platforms(monkeypatch) -> None:
 
     assert [checker.platform_name for checker in result] == [
         IntegrationPlatform.INSTAGRAM,
-        IntegrationPlatform.SPOTIFY,
         IntegrationPlatform.TIKTOK,
         IntegrationPlatform.YOUTUBE,
     ]

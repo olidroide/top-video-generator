@@ -4,7 +4,7 @@
 
 ## Overview
 
-Automated pipeline: fetch YouTube trending music data → score and rank → render videos → publish to YouTube/Instagram/TikTok → update Spotify state.
+Automated pipeline: fetch YouTube trending music data → score and rank → render videos → publish to YouTube/Instagram/TikTok.
 
 The active architecture is hexagonal (Ports & Adapters). The migration away from legacy god files is largely complete.
 
@@ -138,7 +138,6 @@ flowchart LR
         YT["▶️ YouTube"]:::ext
         IG["📸 Instagram"]:::ext
         TT["🎵 TikTok"]:::ext
-        SP["🎧 Spotify"]:::ext
     end
 
     SCH -->|"Dispatches"| J1 & J2 & J3
@@ -149,7 +148,7 @@ flowchart LR
     WEB -.->|"Reads"| DB & TS
 
     J2 ==>|"Uploads"| YT & IG & TT
-    J3 ==>|"Uploads"| YT & SP
+    J3 ==>|"Uploads"| YT
 
     style Services  fill:#E0F2FE,stroke:#0284C7,stroke-width:2px,color:#0C4A6E
     style Jobs      fill:#FEF3C7,stroke:#F59E0B,stroke-width:2px,color:#451A03
@@ -238,7 +237,7 @@ These three items are standalone and require no structural changes.
 
 **2. Harden Web Route Error Messages**
 - **Task:** Ensure all adapter error exceptions map to actionable user-facing messages in route handlers instead of generic 500 responses.
-- **Examples:** Spotify auth revocation → "Reconnect Spotify in setup"; Instagram login failure → "Invalid credentials"; TikTok cookie expired → "Refresh cookies".
+- **Examples:** Instagram login failure → "Invalid credentials"; TikTok cookie expired → "Refresh cookies".
 - **Scope:** Touch `src/web/routes/` handlers that wrap publish and platform-check use cases.
 - **Effort:** 2–3 sessions (~2 hours)
 - **Validation:** Manual web UX tests; existing route handler unit tests still pass.
@@ -246,7 +245,7 @@ These three items are standalone and require no structural changes.
 
 **3. Expand Integration Checker Error Resilience**
 - **Task:** Verify all integration checkers catch platform SDK exceptions and return stable `IntegrationCheckResult(status=ERROR, reason=...)` instead of uncaught stack traces.
-- **Current State:** Already done for Spotify; validate YouTube, Instagram, TikTok.
+- **Current State:** Validate YouTube, Instagram, TikTok.
 - **Scope:** `src/adapters/{platform}_integration_checker.py` files.
 - **Effort:** 1 session (~45 minutes)
 - **Validation:** Raise SDK exceptions in test mocks; confirm use case returns ERROR, not exception.
