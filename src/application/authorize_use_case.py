@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from src.domain.models import TikTokAuth
 
 if TYPE_CHECKING:
-    from src.domain.models import SpotifyAuth, YtAuth
+    from src.domain.models import YtAuth
     from src.domain.ports import AuthCredentialStore, OAuthProvider
 from src.shared.logging import get_logger
 
@@ -27,11 +27,6 @@ class AuthorizeTikTokCookiesRequest:
     client_id: str
 
 
-@dataclass(frozen=True)
-class AuthorizeSpotifyRequest:
-    code: str
-
-
 class AuthorizeUseCase:
     """Handles OAuth authorization callbacks and persistence."""
 
@@ -39,11 +34,9 @@ class AuthorizeUseCase:
         self,
         auth_repo: AuthCredentialStore,
         yt_provider: OAuthProvider[YtAuth],
-        spotify_provider: OAuthProvider[SpotifyAuth],
     ) -> None:
         self._auth_repo = auth_repo
         self._yt_provider = yt_provider
-        self._spotify_provider = spotify_provider
 
     async def execute_yt(self, request: AuthorizeYtRequest) -> YtAuth:
         """Exchange code and save YT credentials."""
@@ -60,10 +53,3 @@ class AuthorizeUseCase:
                 scopes=["cookies"],
             )
         )
-
-    async def execute_spotify(self, request: AuthorizeSpotifyRequest) -> SpotifyAuth:
-        """Exchange code and save Spotify credentials."""
-        oauth_credentials = await self._spotify_provider.step_2_exchange_code_authentication(
-            request.code,
-        )
-        return self._auth_repo.add_or_update_spotify_auth(oauth_credentials)

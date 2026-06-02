@@ -1,5 +1,4 @@
 from src.adapters.instagram_integration_checker import InstagramIntegrationChecker
-from src.adapters.spotify_integration_checker import SpotifyIntegrationChecker
 from src.adapters.tiktok_integration_checker import TikTokIntegrationChecker
 from src.adapters.youtube_integration_checker import YouTubeIntegrationChecker
 from src.domain.ports import IntegrationChecker
@@ -11,7 +10,6 @@ logger = get_logger(__name__)
 def build_integration_checkers() -> list[IntegrationChecker]:
     checkers: list[IntegrationChecker] = [
         InstagramIntegrationChecker(),
-        SpotifyIntegrationChecker(),
         TikTokIntegrationChecker(),
         YouTubeIntegrationChecker(),
     ]

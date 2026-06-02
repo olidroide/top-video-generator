@@ -77,10 +77,8 @@ async def _build_connections_context(
         GetSetupPageRequest(
             yt_session_client_id=request.session.get("yt_credentials"),
             tiktok_session_client_id=request.session.get("tiktok_credentials"),
-            spotify_session_client_id=request.session.get("spotify_credentials"),
             yt_auth_user_id=settings.yt_auth_user_id or None,
             tiktok_user_openid=settings.tiktok_user_openid or None,
-            spotify_user_id=settings.spotify_user_id or None,
         )
     )
     return {
@@ -321,8 +319,6 @@ def _normalize_task_publisher(method: str, publisher: str | None) -> str | None:
         raise ValueError(msg)
     if method != "daily" and normalized_publisher:
         raise ValueError("'publisher' is only supported for daily task.")
-    if method == "daily" and normalized_publisher == "spotify":
-        raise ValueError("Spotify is not a daily video publisher.")
     return normalized_publisher
 
 
@@ -520,7 +516,7 @@ async def admin_publishers_status(
     )
 
 
-_VALID_PUBLISHER_SLUGS = {"youtube", "tiktok", "instagram", "spotify"}
+_VALID_PUBLISHER_SLUGS = {"youtube", "tiktok", "instagram"}
 
 
 @router.post("/publishers/{slug}/toggle", response_class=HTMLResponse)

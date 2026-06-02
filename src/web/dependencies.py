@@ -15,7 +15,7 @@ from src.application.get_top_videos_dashboard_use_case import GetTopVideosDashbo
 from src.application.trigger_admin_task_use_case import TriggerAdminTaskUseCase
 from src.application.verify_published_videos_use_case import VerifyPublishedVideosUseCase
 from src.config.settings import AppSettings, get_app_settings
-from src.domain.models import SpotifyAuth, YtAuth
+from src.domain.models import YtAuth
 from src.domain.ports import AuthCredentialStore as AuthenticationRepositoryPort
 from src.domain.ports import IntegrationChecker, OAuthProvider
 from src.domain.ports import OperationalMetricsReader as OperationalMetricsRepositoryPort
@@ -26,7 +26,6 @@ from src.domain.ports import TaskRunStateReader as TaskRunStateRepositoryPort
 from src.domain.ports import TaskRunStateWriter as TaskRunStateWriterPort
 from src.domain.ports import TimeSeriesReader as TimeSeriesRepositoryPort
 from src.domain.ports import VideoMetadataReader as VideoRepositoryPort
-from src.infrastructure.social.spotify_client import SpotifyClient
 from src.infrastructure.storage.auth_repository import AuthenticationRepository as TinyDbAuthenticationRepository
 from src.infrastructure.storage.operational_metrics_repository import (
     OperationalMetricsRepository as TinyFluxOperationalMetricsRepository,
@@ -60,12 +59,6 @@ def get_yt_provider(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> OAuthProvider[YtAuth]:
     return get_yt_client(settings)
-
-
-def get_spotify_provider(
-    settings: Annotated[AppSettings, Depends(get_settings)],
-) -> OAuthProvider[SpotifyAuth]:
-    return SpotifyClient(settings)
 
 
 def get_auth_repo(settings: Annotated[AppSettings, Depends(get_settings)]) -> AuthenticationRepositoryPort:
@@ -111,12 +104,10 @@ def get_task_run_state_repo(
 def get_authorize_use_case(
     auth_repo: Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)],
     yt_provider: Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)],
-    spotify_provider: Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)],
 ) -> AuthorizeUseCase:
     return AuthorizeUseCase(
         auth_repo=auth_repo,
         yt_provider=yt_provider,
-        spotify_provider=spotify_provider,
     )
 
 
@@ -137,12 +128,10 @@ def get_top_videos_dashboard_use_case(
 def get_setup_page_use_case(
     auth_repo: Annotated[AuthenticationRepositoryPort, Depends(get_auth_repo)],
     yt_provider: Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)],
-    spotify_provider: Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)],
 ) -> GetSetupPageUseCase:
     return GetSetupPageUseCase(
         auth_repo=auth_repo,
         yt_provider=yt_provider,
-        spotify_provider=spotify_provider,
     )
 
 
@@ -199,7 +188,6 @@ ReleaseRepositoryDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo
 PublisherStateDep = Annotated[PublisherStatePort, Depends(get_publisher_state_repo)]
 PublisherStateWriterDep = Annotated[PublisherStateWriterPort, Depends(get_publisher_state_repo)]
 ReleaseReadPortDep = Annotated[ReleaseRepositoryPort, Depends(get_release_repo)]
-SpotifyProviderDep = Annotated[OAuthProvider[SpotifyAuth], Depends(get_spotify_provider)]
 YouTubeProviderDep = Annotated[OAuthProvider[YtAuth], Depends(get_yt_provider)]
 TimeSeriesRepositoryDep = Annotated[TimeSeriesRepositoryPort, Depends(get_timeseries_repo)]
 VideoRepositoryDep = Annotated[VideoRepositoryPort, Depends(get_video_repo)]

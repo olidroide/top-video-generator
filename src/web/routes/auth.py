@@ -8,7 +8,6 @@ from starlette.responses import RedirectResponse, Response
 from starlette.status import HTTP_303_SEE_OTHER, HTTP_307_TEMPORARY_REDIRECT
 
 from src.application.authorize_use_case import (
-    AuthorizeSpotifyRequest,
     AuthorizeTikTokCookiesRequest,
     AuthorizeYtRequest,
 )
@@ -86,35 +85,6 @@ async def save_tiktok_credentials(
     return RedirectResponse("/setup", status_code=HTTP_303_SEE_OTHER)
 
 
-@router.get(
-    "/spotify_auth/",
-    response_class=RedirectResponse,
-    status_code=HTTP_307_TEMPORARY_REDIRECT,
-)
-async def spotify_auth(
-    request: Request,
-    use_case: AuthorizeUseCaseDep,
-    code: str | None = None,
-    _scopes: str | None = None,
-    _state: str | None = None,
-    _error: str | None = None,
-    _error_description: str | None = None,
-) -> Response:
-    if not code:
-        logger.warning("Not CODE received in callback Spotify Auth", request=request.url)
-        return RedirectResponse("/")
-
-    try:
-        spotify_auth_response = await use_case.execute_spotify(AuthorizeSpotifyRequest(code=code))
-    except RuntimeError as exc:
-        logger.exception("spotify_auth.callback_failed", error=str(exc))
-        return RedirectResponse("/setup")
-
-    request.session["spotify_credentials"] = spotify_auth_response.client_id
-
-    return RedirectResponse("/")
-
-
 @router.get("/setup", response_class=HTMLResponse)
 async def setup_page(
     request: Request,
@@ -125,10 +95,8 @@ async def setup_page(
         GetSetupPageRequest(
             yt_session_client_id=request.session.get("yt_credentials"),
             tiktok_session_client_id=request.session.get("tiktok_credentials"),
-            spotify_session_client_id=request.session.get("spotify_credentials"),
             yt_auth_user_id=settings.yt_auth_user_id or None,
             tiktok_user_openid=settings.tiktok_user_openid or None,
-            spotify_user_id=settings.spotify_user_id or None,
         )
     )
 

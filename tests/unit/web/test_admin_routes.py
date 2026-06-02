@@ -81,19 +81,17 @@ def _build_setup_result() -> GetSetupPageResult:
         yt_credentials=None,
         tiktok_authentication_url="https://tt.example/auth",
         tiktok_credentials=None,
-        spotify_authentication_url="https://sp.example/auth",
-        spotify_credentials=None,
         is_completed=False,
     )
 
 
 def _build_check_result() -> IntegrationCheckResult:
     return IntegrationCheckResult(
-        platform=IntegrationPlatform.SPOTIFY,
+        platform=IntegrationPlatform.INSTAGRAM,
         status=IntegrationCheckStatus.OK,
         is_configured=True,
-        is_publish_target=False,
-        message="Spotify account access verified.",
+        is_publish_target=True,
+        message="Instagram session verified.",
     )
 
 
@@ -104,16 +102,6 @@ def _build_instagram_not_configured_check_result() -> IntegrationCheckResult:
         is_configured=False,
         is_publish_target=True,
         message="Missing Instagram credentials or dependency.",
-    )
-
-
-def _build_spotify_reauth_check_result() -> IntegrationCheckResult:
-    return IntegrationCheckResult(
-        platform=IntegrationPlatform.SPOTIFY,
-        status=IntegrationCheckStatus.ERROR,
-        is_configured=True,
-        is_publish_target=False,
-        message="Spotify authorization is invalid or expired. Reconnect Spotify from Setup.",
     )
 
 
@@ -204,7 +192,6 @@ def test_admin_status_returns_partial_when_authenticated(monkeypatch) -> None:
     assert login_response.status_code == 303
     assert status_response.status_code == 200
     assert "connections-grid" in status_response.text
-    assert "Check connection" in status_response.text
     assert "Check publish" in status_response.text
     assert "YouTube" in status_response.text
 
@@ -223,15 +210,15 @@ def test_admin_connection_check_returns_single_card_partial(monkeypatch) -> None
             data={"password": "admin-pass"},
             follow_redirects=False,
         )
-        check_response = client.post("/admin/connections/spotify/check")
+        check_response = client.post("/admin/connections/instagram/check")
 
     app.dependency_overrides.clear()
 
     assert login_response.status_code == 303
     assert check_response.status_code == 200
-    assert "platform-card-spotify" in check_response.text
+    assert "platform-card-instagram" in check_response.text
     assert "VERIFIED" in check_response.text
-    assert "Spotify account access verified." in check_response.text
+    assert "Instagram session verified." in check_response.text
     rendered_label = next(label for label in ("Check publish", "Check connection") if label in check_response.text)
     assert check_response.text.rindex(rendered_label) < check_response.text.index("platform-card__check-spinner")
 
@@ -244,7 +231,6 @@ def test_admin_publisher_toggle_returns_single_publisher_card_fragment(monkeypat
             "youtube": True,
             "tiktok": True,
             "instagram": True,
-            "spotify": True,
         }
     )
     app.dependency_overrides[get_publisher_state_repo] = lambda: publisher_state
@@ -256,13 +242,13 @@ def test_admin_publisher_toggle_returns_single_publisher_card_fragment(monkeypat
             data={"password": "admin-pass"},
             follow_redirects=False,
         )
-        toggle_response = client.post("/admin/publishers/spotify/toggle")
+        toggle_response = client.post("/admin/publishers/instagram/toggle")
 
     app.dependency_overrides.clear()
 
     assert login_response.status_code == 303
     assert toggle_response.status_code == 200
-    assert "publisher-card-spotify" in toggle_response.text
+    assert "publisher-card-instagram" in toggle_response.text
     assert "publishers-grid" not in toggle_response.text
     assert "publisher-card-tiktok" not in toggle_response.text
 
@@ -271,7 +257,7 @@ def test_admin_publisher_toggle_requires_authenticated_session() -> None:
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
 
     with TestClient(app) as client:
-        response = client.post("/admin/publishers/spotify/toggle")
+        response = client.post("/admin/publishers/instagram/toggle")
 
     assert response.status_code == 403
 
@@ -284,7 +270,6 @@ def test_admin_publishers_status_shows_instagram_check_auth_button(monkeypatch) 
             "youtube": True,
             "tiktok": True,
             "instagram": True,
-            "spotify": True,
         }
     )
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
@@ -313,7 +298,6 @@ def test_admin_publisher_check_auth_returns_single_card_fragment(monkeypatch) ->
             "youtube": True,
             "tiktok": True,
             "instagram": True,
-            "spotify": True,
         }
     )
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
@@ -596,31 +580,6 @@ def test_admin_connection_check_instagram_not_configured_aligns_card_state(monke
     assert "Check publish" in check_response.text
     assert 'hx-post="/admin/connections/instagram/check"' in check_response.text
     assert '<button\n      disabled\n      class="secondary outline"' in check_response.text
-
-
-def test_admin_connection_check_spotify_reauth_required(monkeypatch) -> None:
-    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
-    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
-    app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
-    app.dependency_overrides[get_check_platform_connection_use_case] = lambda: _CheckPlatformConnectionUseCaseStub(
-        _build_spotify_reauth_check_result()
-    )
-
-    with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
-        check_response = client.post("/admin/connections/spotify/check")
-
-    app.dependency_overrides.clear()
-
-    assert login_response.status_code == 303
-    assert check_response.status_code == 200
-    assert "platform-card-spotify" in check_response.text
-    assert "REAUTH REQUIRED" in check_response.text
-    assert "Reconnect Spotify from Setup." in check_response.text
 
 
 def test_admin_tasks_status_shows_running_indicator(monkeypatch) -> None:

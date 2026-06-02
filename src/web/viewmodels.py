@@ -14,10 +14,7 @@ if TYPE_CHECKING:
     from src.application.get_admin_task_status_use_case import TaskStatusResult
     from src.application.get_setup_page_use_case import GetSetupPageResult
     from src.config.settings import AppSettings
-    from src.domain.models import SpotifyAuth, TikTokAuth, Video, YtAuth
-
-
-_SPOTIFY_REAUTH_PREFIX = "Spotify authorization is invalid or expired."
+    from src.domain.models import TikTokAuth, Video, YtAuth
 _SECONDS_PER_HOUR = 3600
 _HOURS_PER_DAY = 24
 _HOURS_PER_WEEK = _HOURS_PER_DAY * 7
@@ -107,8 +104,6 @@ class SetupPageViewModel:
     yt_credentials: YtAuth | None
     tiktok_authentication_url: str | None
     tiktok_credentials: TikTokAuth | None
-    spotify_authentication_url: str | None
-    spotify_credentials: SpotifyAuth | None
 
 
 def build_setup_page_view_model(result: GetSetupPageResult) -> SetupPageViewModel:
@@ -119,8 +114,6 @@ def build_setup_page_view_model(result: GetSetupPageResult) -> SetupPageViewMode
         yt_credentials=result.yt_credentials,
         tiktok_authentication_url=result.tiktok_authentication_url,
         tiktok_credentials=result.tiktok_credentials,
-        spotify_authentication_url=result.spotify_authentication_url,
-        spotify_credentials=result.spotify_credentials,
     )
 
 
@@ -198,13 +191,6 @@ def _build_live_check_view_model(
             state="na",
             label="NOT CONFIGURED",
             message=check_result.message or "Missing local configuration.",
-        )
-
-    if isinstance(check_result.message, str) and check_result.message.startswith(_SPOTIFY_REAUTH_PREFIX):
-        return PlatformLiveCheckViewModel(
-            state="off",
-            label="REAUTH REQUIRED",
-            message=check_result.message,
         )
 
     return PlatformLiveCheckViewModel(
@@ -292,18 +278,6 @@ def build_admin_connections_view_model(
         auth_type="COOKIE",
         check_result=checks.get("tiktok"),
     )
-    spotify = _build_platform_connection_view_model(
-        slug="spotify",
-        name="Spotify",
-        icon_class="fab fa-spotify",
-        is_connected=result.spotify_credentials is not None,
-        is_configured=bool(settings.spotify_client_id and settings.spotify_client_secret),
-        is_publish_target=False,
-        auth_url=result.spotify_authentication_url,
-        connected_id=settings.spotify_user_id,
-        auth_type="OAUTH 2.0",
-        check_result=checks.get("spotify"),
-    )
     instagram = _build_platform_connection_view_model(
         slug="instagram",
         name="Instagram",
@@ -316,7 +290,7 @@ def build_admin_connections_view_model(
         auth_type="CREDENTIAL",
         check_result=checks.get("instagram"),
     )
-    return AdminConnectionsViewModel(platforms=(yt, tiktok, spotify, instagram))
+    return AdminConnectionsViewModel(platforms=(yt, tiktok, instagram))
 
 
 @dataclass(frozen=True)
@@ -574,7 +548,7 @@ def build_admin_tasks_view_model(
     tasks: list[AdminTaskViewModel] = [daily_task_vm, daily_publish_task_vm, weekly_yt_task_vm]
 
     # Weekly horizontal for non-YouTube platforms (not applicable)
-    for platform in [Platform.TIKTOK, Platform.INSTAGRAM, Platform.SPOTIFY]:
+    for platform in [Platform.TIKTOK, Platform.INSTAGRAM]:
         task_vm = AdminTaskViewModel(
             name=f"Weekly Horizontal ({platform.value})",
             last_run_label="Not applicable",
@@ -673,12 +647,6 @@ def build_admin_publishers_view_model(
             "name": "Instagram",
             "icon_class": "fab fa-instagram",
             "configured": bool(settings.instagram_client_username and settings.instagram_client_password),
-        },
-        {
-            "slug": "spotify",
-            "name": "Spotify",
-            "icon_class": "fab fa-spotify",
-            "configured": bool(settings.spotify_client_id and settings.spotify_client_secret),
         },
     ]
 

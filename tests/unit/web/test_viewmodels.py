@@ -70,7 +70,7 @@ def test_build_admin_tasks_view_model_non_youtube_weekly_not_applicable() -> Non
 
     tasks_vm = build_admin_tasks_view_model(result)
 
-    for platform_name in ("TIKTOK", "INSTAGRAM", "SPOTIFY"):
+    for platform_name in ("TIKTOK", "INSTAGRAM"):
         task = _task(f"Weekly Horizontal ({platform_name})", tasks_vm)
         assert task.applicable is False
         assert task.last_run_label == "Not applicable"
@@ -104,7 +104,6 @@ def test_build_admin_tasks_view_model_daily_failed_recommends_retry_and_shows_de
     assert any(row.startswith("YOUTUBE:") for row in daily_task.detail_rows)
     assert any(row.startswith("INSTAGRAM:") for row in daily_task.detail_rows)
     assert any(row == "TIKTOK: Never" for row in daily_task.detail_rows)
-    assert any(row == "SPOTIFY: Never" for row in daily_task.detail_rows)
 
 
 def test_build_admin_tasks_view_model_running_methods_shows_is_running() -> None:
