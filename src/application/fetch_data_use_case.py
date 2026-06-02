@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_SECONDS_PER_DAY = 24 * 60 * 60
+
 
 class FetchDataUseCase:
     """Orchestrates fetching trending videos and storing timeseries data."""
@@ -128,11 +130,15 @@ class FetchDataUseCase:
             return True
         current_datetime = datetime.now(UTC)
         delta_from_last_recollection = current_datetime - last_timeseries_datetime
+        min_elapsed_seconds = min_days * _SECONDS_PER_DAY
+        elapsed_seconds = delta_from_last_recollection.total_seconds()
 
-        if not (is_enough_time := delta_from_last_recollection.days >= min_days):
+        if not (is_enough_time := elapsed_seconds >= min_elapsed_seconds):
             logger.debug(
                 "fetch_data.not_enough_time_elapsed",
                 min_days=min_days,
                 delta=str(delta_from_last_recollection),
+                elapsed_seconds=elapsed_seconds,
+                min_elapsed_seconds=min_elapsed_seconds,
             )
         return is_enough_time

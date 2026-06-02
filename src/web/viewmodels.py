@@ -62,6 +62,7 @@ class IndexPageViewModel:
     is_weekly: bool
     yt_video_published: bool
     credentials_owner: bool
+    error_message: str | None = None
 
     @property
     def timeseries_mode_label(self) -> str:
@@ -78,6 +79,7 @@ def build_index_page_view_model(
     is_weekly: bool,
     yt_video_published: bool,
     credentials_owner: bool,
+    error_message: str | None = None,
 ) -> IndexPageViewModel:
     """Build the page model for the top-videos index SSR template."""
     previous_day = current_date - timedelta(days=1)
@@ -92,6 +94,7 @@ def build_index_page_view_model(
         is_weekly=is_weekly,
         yt_video_published=yt_video_published,
         credentials_owner=credentials_owner,
+        error_message=error_message,
     )
 
 

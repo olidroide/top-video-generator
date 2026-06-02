@@ -31,7 +31,7 @@ def _build_dashboard_use_case_stub() -> GetTopVideosDashboardUseCase:
 
 
 def test_index_renders_page_with_video_list() -> None:
-    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app = create_app(AppSettings(env="prod", yt_search_region_code="ES"))
     app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
@@ -46,7 +46,7 @@ def test_index_renders_page_with_video_list() -> None:
 
 
 def test_index_uses_globe_when_region_code_is_invalid() -> None:
-    app = create_app(AppSettings(yt_search_region_code="WORLD"))
+    app = create_app(AppSettings(env="prod", yt_search_region_code="WORLD"))
     app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
@@ -59,7 +59,7 @@ def test_index_uses_globe_when_region_code_is_invalid() -> None:
 
 
 def test_index_uses_requested_daily_query_param() -> None:
-    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app = create_app(AppSettings(env="prod", yt_search_region_code="ES"))
 
     class _CaptureDashboardUseCase:
         def __init__(self) -> None:
@@ -84,7 +84,7 @@ def test_index_uses_requested_daily_query_param() -> None:
 
 
 def test_index_rejects_daily_query_before_minimum_date() -> None:
-    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app = create_app(AppSettings(env="prod", yt_search_region_code="ES"))
     app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
@@ -97,7 +97,7 @@ def test_index_rejects_daily_query_before_minimum_date() -> None:
 
 
 def test_index_hides_previous_navigation_at_minimum_daily_date() -> None:
-    app = create_app(AppSettings(yt_search_region_code="ES"))
+    app = create_app(AppSettings(env="prod", yt_search_region_code="ES"))
     app.dependency_overrides[get_top_videos_dashboard_use_case] = _build_dashboard_use_case_stub
 
     with TestClient(app) as client:
@@ -107,3 +107,27 @@ def test_index_hides_previous_navigation_at_minimum_daily_date() -> None:
 
     assert response.status_code == 200
     assert "?daily=2019-12-31" not in response.text
+
+
+def test_index_renders_dashboard_error_message() -> None:
+    app = create_app(AppSettings(env="prod", yt_search_region_code="ES"))
+
+    class _ErrorDashboardUseCase:
+        async def execute(self, request: object) -> GetTopVideosDashboardResult:
+            del request
+            return GetTopVideosDashboardResult(
+                videos=(),
+                yt_video_published=False,
+                error_message="No video timeseries for today; run fetch script first",
+            )
+
+    app.dependency_overrides[get_top_videos_dashboard_use_case] = _ErrorDashboardUseCase
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "timeseries-error" in response.text
+    assert "No video timeseries for today; run fetch script first" in response.text

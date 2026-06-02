@@ -122,6 +122,17 @@ class AppSettings(BaseSettings):
     def normalize_yt_search_region_code(cls, value: str) -> str:
         return value.upper()
 
+    @field_validator("env", mode="before")
+    @classmethod
+    def normalize_env_alias(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized == "prod":
+                return Environment.PRODUCTION.value
+            if normalized == "dev":
+                return Environment.DEVELOPMENT.value
+        return value
+
     @property
     def is_production_env(self) -> bool:
         return self.env == Environment.PRODUCTION
