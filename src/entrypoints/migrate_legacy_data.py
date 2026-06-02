@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from src.config.settings import get_app_settings
-from src.domain.models import CanonicalVideo, Platform, Release, SpotifyAuth, TikTokAuth, YtAuth
+from src.domain.models import CanonicalVideo, Platform, Release, TikTokAuth, YtAuth
 from src.infrastructure.storage.auth_repository import AuthenticationRepository
 from src.infrastructure.storage.release_repository import ReleaseRepository
 from src.infrastructure.storage.video_repository import VideoRepository
@@ -27,7 +27,6 @@ logger = get_logger(__name__)
 
 _VIDEO_TABLE_NAMES = frozenset({"video", "videos"})
 _RELEASE_TABLE_NAMES = frozenset({"release", "releases"})
-_SPOTIFY_TABLE_NAMES = frozenset({"spotify_auth", "spotify"})
 _TIKTOK_TABLE_NAMES = frozenset({"tiktok_auth", "tiktok"})
 _YT_TABLE_NAMES = frozenset({"yt_auth", "youtube_auth", "youtube", "yt"})
 _PLATFORM_ALIASES = {
@@ -37,8 +36,6 @@ _PLATFORM_ALIASES = {
     "TIKTOK": Platform.TIKTOK.value,
     "IG": Platform.INSTAGRAM.value,
     "INSTAGRAM": Platform.INSTAGRAM.value,
-    "SP": Platform.SPOTIFY.value,
-    "SPOTIFY": Platform.SPOTIFY.value,
 }
 
 
@@ -53,7 +50,6 @@ class MigrationSummary:
     release_parsed: int = 0
     release_valid: int = 0
     written_video: int = 0
-    written_spotify_auth: int = 0
     written_tiktok_auth: int = 0
     written_yt_auth: int = 0
     written_release: int = 0
@@ -108,10 +104,8 @@ def _classify_source_records(
     list[dict[str, object]],
     list[dict[str, object]],
     list[dict[str, object]],
-    list[dict[str, object]],
 ]:
     video_records: list[dict[str, object]] = []
-    spotify_records: list[dict[str, object]] = []
     tiktok_records: list[dict[str, object]] = []
     yt_records: list[dict[str, object]] = []
     release_records: list[dict[str, object]] = []
@@ -122,9 +116,6 @@ def _classify_source_records(
         for record in records:
             if lowered in _VIDEO_TABLE_NAMES:
                 video_records.append(record)
-                continue
-            if lowered in _SPOTIFY_TABLE_NAMES:
-                spotify_records.append(record)
                 continue
             if lowered in _TIKTOK_TABLE_NAMES:
                 tiktok_records.append(record)
@@ -150,7 +141,7 @@ def _classify_source_records(
                 continue
             leftovers.append(record)
 
-    return video_records, spotify_records, tiktok_records, yt_records, release_records, leftovers
+    return video_records, tiktok_records, yt_records, release_records, leftovers
 
 
 def _to_canonical_video(record: dict[str, object]) -> CanonicalVideo:
@@ -218,7 +209,6 @@ def _collect_destination_counts(video_db: Path, auth_db: Path, release_db: Path)
 
     auth_tinydb = TinyDB(str(auth_db))
     try:
-        counts["spotify_auth"] = len(auth_tinydb.table("spotify_auth"))
         counts["tiktok_auth"] = len(auth_tinydb.table("tiktok_auth"))
         counts["yt_auth"] = len(auth_tinydb.table("yt_auth"))
     finally:
@@ -245,16 +235,6 @@ def _parse_video_records(records: list[dict[str, object]], summary: MigrationSum
         except (ValidationError, TypeError, ValueError) as exc:
             summary.errors.append(f"Invalid video record: {exc}")
     return videos
-
-
-def _parse_spotify_auth_records(records: list[dict[str, object]], summary: MigrationSummary) -> list[SpotifyAuth]:
-    parsed_records: list[SpotifyAuth] = []
-    for record in records:
-        try:
-            parsed_records.append(SpotifyAuth.model_validate(record))
-        except ValidationError as exc:
-            summary.errors.append(f"Invalid spotify_auth record: {exc}")
-    return parsed_records
 
 
 def _parse_tiktok_auth_records(records: list[dict[str, object]], summary: MigrationSummary) -> list[TikTokAuth]:
@@ -304,7 +284,6 @@ def _apply_parsed_records(
     auth_db: Path,
     release_db: Path,
     videos: list[CanonicalVideo],
-    spotify_auths: list[SpotifyAuth],
     tiktok_auths: list[TikTokAuth],
     yt_auths: list[YtAuth],
     releases: list[Release],
@@ -322,10 +301,6 @@ def _apply_parsed_records(
         for video in videos:
             video_repo.upsert(video)
             summary.written_video += 1
-
-        for spotify_auth in spotify_auths:
-            auth_repo.add_or_update_spotify_auth(spotify_auth)
-            summary.written_spotify_auth += 1
 
         for tiktok_auth in tiktok_auths:
             auth_repo.add_or_update_tiktok_auth(tiktok_auth)
@@ -367,7 +342,6 @@ def migrate_legacy_data(
 
     (
         video_records,
-        spotify_records,
         tiktok_records,
         yt_records,
         release_records,
@@ -375,20 +349,19 @@ def migrate_legacy_data(
     ) = _classify_source_records(records_by_table)
 
     summary.video_parsed = len(video_records)
-    summary.auth_parsed = len(spotify_records) + len(tiktok_records) + len(yt_records)
+    summary.auth_parsed = len(tiktok_records) + len(yt_records)
     summary.release_parsed = len(release_records)
 
     if leftovers:
         summary.warnings.append(f"Unclassified records skipped: {len(leftovers)}")
 
     videos = _parse_video_records(video_records, summary)
-    spotify_auths = _parse_spotify_auth_records(spotify_records, summary)
     tiktok_auths = _parse_tiktok_auth_records(tiktok_records, summary)
     yt_auths = _parse_yt_auth_records(yt_records, summary)
     releases = _parse_release_records(release_records, summary)
 
     summary.video_valid = len(videos)
-    summary.auth_valid = len(spotify_auths) + len(tiktok_auths) + len(yt_auths)
+    summary.auth_valid = len(tiktok_auths) + len(yt_auths)
     summary.release_valid = len(releases)
 
     if not apply_changes:
@@ -401,7 +374,6 @@ def migrate_legacy_data(
         auth_db=auth_db,
         release_db=release_db,
         videos=videos,
-        spotify_auths=spotify_auths,
         tiktok_auths=tiktok_auths,
         yt_auths=yt_auths,
         releases=releases,
@@ -455,7 +427,6 @@ def main() -> None:
         release_parsed=summary.release_parsed,
         release_valid=summary.release_valid,
         written_video=summary.written_video,
-        written_spotify_auth=summary.written_spotify_auth,
         written_tiktok_auth=summary.written_tiktok_auth,
         written_yt_auth=summary.written_yt_auth,
         written_release=summary.written_release,

@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 class ReleaseRepository:
     """
-    Tracks published releases across platforms (YouTube, TikTok, Instagram, Spotify).
+    Tracks published releases across platforms (YouTube, TikTok, Instagram).
 
     Storage: TinyDB (JSON)
     Table: "release"
@@ -32,7 +32,7 @@ class ReleaseRepository:
         Retrieve the most recent release for a platform+client_id combination.
 
         Args:
-            platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM, SPOTIFY).
+            platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM).
             client_id: Client ID for the platform.
             release_kind: Optional release category for scoped idempotency.
 
@@ -126,7 +126,7 @@ class ReleaseRepository:
         Check if a video was released on a specific platform on the given date.
 
         Args:
-            platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM, SPOTIFY).
+            platform: Platform name (YOUTUBE, TIKTOK, INSTAGRAM).
             release_date: Date to check.
             release_kind: Optional release category for scoped idempotency.
 

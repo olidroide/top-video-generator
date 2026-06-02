@@ -16,7 +16,6 @@ if TYPE_CHECKING:
         Platform,
         PublishingResult,
         Release,
-        SpotifyAuth,
         TaskMethod,
         TaskRunState,
         TaskRunStatus,
@@ -88,13 +87,9 @@ class VideoMetadataReader(Protocol):
 
 
 class AuthCredentialStore(Protocol):
-    def get_spotify_auth(self, client_id: str) -> SpotifyAuth | None: ...
-
     def get_tiktok_auth(self, client_id: str) -> TikTokAuth | None: ...
 
     def get_yt_auth(self, client_id: str) -> YtAuth | None: ...
-
-    def add_or_update_spotify_auth(self, spotify_auth: SpotifyAuth) -> SpotifyAuth: ...
 
     def add_or_update_tiktok_auth(self, tiktok_auth: TikTokAuth) -> TikTokAuth: ...
 
@@ -133,12 +128,6 @@ class TaskRunStateReader(Protocol):
         task_method: TaskMethod,
         status: TaskRunStatus | None = None,
     ) -> TaskRunState | None: ...
-
-
-class SpotifyPlaylistUpdater(Protocol):
-    async def is_authorized(self) -> bool: ...
-
-    async def update_original_playlist(self, playlist_id: str, song_title_list: list[str]) -> bool: ...
 
 
 class VerticalVideoPipeline(Protocol):

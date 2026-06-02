@@ -22,14 +22,12 @@ class Platform(StrEnum):
     YOUTUBE = "YOUTUBE"
     TIKTOK = "TIKTOK"
     INSTAGRAM = "INSTAGRAM"
-    SPOTIFY = "SPOTIFY"
 
 
 class IntegrationPlatform(StrEnum):
     YOUTUBE = "youtube"
     TIKTOK = "tiktok"
     INSTAGRAM = "instagram"
-    SPOTIFY = "spotify"
 
 
 class DataSourceType(StrEnum):
@@ -120,15 +118,6 @@ class Channel(BaseModel):
 
     name: str | None = None
     channel_id: str | None = None
-
-
-class SpotifyAuth(BaseModel):
-    """Spotify OAuth2 credentials."""
-
-    token: str | None = None
-    refresh_token: str | None = None
-    client_id: str | None = None
-    scopes: list[str] | None = None
 
 
 class TikTokAuth(BaseModel):

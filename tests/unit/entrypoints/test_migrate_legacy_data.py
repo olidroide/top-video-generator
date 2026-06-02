@@ -22,15 +22,6 @@ def _seed_legacy_db(path: Path) -> None:
             }
         )
         db.table("video").insert({"title": "missing id"})
-
-        db.table("spotify_auth").insert(
-            {
-                "client_id": "spotify-client",
-                "token": "token-a",
-                "refresh_token": "refresh-a",
-                "scopes": ["playlist-modify-public"],
-            }
-        )
         db.table("yt_auth").insert(
             {
                 "client_id": "yt-client",
@@ -81,12 +72,11 @@ def test_migrate_legacy_data_dry_run_does_not_write_files(tmp_path: Path) -> Non
 
     assert summary.video_parsed == 2
     assert summary.video_valid == 1
-    assert summary.auth_parsed == 2
-    assert summary.auth_valid == 2
+    assert summary.auth_parsed == 1
+    assert summary.auth_valid == 1
     assert summary.release_parsed == 2
     assert summary.release_valid == 2
     assert summary.written_video == 0
-    assert summary.written_spotify_auth == 0
     assert summary.written_yt_auth == 0
     assert summary.written_release == 0
     assert summary.backup_path is None
@@ -126,12 +116,10 @@ def test_migrate_legacy_data_apply_writes_destinations_and_backup(tmp_path: Path
 
     auth_tinydb = TinyDB(str(auth_db))
     try:
-        spotify_rows = auth_tinydb.table("spotify_auth").all()
         yt_rows = auth_tinydb.table("yt_auth").all()
     finally:
         auth_tinydb.close()
 
-    assert len(spotify_rows) == 1
     assert len(yt_rows) == 1
 
     release_tinydb = TinyDB(str(release_db))
@@ -144,6 +132,5 @@ def test_migrate_legacy_data_apply_writes_destinations_and_backup(tmp_path: Path
     assert {row["platform"] for row in release_rows} == {"YOUTUBE"}
 
     assert summary.destination_counts["video"] == 1
-    assert summary.destination_counts["spotify_auth"] == 1
     assert summary.destination_counts["yt_auth"] == 1
     assert summary.destination_counts["release"] == 2

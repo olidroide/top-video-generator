@@ -12,21 +12,21 @@ from src.domain.ports import IntegrationChecker
 
 async def test_check_platform_connection_use_case_returns_checker_result() -> None:
     checker = create_autospec(IntegrationChecker, instance=True)
-    checker.platform_name = IntegrationPlatform.SPOTIFY
+    checker.platform_name = IntegrationPlatform.INSTAGRAM
     checker.check_connection = AsyncMock(
         return_value=IntegrationCheckResult(
-            platform=IntegrationPlatform.SPOTIFY,
+            platform=IntegrationPlatform.INSTAGRAM,
             status=IntegrationCheckStatus.OK,
             is_configured=True,
-            is_publish_target=False,
-            message="Spotify account access verified.",
+            is_publish_target=True,
+            message="Instagram session verified.",
         )
     )
     use_case = CheckPlatformConnectionUseCase(checkers=[checker])
 
-    result = await use_case.execute(CheckPlatformConnectionRequest(platform=IntegrationPlatform.SPOTIFY))
+    result = await use_case.execute(CheckPlatformConnectionRequest(platform=IntegrationPlatform.INSTAGRAM))
 
-    assert result.platform == IntegrationPlatform.SPOTIFY
+    assert result.platform == IntegrationPlatform.INSTAGRAM
     assert result.status == IntegrationCheckStatus.OK
     checker.check_connection.assert_awaited_once()
 

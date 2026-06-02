@@ -96,7 +96,7 @@ class GetAdminTaskStatusUseCase:
                     latest_error_by_method[task_method.value] = latest.error_message
 
         daily_publish_timestamps_by_platform: dict[str, float] = {}
-        for platform in (Platform.YOUTUBE, Platform.TIKTOK, Platform.INSTAGRAM, Platform.SPOTIFY):
+        for platform in (Platform.YOUTUBE, Platform.TIKTOK, Platform.INSTAGRAM):
             latest_release = self._release_store.get_latest_release(
                 platform=platform.value,
                 release_kind=ReleaseKind.DAILY_VERTICAL.value,
