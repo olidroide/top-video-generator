@@ -55,7 +55,12 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install system dependencies
-        run: sudo apt-get install -y ffmpeg imagemagick
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --fix-missing ffmpeg imagemagick || (
+            sudo apt-get update -o Acquire::Retries=3 &&
+            sudo apt-get install -y --fix-missing ffmpeg imagemagick
+          )
 
       - name: Set up Python
         run: uv python install 3.13
