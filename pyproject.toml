@@ -55,6 +55,7 @@ scheduler-run = "src.entrypoints.scheduler:main"
 [project.optional-dependencies]
 instagram = [
   "instagrapi>=2.9.0,<3.0.0",
+  "pyotp>=2.9.0,<3.0.0",
 ]
 tiktok = [
   "playwright>=1.58.0,<2.0.0",

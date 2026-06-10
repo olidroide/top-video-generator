@@ -32,7 +32,14 @@ def is_instagrapi_available() -> bool:
 
 
 def _import_instagram_client_types() -> tuple[
-    type[Any], type[Exception], type[Exception], type[Exception], type[Exception], type[Exception], type[Exception]
+    type[Any],
+    type[Exception],
+    type[Exception],
+    type[Exception],
+    type[Exception],
+    type[Exception],
+    type[Exception],
+    type[Any],
 ]:
     if not is_instagrapi_available():
         raise InstagramDependencyError(
@@ -41,6 +48,7 @@ def _import_instagram_client_types() -> tuple[
 
     instagrapi_module = importlib.import_module("instagrapi")
     exceptions_module = importlib.import_module("instagrapi.exceptions")
+    challenge_module = importlib.import_module("instagrapi.mixins.challenge")
     return (
         instagrapi_module.Client,
         exceptions_module.LoginRequired,
@@ -49,6 +57,7 @@ def _import_instagram_client_types() -> tuple[
         exceptions_module.PleaseWaitFewMinutes,
         exceptions_module.FeedbackRequired,
         exceptions_module.ChallengeRequired,
+        challenge_module.ChallengeChoice,
     )
 
 
@@ -104,6 +113,21 @@ def _configure_delay_range(instagram_client_instance: Any) -> None:
     logger.debug("instagram_client.delay_range_configured", min_delay=1, max_delay=3)
 
 
+def _configure_challenge_handler(instagram_client_instance: Any) -> None:
+    def challenge_code_handler(user: str, choice: Any) -> str:
+        channel = getattr(choice, "name", str(choice))
+        logger.warning(
+            "instagram_client.challenge_required",
+            username=user,
+            channel=channel,
+            message=f"Instagram requires verification via {channel}. Check your {channel.lower()} for a 6-digit code.",
+        )
+        return ""
+
+    instagram_client_instance.challenge_code_handler = challenge_code_handler
+    logger.debug("instagram_client.challenge_handler_configured")
+
+
 def _load_session(instagram_client_instance: Any, settings_file_path: Path) -> Any:
     try:
         if not settings_file_path.exists():
@@ -154,6 +178,7 @@ def _try_auth_with_session(
             username=username,
             password=password,
             settings_file_path=settings_file_path,
+            settings=settings,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("instagram_client.session_auth_failed", error=str(exc))
@@ -166,11 +191,16 @@ def _reauth_with_password(
     username: str | None,
     password: str | None,
     settings_file_path: Path,
+    settings: AppSettings | None = None,
 ) -> bool:
     """Re-authenticate with password after session expires."""
     try:
         logger.info("instagram_client.password_reauth_started")
-        instagram_client_instance.login(username, password)
+        verification_code = _get_totp_code(settings) if settings else None
+        if verification_code:
+            instagram_client_instance.login(username, password, verification_code=verification_code)
+        else:
+            instagram_client_instance.login(username, password)
         try:
             instagram_client_instance.dump_settings(settings_file_path)
         except Exception as exc:  # noqa: BLE001
@@ -192,6 +222,7 @@ def _try_auth_with_password(
     username: str | None,
     password: str | None,
     settings_file_path: Path,
+    settings: AppSettings | None = None,
 ) -> bool:
     """Authenticate with password when no valid session exists."""
     try:
@@ -200,7 +231,11 @@ def _try_auth_with_password(
             username=username,
             reason="session_unavailable_or_failed",
         )
-        result = instagram_client_instance.login(username, password)
+        verification_code = _get_totp_code(settings) if settings else None
+        if verification_code:
+            result = instagram_client_instance.login(username, password, verification_code=verification_code)
+        else:
+            result = instagram_client_instance.login(username, password)
         if result:
             try:
                 instagram_client_instance.dump_settings(settings_file_path)
@@ -227,6 +262,27 @@ def _try_auth_with_password(
         return False
 
 
+def _get_totp_code(settings: AppSettings) -> str | None:
+    """Generate TOTP code if seed is configured."""
+    totp_seed_secret = getattr(settings, "instagram_client_totp_seed", None)
+    if not totp_seed_secret:
+        return None
+
+    try:
+        import pyotp
+
+        seed = totp_seed_secret.get_secret_value()
+        code = pyotp.TOTP(seed).now()
+        logger.debug("instagram_client.totp_code_generated")
+        return code
+    except ImportError:
+        logger.warning("instagram_client.totp_pyotp_missing", message="pyotp not installed, TOTP disabled")
+        return None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("instagram_client.totp_generation_failed", error=str(exc))
+        return None
+
+
 def _get_client_with_fresh_login() -> Any:
     settings = get_app_settings()
     ssl_mode = _development_ssl_mode(settings)
@@ -239,10 +295,11 @@ def _get_client_with_fresh_login() -> Any:
     settings_session_file = settings.instagram_client_session_file or "instagram_session.json"
     settings_file_path = Path(settings_session_file)
 
-    instagrapi_client_lib, _, _, _, _, _, _ = _import_instagram_client_types()
+    instagrapi_client_lib, _, _, _, _, _, _, _ = _import_instagram_client_types()
     client = instagrapi_client_lib()
     _configure_optional_ssl_bypass_for_development(client, settings)
     _configure_delay_range(client)
+    _configure_challenge_handler(client)
 
     old_uuids = None
     if settings_file_path.exists():
@@ -259,7 +316,13 @@ def _get_client_with_fresh_login() -> Any:
         client.set_uuids(old_uuids)
 
     logger.info("instagram_client.fresh_login_started", ssl_mode=ssl_mode, preserved_uuids=bool(old_uuids))
-    client.login(username, password)
+
+    verification_code = _get_totp_code(settings)
+    if verification_code:
+        client.login(username, password, verification_code=verification_code)
+    else:
+        client.login(username, password)
+
     try:
         client.dump_settings(settings_file_path)
     except Exception as exc:  # noqa: BLE001
@@ -288,11 +351,12 @@ def _get_instagram_client() -> Any:
     settings_session_file = settings.instagram_client_session_file or "instagram_session.json"
     settings_file_path = Path(settings_session_file)
 
-    instagrapi_client_lib, login_required_exception, _, _, _, _, _ = _import_instagram_client_types()
+    instagrapi_client_lib, login_required_exception, _, _, _, _, _, _ = _import_instagram_client_types()
 
     instagram_client_instance = instagrapi_client_lib()
     _configure_optional_ssl_bypass_for_development(instagram_client_instance, settings)
     _configure_delay_range(instagram_client_instance)
+    _configure_challenge_handler(instagram_client_instance)
     logger.info(
         "instagram_client.client_initialized",
         ssl_mode=ssl_mode,
@@ -329,6 +393,7 @@ def _get_instagram_client() -> Any:
             username=username,
             password=password,
             settings_file_path=settings_file_path,
+            settings=settings,
         )
         logger.info(
             "instagram_client.password_auth_result",
