@@ -78,6 +78,7 @@ class AppSettings(BaseSettings):
     instagram_client_username: str | None = None
     instagram_client_password: SecretStr | None = None
     instagram_client_session_file: str | None = None
+    instagram_client_totp_seed: SecretStr | None = None
 
     db_timeseries_file: str = "db/db_timeseries.csv"
     db_video_file: str = "db/db_video.json"
