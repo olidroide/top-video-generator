@@ -31,7 +31,9 @@ def is_instagrapi_available() -> bool:
     return importlib.util.find_spec("instagrapi") is not None
 
 
-def _import_instagram_client_types() -> tuple[type[Any], type[Exception]]:
+def _import_instagram_client_types() -> tuple[
+    type[Any], type[Exception], type[Exception], type[Exception], type[Exception], type[Exception], type[Exception]
+]:
     if not is_instagrapi_available():
         raise InstagramDependencyError(
             "instagrapi is not installed. Install the 'instagram' optional dependency to enable Instagram publishing."
@@ -39,7 +41,15 @@ def _import_instagram_client_types() -> tuple[type[Any], type[Exception]]:
 
     instagrapi_module = importlib.import_module("instagrapi")
     exceptions_module = importlib.import_module("instagrapi.exceptions")
-    return instagrapi_module.Client, exceptions_module.LoginRequired
+    return (
+        instagrapi_module.Client,
+        exceptions_module.LoginRequired,
+        exceptions_module.ClipNotUpload,
+        exceptions_module.ClientThrottledError,
+        exceptions_module.PleaseWaitFewMinutes,
+        exceptions_module.FeedbackRequired,
+        exceptions_module.ChallengeRequired,
+    )
 
 
 def _configure_optional_certifi_for_development(settings: AppSettings) -> None:
@@ -87,6 +97,11 @@ def _configure_http_noise_reduction_for_development(settings: AppSettings) -> No
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logger.info("instagram_client.http_noise_reduction_enabled_for_development")
+
+
+def _configure_delay_range(instagram_client_instance: Any) -> None:
+    instagram_client_instance.delay_range = [1, 3]
+    logger.debug("instagram_client.delay_range_configured", min_delay=1, max_delay=3)
 
 
 def _load_session(instagram_client_instance: Any, settings_file_path: Path) -> Any:
@@ -212,6 +227,47 @@ def _try_auth_with_password(
         return False
 
 
+def _get_client_with_fresh_login() -> Any:
+    settings = get_app_settings()
+    ssl_mode = _development_ssl_mode(settings)
+    _configure_http_noise_reduction_for_development(settings)
+    _configure_optional_certifi_for_development(settings)
+
+    username = settings.instagram_client_username
+    password_secret = settings.instagram_client_password
+    password = password_secret.get_secret_value() if password_secret else None
+    settings_session_file = settings.instagram_client_session_file or "instagram_session.json"
+    settings_file_path = Path(settings_session_file)
+
+    instagrapi_client_lib, _, _, _, _, _, _ = _import_instagram_client_types()
+    client = instagrapi_client_lib()
+    _configure_optional_ssl_bypass_for_development(client, settings)
+    _configure_delay_range(client)
+
+    old_uuids = None
+    if settings_file_path.exists():
+        try:
+            old_session = client.load_settings(settings_file_path)
+            if old_session and "uuids" in old_session:
+                old_uuids = old_session["uuids"]
+                logger.debug("instagram_client.preserved_device_uuids", uuid_count=len(old_uuids))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("instagram_client.load_old_session_failed", error=str(exc))
+
+    if old_uuids:
+        client.set_settings({})
+        client.set_uuids(old_uuids)
+
+    logger.info("instagram_client.fresh_login_started", ssl_mode=ssl_mode, preserved_uuids=bool(old_uuids))
+    client.login(username, password)
+    try:
+        client.dump_settings(settings_file_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("instagram_client.session_persist_failed", error=str(exc))
+    logger.info("instagram_client.fresh_login_succeeded")
+    return client
+
+
 def _get_instagram_client() -> Any:
     settings = get_app_settings()
     ssl_mode = _development_ssl_mode(settings)
@@ -232,10 +288,11 @@ def _get_instagram_client() -> Any:
     settings_session_file = settings.instagram_client_session_file or "instagram_session.json"
     settings_file_path = Path(settings_session_file)
 
-    instagrapi_client_lib, login_required_exception = _import_instagram_client_types()
+    instagrapi_client_lib, login_required_exception, _, _, _, _, _ = _import_instagram_client_types()
 
     instagram_client_instance = instagrapi_client_lib()
     _configure_optional_ssl_bypass_for_development(instagram_client_instance, settings)
+    _configure_delay_range(instagram_client_instance)
     logger.info(
         "instagram_client.client_initialized",
         ssl_mode=ssl_mode,
@@ -318,27 +375,93 @@ class InstagramClient:
         try:
             logger.info("instagram_client.upload_started", video_path=video_path, caption=caption)
 
-            def _do_upload() -> Any:
+            def _do_upload_with_normal_client() -> Any:
                 client = _get_instagram_client()
                 return client.clip_upload(path=Path(video_path), caption=caption)
 
-            media = await asyncio.to_thread(_do_upload)
-
-            if media and hasattr(media, "pk"):
-                logger.info("instagram_client.upload_succeeded", media_id=str(media.pk))
-                return str(media.pk)
-            if media and hasattr(media, "id"):
-                logger.info("instagram_client.upload_succeeded", media_id=str(media.id))
-                return str(media.id)
-            logger.error("instagram_client.upload_missing_media_id")
-            if media is not None:
-                logger.debug("instagram_client.upload_returned_media", media=repr(media))
-            else:
-                logger.debug("instagram_client.upload_returned_none")
-            return None
+            media = await asyncio.to_thread(_do_upload_with_normal_client)
+            return self._extract_media_id(media)
         except Exception as exc:
+            error_type = self._classify_error(exc)
+            logger.warning("instagram_client.upload_error_classified", error_type=error_type, error=str(exc))
+
+            if error_type == "login_required":
+                return await self._retry_upload_with_fresh_login(video_path, caption)
+            if error_type == "throttled":
+                return await self._retry_upload_with_backoff(video_path, caption)
+            if error_type in ("please_wait", "feedback_required", "challenge_required"):
+                logger.exception("instagram_client.upload_blocked_no_retry", error=str(exc))
+                return None
             logger.exception("instagram_client.upload_failed", error=str(exc))
             return None
+
+    def _classify_error(self, exc: Exception) -> str:
+        exc_type = type(exc).__name__
+        error_msg = str(exc).lower()
+
+        type_mapping = {
+            "LoginRequired": "login_required",
+            "ClipNotUpload": "login_required",
+            "ClientThrottledError": "throttled",
+            "PleaseWaitFewMinutes": "please_wait",
+            "FeedbackRequired": "feedback_required",
+            "ChallengeRequired": "challenge_required",
+        }
+
+        if exc_type in type_mapping:
+            return type_mapping[exc_type]
+
+        msg_patterns = [
+            ("login_required", "login"),
+            ("throttled", "429", "throttl"),
+            ("please_wait", "please wait", "wait few minutes"),
+            ("feedback_required", "feedback"),
+            ("challenge_required", "challenge"),
+        ]
+
+        for error_class, *patterns in msg_patterns:
+            if any(pattern in error_msg for pattern in patterns):
+                return error_class
+
+        return "unknown"
+
+    async def _retry_upload_with_fresh_login(self, video_path: str, caption: str) -> str | None:
+        logger.warning("instagram_client.upload_session_expired_retrying")
+        try:
+            media = await asyncio.to_thread(self._upload_with_fresh_login, video_path, caption)
+            return self._extract_media_id(media)
+        except Exception as retry_exc:
+            logger.exception("instagram_client.upload_retry_failed", error=str(retry_exc))
+            return None
+
+    async def _retry_upload_with_backoff(self, video_path: str, caption: str) -> str | None:
+        backoff_seconds = 30
+        logger.warning("instagram_client.upload_throttled_backing_off", seconds=backoff_seconds)
+        await asyncio.sleep(backoff_seconds)
+        try:
+            media = await asyncio.to_thread(self._upload_with_fresh_login, video_path, caption)
+            return self._extract_media_id(media)
+        except Exception as retry_exc:
+            logger.exception("instagram_client.upload_backoff_retry_failed", error=str(retry_exc))
+            return None
+
+    def _upload_with_fresh_login(self, video_path: str, caption: str) -> Any:
+        client = _get_client_with_fresh_login()
+        return client.clip_upload(path=Path(video_path), caption=caption)
+
+    def _extract_media_id(self, media: Any) -> str | None:
+        if media and hasattr(media, "pk"):
+            logger.info("instagram_client.upload_succeeded", media_id=str(media.pk))
+            return str(media.pk)
+        if media and hasattr(media, "id"):
+            logger.info("instagram_client.upload_succeeded", media_id=str(media.id))
+            return str(media.id)
+        logger.error("instagram_client.upload_missing_media_id")
+        if media is not None:
+            logger.debug("instagram_client.upload_returned_media", media=repr(media))
+        else:
+            logger.debug("instagram_client.upload_returned_none")
+        return None
 
     async def get_media_info(self, media_pk: str) -> Any | None:
         try:
