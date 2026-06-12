@@ -125,15 +125,25 @@ class TestFetchDataUseCase:
         fetch_data_use_case: FetchDataUseCase,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Test that execute respects minimum time window."""
-        recent_time = datetime.now(UTC) - timedelta(hours=12)
+        """Test that execute is blocked when last fetch was earlier the same calendar day."""
+        frozen_now = datetime(2026, 6, 2, 15, 0, 0, tzinfo=UTC)
+
+        class _FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None) -> datetime:  # pragma: no cover - deterministic helper
+                return frozen_now if tz else frozen_now.replace(tzinfo=None)
+
+        monkeypatch.setattr("src.application.fetch_data_use_case.datetime", _FrozenDateTime)
+
+        # Same calendar day as frozen_now → should be blocked
+        same_day_time = datetime(2026, 6, 2, 9, 0, 0, tzinfo=UTC)
 
         class _TimeseriesRepoStub:
             def __init__(self, _path: str) -> None:
                 return
 
             def get_last_timestamp(self) -> datetime:
-                return recent_time
+                return same_day_time
 
             def get_video_points_by_date_range(self, _from_dt: datetime, _until_dt: datetime) -> list:
                 return []
@@ -226,8 +236,7 @@ class TestFetchDataUseCase:
         assert points_added[0].score == 1
         assert points_added[0].views_growth == canonical.views
 
-    @pytest.mark.asyncio
-    async def test_is_passed_enough_time_from_last_fetch_no_timestamp(self) -> None:
+    def test_is_passed_enough_time_from_last_fetch_no_timestamp(self) -> None:
         """Test time check when no timestamp exists."""
         use_case = FetchDataUseCase(
             youtube_source=create_autospec(YouTubeSource),
@@ -237,11 +246,10 @@ class TestFetchDataUseCase:
 
         use_case.timeseries_repo.get_last_timestamp.return_value = None
 
-        result = await use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
+        result = use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
         assert result is True
 
-    @pytest.mark.asyncio
-    async def test_is_passed_enough_time_from_last_fetch_sufficient_time(self) -> None:
+    def test_is_passed_enough_time_from_last_fetch_sufficient_time(self) -> None:
         """Test time check when sufficient time has passed."""
         use_case = FetchDataUseCase(
             youtube_source=create_autospec(YouTubeSource),
@@ -252,29 +260,36 @@ class TestFetchDataUseCase:
         past_time = datetime.now(UTC) - timedelta(days=2)
         use_case.timeseries_repo.get_last_timestamp.return_value = past_time
 
-        result = await use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
+        result = use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
         assert result is True
 
-    @pytest.mark.asyncio
-    async def test_is_passed_enough_time_from_last_fetch_insufficient_time(self) -> None:
-        """Test time check when insufficient time has passed."""
+    def test_is_passed_enough_time_from_last_fetch_insufficient_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test time check when last fetch was earlier the same calendar day."""
         use_case = FetchDataUseCase(
             youtube_source=create_autospec(YouTubeSource),
             video_repo=create_autospec(VideoRepository),
             timeseries_repo=create_autospec(TimeSeriesRepository),
         )
 
-        recent_time = datetime.now(UTC) - timedelta(hours=12)
-        use_case.timeseries_repo.get_last_timestamp.return_value = recent_time
+        frozen_now = datetime(2026, 6, 2, 15, 0, 0, tzinfo=UTC)
 
-        result = await use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
+        class _FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None) -> datetime:  # pragma: no cover - deterministic helper
+                return frozen_now if tz else frozen_now.replace(tzinfo=None)
+
+        monkeypatch.setattr("src.application.fetch_data_use_case.datetime", _FrozenDateTime)
+
+        # Same calendar day as frozen_now → not enough time
+        use_case.timeseries_repo.get_last_timestamp.return_value = datetime(2026, 6, 2, 9, 0, 0, tzinfo=UTC)
+
+        result = use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
         assert result is False
 
-    @pytest.mark.asyncio
-    async def test_is_passed_enough_time_from_last_fetch_boundary_23h59m53s(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Ensure less than 24h elapsed still blocks fetch, even if close to the boundary."""
+    def test_is_passed_enough_time_from_last_fetch_boundary_23h59m53s(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Fetch is allowed when last run was the previous calendar day, even if
+        fewer than 24 elapsed seconds have passed (e.g. 23h59m53s gap that spans
+        midnight). The fix uses calendar-day comparison instead of strict seconds."""
         use_case = FetchDataUseCase(
             youtube_source=create_autospec(YouTubeSource),
             video_repo=create_autospec(VideoRepository),
@@ -290,17 +305,15 @@ class TestFetchDataUseCase:
 
         monkeypatch.setattr("src.application.fetch_data_use_case.datetime", _FrozenDateTime)
 
+        # Last fetch was 2026-06-01 (previous calendar day) → fetch must be allowed
         use_case.timeseries_repo.get_last_timestamp.return_value = frozen_now - timedelta(
             hours=23, minutes=59, seconds=53
         )
 
-        result = await use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
-        assert result is False
+        result = use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
+        assert result is True
 
-    @pytest.mark.asyncio
-    async def test_is_passed_enough_time_from_last_fetch_boundary_exact_24h(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_is_passed_enough_time_from_last_fetch_boundary_exact_24h(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Ensure exactly 24h elapsed allows fetch."""
         use_case = FetchDataUseCase(
             youtube_source=create_autospec(YouTubeSource),
@@ -319,5 +332,5 @@ class TestFetchDataUseCase:
 
         use_case.timeseries_repo.get_last_timestamp.return_value = frozen_now - timedelta(days=1)
 
-        result = await use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
+        result = use_case._is_passed_enough_time_from_last_fetch(use_case.timeseries_repo, min_days=1)
         assert result is True

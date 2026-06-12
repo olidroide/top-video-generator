@@ -104,7 +104,11 @@ class ReleaseRepository:
 
     def add_or_update_release(self, release: Release) -> Release:
         """
-        Insert or update a release record (upsert).
+        Append a new release record, preserving full publish history.
+
+        Each successful publish inserts a new row so the complete publication
+        log is retained. Idempotency is enforced upstream via
+        ``is_release_at_date`` before this method is ever called.
 
         Args:
             release: Release to persist.
@@ -112,13 +116,8 @@ class ReleaseRepository:
         Returns:
             Persisted Release.
         """
-        platform = release.platform or ""
-        client_id = release.client_id or ""
-        release_kind = release.release_kind
         table = self._db.table(self._TABLE)
-        base_cond = (Query().platform == platform) & (Query().client_id == client_id)
-        kind_cond = Query().release_kind == release_kind
-        table.upsert(release.model_dump(), base_cond & kind_cond)
+        table.insert(release.model_dump())
         return release
 
     def is_release_at_date(self, platform: str, release_date: date, release_kind: str | None = None) -> bool:

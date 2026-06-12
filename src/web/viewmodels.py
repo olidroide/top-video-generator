@@ -656,8 +656,8 @@ def build_admin_publishers_view_model(
         oauth_configured = cfg["configured"]
         check_result = checks.get(slug)
 
-        latest_release = release_store.get_latest_release(platform=slug, release_kind="DAILY_VERTICAL")
-        if latest_release and latest_release.published_at:
+        latest_release = release_store.get_latest_release(platform=slug.upper(), release_kind="DAILY_VERTICAL")
+        if latest_release and latest_release.published_at is not None:
             ts = latest_release.published_at
             hours = (now.timestamp() - ts) / _SECONDS_PER_HOUR
             if hours < _HOURS_PER_DAY:
