@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_SECONDS_PER_DAY = 24 * 60 * 60
-
 
 class FetchDataUseCase:
     """Orchestrates fetching trending videos and storing timeseries data."""
@@ -53,7 +51,7 @@ class FetchDataUseCase:
         video_repo = VideoRepository(Path(db_video_file))
         timeseries_repo = TimeSeriesRepository(db_timeseries_file)
 
-        if not self.force_fetch and not await self._is_passed_enough_time_from_last_fetch(timeseries_repo):
+        if not self.force_fetch and not self._is_passed_enough_time_from_last_fetch(timeseries_repo):
             logger.debug("Not enough time elapsed since last fetch")
             return []
 
@@ -121,24 +119,27 @@ class FetchDataUseCase:
 
         return get_app_settings()
 
-    async def _is_passed_enough_time_from_last_fetch(
-        self, timeseries_repo: TimeSeriesRepository, min_days: int = 1
-    ) -> bool:
-        """Check if enough time has passed since last fetch."""
+    def _is_passed_enough_time_from_last_fetch(self, timeseries_repo: TimeSeriesRepository, min_days: int = 1) -> bool:
+        """Check if enough calendar days have passed since last fetch.
+
+        Uses calendar-day comparison instead of strict elapsed seconds to prevent
+        the scheduler from blocking a fetch when the previous run happened a few
+        seconds after the scheduled time (e.g. last fetch at 15:15, next run at
+        15:00 the following day = 23h45m < 86400s but clearly a new day).
+        """
         if not (last_timeseries_datetime := timeseries_repo.get_last_timestamp()):
             logger.debug("No timeseries found")
             return True
-        current_datetime = datetime.now(UTC)
-        delta_from_last_recollection = current_datetime - last_timeseries_datetime
-        min_elapsed_seconds = min_days * _SECONDS_PER_DAY
-        elapsed_seconds = delta_from_last_recollection.total_seconds()
+        current_date = datetime.now(UTC).date()
+        last_date = last_timeseries_datetime.date()
+        days_elapsed = (current_date - last_date).days
 
-        if not (is_enough_time := elapsed_seconds >= min_elapsed_seconds):
+        if not (is_enough_time := days_elapsed >= min_days):
             logger.debug(
                 "fetch_data.not_enough_time_elapsed",
                 min_days=min_days,
-                delta=str(delta_from_last_recollection),
-                elapsed_seconds=elapsed_seconds,
-                min_elapsed_seconds=min_elapsed_seconds,
+                last_date=str(last_date),
+                current_date=str(current_date),
+                days_elapsed=days_elapsed,
             )
         return is_enough_time

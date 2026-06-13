@@ -129,6 +129,13 @@ class TaskRunStateReader(Protocol):
         status: TaskRunStatus | None = None,
     ) -> TaskRunState | None: ...
 
+    def get_task_events_since(
+        self,
+        *,
+        task_method: TaskMethod,
+        since: datetime,
+    ) -> list[TaskRunState]: ...
+
 
 class VerticalVideoPipeline(Protocol):
     async def build_vertical_video(self, video_list: Sequence[Video]) -> str: ...

@@ -1,0 +1,12 @@
+<article class="timeline-card" role="listitem" aria-label="{{ task_name|title }} events">
+  <header class="timeline-card__head">
+    <h4 class="timeline-title">{{ task_name|title }} Events</h4>
+    <span class="timeline-count">{{ events|length }} events</span>
+  </header>
+
+  <ul class="timeline-events" role="list">
+    {% for event in events %}
+      {% include "admin/tasks/_timeline_event_item.html" %}
+    {% endfor %}
+  </ul>
+</article>

@@ -1,0 +1,29 @@
+{# Molecule: Async Content Container
+   Handles deferred loading states: loading, success, error, empty
+   See ADVANCED_PATTERNS.md for usage examples #}
+
+{% macro async_content(state='loading', error_message=None) -%}
+  {% if state == 'loading' %}
+    <div class="n-async-loading" role="status" aria-label="Loading">
+      <div class="n-skeleton-grid">
+        <div class="n-skeleton-card"></div>
+        <div class="n-skeleton-card"></div>
+        <div class="n-skeleton-card"></div>
+      </div>
+    </div>
+  {% elif state == 'success' %}
+    <div class="n-async-success">
+      {{ caller() if caller else '' }}
+    </div>
+  {% elif state == 'error' %}
+    <div class="n-async-error" role="alert">
+      <p class="n-async-error__message">
+        <span aria-hidden="true">⚠️</span> {{ error_message or 'Failed to load content' }}
+      </p>
+    </div>
+  {% elif state == 'empty' %}
+    <div class="n-async-empty" role="status">
+      <p class="n-async-empty__message">{{ error_message or 'No data available' }}</p>
+    </div>
+  {% endif %}
+{%- endmacro %}

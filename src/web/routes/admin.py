@@ -157,41 +157,13 @@ async def admin_logout(request: Request) -> Response:
 async def admin_connections(
     request: Request,
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
-    metrics_use_case: GetOperationalMetricsUseCaseDep,
-    task_status_use_case: GetAdminTaskStatusUseCaseDep,
-    publisher_state: PublisherStateDep,
-    release_repo: ReleaseRepositoryDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
-    timeseries_repo: TimeSeriesRepositoryDep,
 ) -> Response:
     if not settings.admin_password:
         return HTMLResponse(status_code=503, content="Admin password not configured")
     if not _is_admin(request):
         return RedirectResponse("/admin/login", status_code=HTTP_303_SEE_OTHER)
     ctx = await _build_connections_context(request, use_case, settings)
-    checks = {
-        "ffmpeg": ops_routes.check_ffmpeg(),
-        "templates": ops_routes.check_templates(settings),
-        "database": ops_routes.check_database(timeseries_repo),
-        "timeseries": ops_routes.check_timeseries_freshness(timeseries_repo),
-    }
-    overall_status = "healthy" if all(c["status"] == "ok" for c in checks.values()) else "unhealthy"
-    health: dict[str, Any] = {"status": overall_status, "version": get_app_version(), "checks": checks}
-    ctx["health_vm"] = build_admin_health_view_model(health)
-
-    from src.web.viewmodels import build_admin_tasks_view_model
-
-    tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
-    ctx["tasks"] = tasks_vm
-    ctx["metrics_vm"] = build_admin_metrics_view_model(metrics_use_case.execute().to_dict())
-
-    ctx["connectors"] = build_admin_data_connectors_view_model(settings=settings)
-    ctx["publishers"] = build_admin_publishers_view_model(
-        state_reader=publisher_state,
-        release_store=release_repo,
-        settings=settings,
-    )
-
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
 
@@ -282,14 +254,18 @@ async def admin_tasks_status(
         return HTMLResponse(status_code=403, content="")
 
     # Build view model from repos
-    from src.web.viewmodels import build_admin_tasks_view_model
+    from src.web.viewmodels import build_admin_tasks_view_model, format_timeline_timestamp
 
     tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
 
     return templates.TemplateResponse(
         request=request,
         name="admin/_tasks_status.html",
-        context={"request": request, "tasks": tasks_vm},
+        context={
+            "request": request,
+            "tasks": tasks_vm,
+            "format_timeline_timestamp": format_timeline_timestamp,
+        },
     )
 
 

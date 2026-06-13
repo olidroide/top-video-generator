@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 _SECONDS_PER_HOUR = 3600
 _HOURS_PER_DAY = 24
 _HOURS_PER_WEEK = _HOURS_PER_DAY * 7
+_SECONDS_PER_MINUTE = 60
+_MINUTES_PER_HOUR = 60
 
 
 @dataclass(frozen=True)
@@ -399,6 +401,8 @@ class AdminTasksPanelViewModel:
 
     tasks: tuple[AdminTaskViewModel, ...]
     any_running: bool = False
+    timeline_data: dict[str, list[dict]] = field(default_factory=dict)
+    """Timeline data for each task method over the last 7 days."""
 
 
 def build_time_label(timestamp: float | None) -> str:
@@ -428,6 +432,142 @@ def build_time_label(timestamp: float | None) -> str:
     # Return ISO 8601 format
     dt = datetime.fromtimestamp(timestamp, tz=UTC)
     return dt.isoformat(timespec="minutes")
+
+
+def format_timeline_timestamp(timestamp: float) -> str:
+    """
+    Format timestamp for timeline display.
+
+    Args:
+        timestamp: Unix timestamp
+
+    Returns:
+        - "HH:MM" format for recent events
+        - "MMM DD HH:MM" format for older events
+    """
+    from datetime import UTC, datetime
+
+    dt = datetime.fromtimestamp(timestamp, tz=UTC)
+    now = datetime.now(UTC)
+    hours_diff = (now - dt).total_seconds() / _SECONDS_PER_HOUR
+
+    if hours_diff < _HOURS_PER_DAY:
+        return dt.strftime("%H:%M")
+    return dt.strftime("%b %d %H:%M")
+
+
+def format_relative_time(timestamp: float, *, now_timestamp: float | None = None) -> str:
+    """Return compact relative time labels for timeline chips."""
+    from datetime import UTC, datetime
+
+    now_ts = now_timestamp if now_timestamp is not None else datetime.now(UTC).timestamp()
+    delta_seconds = max(0, int(now_ts - timestamp))
+
+    if delta_seconds < _SECONDS_PER_MINUTE:
+        return f"{delta_seconds}s ago"
+    if delta_seconds < _SECONDS_PER_HOUR:
+        return f"{delta_seconds // 60}m ago"
+    if delta_seconds < (_HOURS_PER_DAY * _SECONDS_PER_HOUR):
+        return f"{delta_seconds // _SECONDS_PER_HOUR}h ago"
+    return f"{delta_seconds // (_HOURS_PER_DAY * _SECONDS_PER_HOUR)}d ago"
+
+
+def _format_duration(seconds: float) -> str:
+    """Render compact duration labels (e.g., 42s, 3m 12s, 1h 05m)."""
+    total_seconds = max(0, int(seconds))
+    if total_seconds < _SECONDS_PER_MINUTE:
+        return f"{total_seconds}s"
+
+    minutes, rem_seconds = divmod(total_seconds, _SECONDS_PER_MINUTE)
+    if minutes < _MINUTES_PER_HOUR:
+        if rem_seconds == 0:
+            return f"{minutes}m"
+        return f"{minutes}m {rem_seconds:02d}s"
+
+    hours, rem_minutes = divmod(minutes, _MINUTES_PER_HOUR)
+    return f"{hours}h {rem_minutes:02d}m"
+
+
+def _summarize_error_message(error_message: str, *, max_chars: int = 90) -> str:
+    """Return a one-line summary suitable for <summary> content."""
+    normalized = " ".join(error_message.split())
+    if len(normalized) <= max_chars:
+        return normalized
+    return f"{normalized[: max_chars - 1].rstrip()}…"
+
+
+def _enrich_timeline_events(events: list[dict[str, Any]], *, now_timestamp: float) -> list[dict[str, Any]]:
+    """Decorate raw timeline events with UI-ready metadata."""
+    from datetime import UTC, datetime
+
+    enriched: list[dict[str, Any]] = []
+    run_index = 0
+    queued_started_at: float | None = None
+
+    for index, event in enumerate(events):
+        timestamp_value = event.get("timestamp")
+        if not isinstance(timestamp_value, int | float):
+            continue
+
+        timestamp = float(timestamp_value)
+        status = str(event.get("status") or "").lower()
+        error_message = str(event.get("error_message") or "") or None
+
+        if status == "queued":
+            run_index += 1
+            queued_started_at = timestamp
+        elif run_index == 0:
+            # Fallback for terminal events without a visible queued marker in range.
+            run_index = 1
+
+        run_label = f"Run {run_index:02d}"
+        duration_label: str | None = None
+        if status in {"success", "failed"} and queued_started_at is not None and timestamp >= queued_started_at:
+            duration_label = f"Duration {_format_duration(timestamp - queued_started_at)}"
+            queued_started_at = None
+        elif status == "queued":
+            has_terminal_before_next_queue = False
+            for future_event in events[index + 1 :]:
+                future_status = str(future_event.get("status") or "").lower()
+                if future_status == "queued":
+                    break
+                if future_status in {"success", "failed"}:
+                    has_terminal_before_next_queue = True
+                    break
+
+            if not has_terminal_before_next_queue:
+                duration_label = f"Running for {_format_duration(now_timestamp - timestamp)}"
+
+        timestamp_full = datetime.fromtimestamp(timestamp, tz=UTC).isoformat(timespec="seconds")
+        error_summary = _summarize_error_message(error_message) if error_message else None
+
+        enriched.append(
+            {
+                "status": status,
+                "status_label": status.upper() if status else "UNKNOWN",
+                "timestamp": timestamp,
+                "timestamp_label": format_timeline_timestamp(timestamp),
+                "timestamp_full": timestamp_full,
+                "relative_label": format_relative_time(timestamp, now_timestamp=now_timestamp),
+                "run_label": run_label,
+                "duration_label": duration_label,
+                "error_message": error_message,
+                "error_summary": error_summary,
+            }
+        )
+
+    return enriched
+
+
+def _build_timeline_view_data(raw_timeline_data: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """Transform raw task timeline data into richer UI events."""
+    from datetime import UTC, datetime
+
+    now_timestamp = datetime.now(UTC).timestamp()
+    return {
+        task_method: _enrich_timeline_events(events, now_timestamp=now_timestamp)
+        for task_method, events in raw_timeline_data.items()
+    }
 
 
 def build_admin_tasks_view_model(
@@ -566,6 +706,7 @@ def build_admin_tasks_view_model(
     return AdminTasksPanelViewModel(
         tasks=tuple(tasks),
         any_running=any(t.is_running for t in tasks),
+        timeline_data=_build_timeline_view_data(task_status.timeline_data),
     )
 
 
@@ -656,8 +797,8 @@ def build_admin_publishers_view_model(
         oauth_configured = cfg["configured"]
         check_result = checks.get(slug)
 
-        latest_release = release_store.get_latest_release(platform=slug, release_kind="DAILY_VERTICAL")
-        if latest_release and latest_release.published_at:
+        latest_release = release_store.get_latest_release(platform=slug.upper(), release_kind="DAILY_VERTICAL")
+        if latest_release and latest_release.published_at is not None:
             ts = latest_release.published_at
             hours = (now.timestamp() - ts) / _SECONDS_PER_HOUR
             if hours < _HOURS_PER_DAY:

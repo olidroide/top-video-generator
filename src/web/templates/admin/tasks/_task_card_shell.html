@@ -1,0 +1,33 @@
+<article
+  class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% elif not task.applicable %}platform-card--inactive{% endif %}"
+  role="listitem"
+>
+  <div class="card-head">
+    <h3 class="task-card__title">
+      {{ task.name }}
+      {% if task.is_running %}
+        <span class="task-running-badge">
+          <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
+        </span>
+      {% endif %}
+    </h3>
+  </div>
+
+  {% if inactive_only %}
+    <div class="card-body">
+      <p class="task-value task-value--muted">
+        <em>{{ task.warning_message }}</em>
+      </p>
+    </div>
+  {% else %}
+    {% include "admin/tasks/_task_card_meta.html" %}
+    {% include "admin/tasks/_task_card_warning.html" %}
+    {% include "admin/tasks/_task_card_logs_slot.html" %}
+
+    <div class="card-foot task-card__actions">
+      {% if actions_partial %}
+        {% include actions_partial %}
+      {% endif %}
+    </div>
+  {% endif %}
+</article>

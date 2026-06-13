@@ -34,6 +34,7 @@ from .renderer import VideoRenderer
 logger = get_logger(__name__)
 
 CLIP_TRIM_THRESHOLD_SECONDS = 50
+SUPPORTED_SOURCE_EXTENSIONS = {".mp4", ".webm", ".mkv", ".mov", ".m4v"}
 
 
 class VideoCompositor:
@@ -72,7 +73,16 @@ class VideoCompositor:
         if not video_id:
             raise ValueError("video_id is empty")
 
-        return pathlib.Path(self._video_yt_resources_folder) / f"{video_id}.mp4"
+        base_folder = pathlib.Path(self._video_yt_resources_folder)
+        preferred_mp4 = base_folder / f"{video_id}.mp4"
+        if preferred_mp4.exists():
+            return preferred_mp4
+
+        for candidate in sorted(base_folder.glob(f"{video_id}.*")):
+            if candidate.is_file() and candidate.suffix.lower() in SUPPORTED_SOURCE_EXTENSIONS:
+                return candidate
+
+        raise FileNotFoundError(f"Source video not found for ID '{video_id}'")
 
     async def post_process_video(self, video: Video) -> None:
         """Compose horizontal video (1920x1080) with overlays and render.

@@ -1,0 +1,5 @@
+{% if task.warning_message and task.older_than_24h %}
+  <div class="n-task-warning">
+    <span aria-hidden="true">⚠</span> {{ task.warning_message }}
+  </div>
+{% endif %}

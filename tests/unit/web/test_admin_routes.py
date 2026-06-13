@@ -155,6 +155,7 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
         )
 
         dashboard_response = client.get("/admin")
+        health_response = client.get("/admin/health/status")
 
     app.dependency_overrides.clear()
 
@@ -162,7 +163,9 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
     assert login_response.headers["location"] == "/admin"
     assert dashboard_response.status_code == 200
     assert "Data Connectors" in dashboard_response.text
-    assert f"v{get_app_version()}" in dashboard_response.text
+    # Version is now loaded via HTMX from /admin/health/status
+    assert health_response.status_code == 200
+    assert f"v{get_app_version()}" in health_response.text
 
 
 def test_admin_status_requires_authenticated_session() -> None:

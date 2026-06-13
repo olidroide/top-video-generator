@@ -1,0 +1,18 @@
+<section
+  class="tasks-timeline-section tasks-grid__fullrow"
+  role="region"
+  aria-labelledby="tasks-timeline-title"
+>
+  <div class="section-header tasks-timeline-header">
+    <h3 id="tasks-timeline-title" class="section-title">Task Execution Timeline</h3>
+    <span class="section-meta">Last 7 days · UTC</span>
+  </div>
+
+  <div class="timeline-grid" role="list" aria-label="Task timelines by method">
+    {% for task_name, events in tasks.timeline_data.items() %}
+      {% if events %}
+        {% include "admin/tasks/_timeline_card.html" %}
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
