@@ -1,0 +1,29 @@
+<button
+  class="n-btn"
+  hx-post="/admin/tasks/fetch/trigger?force=true"
+  hx-target="#tasks-feedback"
+  hx-swap="outerHTML"
+  hx-confirm="This task can take several minutes. Continue?"
+  title="Manually trigger fetch from YouTube and overwrite current snapshot"
+  aria-label="Trigger fetch task"
+>
+  {{ task.action_label }}
+  <span class="htmx-indicator" aria-hidden="true">
+    <i class="fas fa-circle-notch n-spin"></i>
+  </span>
+</button>
+{% if task.is_running %}
+  <button
+    class="n-btn n-btn--outline"
+    hx-get="/admin/tasks/logs/fetch"
+    hx-target="#task-logs-fetch-data"
+    hx-swap="innerHTML"
+    title="View live task logs"
+    aria-label="View task logs"
+  >
+    <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
+    <span class="htmx-indicator" aria-hidden="true">
+      <i class="fas fa-circle-notch n-spin"></i>
+    </span>
+  </button>
+{% endif %}

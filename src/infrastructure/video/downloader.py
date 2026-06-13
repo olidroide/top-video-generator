@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 
 class VideoDownloader:
     _SHORTS_MAX_DURATION_SECONDS = 60
+    _VIDEO_EXTENSIONS = (".mp4", ".webm", ".mkv", ".mov", ".m4v")
 
     def __init__(self) -> None:
         super().__init__()
@@ -23,8 +24,20 @@ class VideoDownloader:
         path.mkdir(parents=True, exist_ok=True)
         self.video_yt_resources_folder = str(path)
 
+    def _existing_video_path(self, video_id: str) -> pathlib.Path | None:
+        base_folder = pathlib.Path(self.video_yt_resources_folder)
+        preferred_mp4 = base_folder / f"{video_id}.mp4"
+        if preferred_mp4.exists():
+            return preferred_mp4
+
+        for candidate in sorted(base_folder.glob(f"{video_id}.*")):
+            if candidate.is_file() and candidate.suffix.lower() in self._VIDEO_EXTENSIONS:
+                return candidate
+
+        return None
+
     def is_already_downloaded(self, video: Video) -> bool:
-        return pathlib.Path(f"{self.video_yt_resources_folder}/{video.video_id}.mp4").exists()
+        return self._existing_video_path(video.video_id) is not None
 
     def _ydl_opts(self) -> dict[str, Any]:
         return {
@@ -63,19 +76,33 @@ class VideoDownloader:
     def _download_ranges() -> Callable[[dict[str, Any], Any], list[dict[str, int]]]:
         return lambda _info_dict, _ydl: [{"start_time": 30, "end_time": 90}]
 
+    def _classify_pending_videos(self, video_list: list[Video]) -> tuple[list[Video], list[str], list[str]]:
+        pending_videos: list[Video] = []
+        yt_urls: list[str] = []
+        yt_shorts_urls: list[str] = []
+
+        for video in video_list:
+            if self.is_already_downloaded(video):
+                continue
+
+            duration = video.duration
+            if duration is None:
+                continue
+
+            pending_videos.append(video)
+            if duration > self._SHORTS_MAX_DURATION_SECONDS:
+                yt_urls.append(video.yt_video_url)
+            else:
+                yt_shorts_urls.append(video.yt_video_url)
+
+        return pending_videos, yt_urls, yt_shorts_urls
+
+    def _missing_video_ids(self, pending_videos: list[Video]) -> list[str]:
+        return [video.video_id for video in pending_videos if not self.is_already_downloaded(video)]
+
     async def download_video(self, video_list: list[Video]) -> None:
-        yt_urls = [
-            video.yt_video_url
-            for video in video_list
-            if not self.is_already_downloaded(video)
-            and (video.duration is not None and video.duration > self._SHORTS_MAX_DURATION_SECONDS)
-        ]
-        yt_shorts_urls = [
-            video.yt_video_url
-            for video in video_list
-            if not self.is_already_downloaded(video)
-            and (video.duration is not None and video.duration <= self._SHORTS_MAX_DURATION_SECONDS)
-        ]
+        pending_videos, yt_urls, yt_shorts_urls = self._classify_pending_videos(video_list)
+
         if not yt_urls and not yt_shorts_urls:
             logger.info("youtube_downloader.no_videos_to_download")
             return
@@ -104,5 +131,10 @@ class VideoDownloader:
                     except Exception as exc:
                         logger.exception("youtube_downloader.download_short_failed", url=url, error=str(exc))
                         continue
+
+        missing_video_ids = self._missing_video_ids(pending_videos)
+        if missing_video_ids:
+            logger.error("youtube_downloader.missing_assets", video_ids=missing_video_ids)
+            raise RuntimeError(f"Missing downloaded assets for video IDs: {', '.join(missing_video_ids)}")
 
         logger.info("youtube_downloader.finished", long_videos=yt_urls, short_videos=yt_shorts_urls)

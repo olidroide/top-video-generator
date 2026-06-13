@@ -500,6 +500,23 @@ button.htmx-request .refresh-action__icon {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   }
 
+  .timeline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-event {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+
+  .timeline-event__meta {
+    gap: 0.28rem;
+  }
+
+  .timeline-error-preview {
+    white-space: normal;
+  }
+
   .task-card__actions > button,
   .task-card__actions > a[role="button"] {
     width: 100%;
@@ -690,6 +707,212 @@ article.platform-card--inactive {
   margin-top: 0.25rem;
   color: #D97706;
   font-style: italic;
+}
+
+/* ── Task timeline (last 7 days) ───────────────────── */
+.tasks-timeline-section {
+  border: 1px dashed var(--pico-muted-border-color);
+  padding: var(--pico-spacing);
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.tasks-timeline-header {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.timeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0.8rem;
+}
+
+.timeline-card {
+  border: 1px dashed var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  padding: 0.7rem;
+}
+
+.timeline-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.timeline-title {
+  margin: 0;
+  font-family: var(--n-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.timeline-count {
+  font-family: var(--n-font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+  white-space: nowrap;
+}
+
+.timeline-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.timeline-event {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 0.28rem;
+  padding-bottom: 0.42rem;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.3);
+}
+
+.timeline-event:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.timeline-timestamp {
+  font-family: var(--n-font-mono);
+  font-size: 0.61rem;
+  letter-spacing: 0.06em;
+  color: var(--pico-muted-color);
+}
+
+.timeline-event__head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.38rem;
+}
+
+.timeline-event__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.38rem 0.55rem;
+}
+
+.timeline-run-chip,
+.timeline-relative,
+.timeline-duration {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  font-family: var(--n-font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pico-muted-color);
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  padding: 0.08rem 0.3rem;
+}
+
+.timeline-duration {
+  color: #1D4ED8;
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.timeline-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  font-family: var(--n-font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px dashed transparent;
+  padding: 0.1rem 0.35rem;
+}
+
+.timeline-status-badge--success {
+  color: var(--n-green);
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.timeline-status-badge--queued {
+  color: #1D4ED8;
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.timeline-status-badge--failed {
+  color: var(--n-accent);
+  border-color: rgba(252, 43, 76, 0.35);
+  background: rgba(252, 43, 76, 0.12);
+}
+
+.timeline-error {
+  margin: 0;
+  font-family: var(--n-font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  color: var(--n-accent);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.timeline-error-block {
+  margin: 0;
+  border: 1px dashed rgba(252, 43, 76, 0.28);
+  background: rgba(252, 43, 76, 0.05);
+  padding: 0.24rem 0.35rem;
+}
+
+.timeline-error-block > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.timeline-error-block > summary::-webkit-details-marker {
+  display: none;
+}
+
+.timeline-error-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.timeline-error-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  font-family: var(--n-font-mono);
+  font-size: 0.49rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--n-accent);
+  border: 1px dashed rgba(252, 43, 76, 0.4);
+  padding: 0.08rem 0.25rem;
+}
+
+.timeline-error-preview {
+  font-family: var(--n-font-mono);
+  font-size: 0.54rem;
+  color: var(--n-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.timeline-error-block[open] .timeline-error {
+  margin-top: 0.3rem;
 }
 
 /* ── Task log panel (legacy, replaced by .n-log-viewer) */

@@ -94,7 +94,22 @@ def _make_video(video_id: str = "abc123") -> Video:
 
 
 class TestVideoCompositor:
+    def test_source_video_file_accepts_non_mp4_extension(self, tmp_path: Path) -> None:
+        asset_manager = _make_asset_manager(tmp_path)
+        yt_folder = Path(asset_manager.video_yt_resources_folder)
+        yt_folder.mkdir(parents=True, exist_ok=True)
+        source_file = yt_folder / "abc123.webm"
+        source_file.touch()
+
+        compositor = VideoCompositor(asset_manager, VideoRenderer(asset_manager))
+
+        resolved = compositor._source_video_file(_make_video())
+
+        assert resolved == source_file
+
     async def test_post_process_video_trims_middle_segment_for_long_clips(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / "yt").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "yt" / "abc123.mp4").touch()
         source_clip = _RecordedVideoClip(str(tmp_path / "yt" / "abc123.mp4"), duration=60.0)
         composite_clips: list[_RecordedCompositeClip] = []
 
@@ -121,6 +136,8 @@ class TestVideoCompositor:
     async def test_post_process_vertical_video_uses_top_alignment_and_short_trim(
         self, tmp_path: Path, monkeypatch
     ) -> None:
+        (tmp_path / "yt").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "yt" / "abc123.mp4").touch()
         source_clip = _RecordedVideoClip(str(tmp_path / "yt" / "abc123.mp4"), duration=12.0, width=1080, height=1920)
         composite_clips: list[_RecordedCompositeClip] = []
 

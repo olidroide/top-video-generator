@@ -1,0 +1,26 @@
+<li class="timeline-event" data-status="{{ event.status }}">
+  <div class="timeline-event__head">
+    <span class="timeline-status-badge timeline-status-badge--{{ event.status }}">{{ event.status_label }}</span>
+    <span class="timeline-run-chip">{{ event.run_label }}</span>
+  </div>
+
+  <div class="timeline-event__meta">
+    <time class="timeline-timestamp" datetime="{{ event.timestamp_full }}" title="{{ event.timestamp_full }} UTC">
+      {{ event.timestamp_label }}
+    </time>
+    <span class="timeline-relative">{{ event.relative_label }}</span>
+    {% if event.duration_label %}
+      <span class="timeline-duration">{{ event.duration_label }}</span>
+    {% endif %}
+  </div>
+
+  {% if event.error_message %}
+    <details class="timeline-error-block">
+      <summary class="timeline-error-summary">
+        <span class="timeline-error-badge">Error</span>
+        <span class="timeline-error-preview">{{ event.error_summary }}</span>
+      </summary>
+      <p class="timeline-error">{{ event.error_message }}</p>
+    </details>
+  {% endif %}
+</li>

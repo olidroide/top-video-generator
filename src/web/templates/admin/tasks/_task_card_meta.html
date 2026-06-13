@@ -1,0 +1,33 @@
+<div class="card-body task-card__stack">
+  <p class="task-value">
+    <span class="task-label">{{ run_label }}</span> {{ task.last_run_label }}
+  </p>
+  {% if task.last_status %}
+    <p class="task-value task-card__row">
+      <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
+    </p>
+  {% endif %}
+  {% if task.last_error %}
+    <p class="task-value task-value--error task-card__row">
+      <span class="task-label">Last Error:</span> {{ task.last_error }}
+    </p>
+  {% endif %}
+  {% if task.hours_since is not none %}
+    <p class="task-value task-value--muted task-card__row">
+      {{ task.hours_since }} hours ago
+    </p>
+  {% endif %}
+  <p class="task-value task-value--muted task-card__row">
+    <span class="task-label">Source:</span> {{ task.source }}
+    {% if source_note %}
+      <span class="task-source-note">{{ source_note }}</span>
+    {% endif %}
+  </p>
+  {% if task.detail_rows %}
+    <div class="task-detail-row">
+      {% for row in task.detail_rows %}
+        <p class="task-detail-text">{{ row }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

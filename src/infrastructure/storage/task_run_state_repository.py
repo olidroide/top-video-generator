@@ -11,7 +11,7 @@ from typing import IO, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from tinyflux import Point, TagQuery, TinyFlux
+from tinyflux import Point, TagQuery, TimeQuery, TinyFlux
 
 from src.domain.models import TaskMethod, TaskRunState, TaskRunStatus
 
@@ -74,6 +74,27 @@ class TaskRunStateRepository:
             event_at=cast("datetime", latest.time).astimezone(UTC),
             error_message=(latest.tags.get("error_message") or None),
         )
+
+    def get_task_events_since(
+        self,
+        *,
+        task_method: TaskMethod,
+        since: datetime,
+    ) -> list[TaskRunState]:
+        query = TagQuery().task_method == task_method.value
+        with self._acquire_lock():
+            points = self._db.search(query & (TimeQuery() > since))
+
+        filtered = [point for point in points if point.measurement == self._MEASUREMENT and point.time is not None]
+        return [
+            TaskRunState(
+                task_method=TaskMethod(point.tags.get("task_method") or task_method.value),
+                status=TaskRunStatus(point.tags.get("status") or TaskRunStatus.QUEUED.value),
+                event_at=cast("datetime", point.time).astimezone(UTC),
+                error_message=(point.tags.get("error_message") or None),
+            )
+            for point in sorted(filtered, key=lambda p: cast("datetime", p.time))
+        ]
 
     def close(self) -> None:
         self._db.close()

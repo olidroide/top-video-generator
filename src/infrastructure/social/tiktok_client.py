@@ -234,7 +234,7 @@ class TikTokClient:
         file_size_bytes = (await asyncio.to_thread(video_file_path.stat)).st_size
         chunk_size_64mb_in_bytes = 67108864
 
-        upload_data = []
+        upload_data: list[dict[str, int | bytes]] = []
         first_byte = 0
         last_byte = 0
         for current_chunk in self._file_sender(file_name=video_path, chunk_size_bytes=chunk_size_64mb_in_bytes):
@@ -277,7 +277,12 @@ class TikTokClient:
                 logger.error("publish_video_init missing upload_url", response=response_publish_video_init_url)
                 return None
             for video_data in upload_data:
-                content_length = str(len(video_data["data"]))
+                chunk_data = video_data["data"]
+                if not isinstance(chunk_data, bytes):
+                    logger.error("tiktok_upload.invalid_chunk_type", chunk_type=type(chunk_data).__name__)
+                    return None
+
+                content_length = str(len(chunk_data))
                 content_range = f"{video_data['first_byte']!s}-{video_data['last_byte']!s}/{video_data['total_byte']!s}"
                 content_video_headers = {
                     "Content-Type": "video/mp4",
@@ -287,7 +292,7 @@ class TikTokClient:
                 response = await client.put(
                     url=response_publish_video_init_url.data.upload_url,
                     headers=content_video_headers,
-                    data=video_data["data"],
+                    data=chunk_data,
                 )
                 logger.debug("response_chunk:", status=response.status)
 

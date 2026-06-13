@@ -8,320 +8,51 @@
       </div>
     {% endif %}
 
+  {% if tasks.timeline_data %}
+    {% include "admin/tasks/_timeline_section.html" %}
+  {% endif %}
+
   {% for task in tasks.tasks %}
     {# First card — always applicable (Fetch Data) #}
     {% if ns.first_card %}
-      <article
-        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
-        role="listitem"
-      >
-        <div class="card-head">
-          <h3 class="task-card__title">
-            {{ task.name }}
-            {% if task.is_running %}
-              <span class="task-running-badge">
-                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
-              </span>
-            {% endif %}
-          </h3>
-        </div>
-
-        <div class="card-body task-card__stack">
-          <p class="task-value">
-            <span class="task-label">Last Run:</span> {{ task.last_run_label }}
-          </p>
-          {% if task.last_status %}
-            <p class="task-value task-card__row">
-              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
-            </p>
-          {% endif %}
-          {% if task.last_error %}
-            <p class="task-value task-value--error task-card__row">
-              <span class="task-label">Last Error:</span> {{ task.last_error }}
-            </p>
-          {% endif %}
-          {% if task.hours_since is not none %}
-            <p class="task-value task-value--muted task-card__row">
-              {{ task.hours_since }} hours ago
-            </p>
-          {% endif %}
-          <p class="task-value task-value--muted task-card__row">
-            <span class="task-label">Source:</span> {{ task.source }}
-            {% if task.name == "Fetch Data" %}
-              <span class="task-source-note">Persisted from task execution events</span>
-            {% endif %}
-          </p>
-        </div>
-
-        {% if task.warning_message and task.older_than_24h %}
-          <div class="n-task-warning">
-            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
-          </div>
-        {% endif %}
-
-        {% if task.is_running %}
-          <div id="task-logs-{{ task.name|lower|replace(' ', '-') }}" class="task-card__logs-slot"></div>
-        {% endif %}
-
-        <div class="card-foot task-card__actions">
-          <button
-            class="n-btn"
-            hx-post="/admin/tasks/fetch/trigger?force=true"
-            hx-target="#tasks-feedback"
-            hx-swap="outerHTML"
-            hx-confirm="This task can take several minutes. Continue?"
-            title="Manually trigger fetch from YouTube and overwrite current snapshot"
-            aria-label="Trigger fetch task"
-          >
-            {{ task.action_label }}
-            <span class="htmx-indicator" aria-hidden="true">
-              <i class="fas fa-circle-notch n-spin"></i>
-            </span>
-          </button>
-          {% if task.is_running %}
-            <button
-              class="n-btn n-btn--outline"
-              hx-get="/admin/tasks/logs/fetch"
-              hx-target="#task-logs-fetch-data"
-              hx-swap="innerHTML"
-              title="View live task logs"
-              aria-label="View task logs"
-            >
-              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
-              <span class="htmx-indicator" aria-hidden="true">
-                <i class="fas fa-circle-notch n-spin"></i>
-              </span>
-            </button>
-          {% endif %}
-        </div>
-      </article>
+      {% set run_label = "Last Run:" %}
+      {% set source_note = "Persisted from task execution events" if task.name == "Fetch Data" else none %}
+      {% set logs_slot_id = "task-logs-" ~ task.name|lower|replace(' ', '-') %}
+      {% set actions_partial = "admin/tasks/_task_actions_fetch.html" %}
+      {% set inactive_only = false %}
+      {% include "admin/tasks/_task_card_shell.html" %}
 
       {% set ns.first_card = false %}
 
     {# Daily vertical card #}
     {% elif task.name == "Daily Vertical Videos" %}
-      <article
-        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
-        role="listitem"
-      >
-        <div class="card-head">
-          <h3 class="task-card__title">
-            {{ task.name }}
-            {% if task.is_running %}
-              <span class="task-running-badge">
-                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
-              </span>
-            {% endif %}
-          </h3>
-        </div>
-
-        <div class="card-body task-card__stack">
-          <p class="task-value">
-            <span class="task-label">Last Publish:</span> {{ task.last_run_label }}
-          </p>
-          {% if task.last_status %}
-            <p class="task-value task-card__row">
-              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
-            </p>
-          {% endif %}
-          {% if task.last_error %}
-            <p class="task-value task-value--error task-card__row">
-              <span class="task-label">Last Error:</span> {{ task.last_error }}
-            </p>
-          {% endif %}
-          {% if task.hours_since is not none %}
-            <p class="task-value task-value--muted task-card__row">
-              {{ task.hours_since }} hours ago
-            </p>
-          {% endif %}
-          <p class="task-value task-value--muted task-card__row">
-            <span class="task-label">Source:</span> {{ task.source }}
-            <span class="task-source-note">Persisted from task execution events</span>
-          </p>
-          {% if task.detail_rows %}
-            <div class="task-detail-row">
-              {% for row in task.detail_rows %}
-                <p class="task-detail-text">{{ row }}</p>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </div>
-
-        {% if task.warning_message and task.older_than_24h %}
-          <div class="n-task-warning">
-            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
-          </div>
-        {% endif %}
-
-        {% if task.is_running %}
-          <div id="task-logs-daily-vertical" class="task-card__logs-slot"></div>
-        {% endif %}
-
-        <div class="card-foot task-card__actions">
-          <button
-            class="n-btn"
-            hx-post="/admin/tasks/daily/trigger"
-            hx-target="#tasks-feedback"
-            hx-swap="outerHTML"
-            hx-confirm="This task can take several minutes. Continue?"
-            title="Manually trigger daily vertical publish"
-            aria-label="Trigger daily task"
-          >
-            {{ task.action_label }}
-            <span class="htmx-indicator" aria-hidden="true">
-              <i class="fas fa-circle-notch n-spin"></i>
-            </span>
-          </button>
-          <button
-            class="n-btn n-btn--outline"
-            hx-post="/admin/tasks/daily/trigger?publisher=instagram"
-            hx-target="#tasks-feedback"
-            hx-swap="outerHTML"
-            hx-confirm="This will retry Daily Vertical for Instagram only. Continue?"
-            title="Manually trigger daily vertical publish for Instagram"
-            aria-label="Trigger daily task for Instagram"
-          >
-            Trigger Instagram
-            <span class="htmx-indicator" aria-hidden="true">
-              <i class="fas fa-circle-notch n-spin"></i>
-            </span>
-          </button>
-          <p class="task-value task-value--muted">
-            <span class="task-source-note">Instagram only</span>
-          </p>
-          {% if task.is_running %}
-            <button
-              class="n-btn n-btn--outline"
-              hx-get="/admin/tasks/logs/daily"
-              hx-target="#task-logs-daily-vertical"
-              hx-swap="innerHTML"
-              title="View live task logs"
-              aria-label="View task logs"
-            >
-              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
-              <span class="htmx-indicator" aria-hidden="true">
-                <i class="fas fa-circle-notch n-spin"></i>
-              </span>
-            </button>
-          {% endif %}
-          <button
-            class="n-btn n-btn--outline"
-            hx-get="/admin/verify"
-            hx-target="#verification-results-container"
-            hx-swap="innerHTML"
-            hx-disabled-elt="this"
-            title="Verify latest published videos are live"
-            aria-label="Verify published videos"
-          >
-            <i class="fas fa-check-circle refresh-action__icon" aria-hidden="true"></i> Verify Published
-            <span class="htmx-indicator" aria-hidden="true">
-              <i class="fas fa-circle-notch n-spin"></i>
-            </span>
-          </button>
-        </div>
-      </article>
+      {% set run_label = "Last Publish:" %}
+      {% set source_note = "Persisted from task execution events" %}
+      {% set logs_slot_id = "task-logs-daily-vertical" %}
+      {% set actions_partial = "admin/tasks/_task_actions_daily.html" %}
+      {% set inactive_only = false %}
+      {% include "admin/tasks/_task_card_shell.html" %}
 
       {# Verification results container #}
       <div id="verification-results-container" class="tasks-grid__fullrow"></div>
 
     {# Weekly horizontal — YouTube only #}
     {% elif task.name == "Weekly Horizontal (YouTube)" %}
-      <article
-        class="platform-card task-card {% if task.is_running %}platform-card--running{% elif task.older_than_24h %}platform-card--stale{% endif %}"
-        role="listitem"
-      >
-        <div class="card-head">
-          <h3 class="task-card__title">
-            {{ task.name }}
-            {% if task.is_running %}
-              <span class="task-running-badge">
-                <i class="fas fa-circle-notch n-spin" aria-hidden="true"></i> Running
-              </span>
-            {% endif %}
-          </h3>
-        </div>
-
-        <div class="card-body task-card__stack">
-          <p class="task-value">
-            <span class="task-label">Last Publish:</span> {{ task.last_run_label }}
-          </p>
-          {% if task.last_status %}
-            <p class="task-value task-card__row">
-              <span class="task-label">Last Status:</span> {{ task.last_status|upper }}
-            </p>
-          {% endif %}
-          {% if task.last_error %}
-            <p class="task-value task-value--error task-card__row">
-              <span class="task-label">Last Error:</span> {{ task.last_error }}
-            </p>
-          {% endif %}
-          {% if task.hours_since is not none %}
-            <p class="task-value task-value--muted task-card__row">
-              {{ task.hours_since }} hours ago
-            </p>
-          {% endif %}
-          <p class="task-value task-value--muted task-card__row">
-            <span class="task-label">Source:</span> {{ task.source }}
-            <span class="task-source-note">YouTube-only, persisted from task execution events</span>
-          </p>
-        </div>
-
-        {% if task.warning_message and task.older_than_24h %}
-          <div class="n-task-warning">
-            <span aria-hidden="true">⚠</span> {{ task.warning_message }}
-          </div>
-        {% endif %}
-
-        {% if task.is_running %}
-          <div id="task-logs-weekly-horizontal" class="task-card__logs-slot"></div>
-        {% endif %}
-
-        <div class="card-foot task-card__actions">
-          <button
-            class="n-btn"
-            hx-post="/admin/tasks/weekly/trigger"
-            hx-target="#tasks-feedback"
-            hx-swap="outerHTML"
-            hx-confirm="This task can take several minutes. Continue?"
-            title="Manually trigger weekly horizontal publish"
-            aria-label="Trigger weekly task"
-          >
-            {{ task.action_label }}
-            <span class="htmx-indicator" aria-hidden="true">
-              <i class="fas fa-circle-notch n-spin"></i>
-            </span>
-          </button>
-          {% if task.is_running %}
-            <button
-              class="n-btn n-btn--outline"
-              hx-get="/admin/tasks/logs/weekly"
-              hx-target="#task-logs-weekly-horizontal"
-              hx-swap="innerHTML"
-              title="View live task logs"
-              aria-label="View task logs"
-            >
-              <i class="fas fa-file-alt" aria-hidden="true"></i> View Logs
-              <span class="htmx-indicator" aria-hidden="true">
-                <i class="fas fa-circle-notch n-spin"></i>
-              </span>
-            </button>
-          {% endif %}
-        </div>
-      </article>
+      {% set run_label = "Last Publish:" %}
+      {% set source_note = "YouTube-only, persisted from task execution events" %}
+      {% set logs_slot_id = "task-logs-weekly-horizontal" %}
+      {% set actions_partial = "admin/tasks/_task_actions_weekly.html" %}
+      {% set inactive_only = false %}
+      {% include "admin/tasks/_task_card_shell.html" %}
 
     {# Other platforms (not applicable) #}
     {% elif not task.applicable %}
-      <article class="platform-card task-card platform-card--inactive" role="listitem">
-        <div class="card-head">
-          <h3 class="task-card__title">{{ task.name }}</h3>
-        </div>
-
-        <div class="card-body">
-          <p class="task-value task-value--muted">
-            <em>{{ task.warning_message }}</em>
-          </p>
-        </div>
-      </article>
+      {% set run_label = "Last Run:" %}
+      {% set source_note = none %}
+      {% set logs_slot_id = none %}
+      {% set actions_partial = none %}
+      {% set inactive_only = true %}
+      {% include "admin/tasks/_task_card_shell.html" %}
 
     {% endif %}
   {% endfor %}

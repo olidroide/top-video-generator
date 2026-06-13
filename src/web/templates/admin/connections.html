@@ -1,16 +1,15 @@
 {% extends "admin/base.html" %}
 
+{% from "common/partials/async_content.html" import async_content %}
+
 {% block title %}Dashboard{% endblock %}
 
 {% block page_content %}
 
-  {# ── Data Connectors ── #}
+  {# ── Data Connectors (Lazy-loaded) ── #}
   <div class="section-header">
     <h2 class="section-title">Data Connectors</h2>
-
     <div class="section-actions">
-      <span class="section-meta">{{ connectors.connectors|length }} sources</span>
-
       <button
         class="n-btn n-btn--outline n-btn--compact"
         hx-get="/admin/connectors/status"
@@ -24,15 +23,21 @@
     </div>
   </div>
 
-  {% include "admin/_data_connectors_status.html" with context %}
+  <div
+    id="connectors-grid"
+    hx-get="/admin/connectors/status"
+    hx-trigger="load"
+    hx-swap="outerHTML"
+    role="region"
+    aria-label="Data connectors"
+  >
+    {{ async_content(state='loading') }}
+  </div>
 
-  {# ── Publishers ── #}
+  {# ── Publishers (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
     <h2 class="section-title">Publishers</h2>
-
     <div class="section-actions">
-      <span class="section-meta">{{ publishers.publishers|length }} platforms</span>
-
       <button
         class="n-btn n-btn--outline n-btn--compact"
         hx-get="/admin/publishers/status"
@@ -46,12 +51,20 @@
     </div>
   </div>
 
-  {% include "admin/_publishers_status.html" with context %}
+  <div
+    id="publishers-grid"
+    hx-get="/admin/publishers/status"
+    hx-trigger="load"
+    hx-swap="outerHTML"
+    role="region"
+    aria-label="Publishers"
+  >
+    {{ async_content(state='loading') }}
+  </div>
 
-  {# ── Task Operations ── #}
+  {# ── Task Operations (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
     <h2 class="section-title">Task Operations</h2>
-
     <button
       class="n-btn n-btn--outline n-btn--compact"
       hx-get="/admin/tasks/status"
@@ -64,12 +77,20 @@
     </button>
   </div>
 
-  {% include "admin/_tasks_status.html" with context %}
+  <div
+    id="tasks-grid"
+    hx-get="/admin/tasks/status"
+    hx-trigger="load"
+    hx-swap="outerHTML"
+    role="region"
+    aria-label="Tasks"
+  >
+    {{ async_content(state='loading') }}
+  </div>
 
-  {# ── Runtime Metrics ── #}
+  {# ── Runtime Metrics (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
     <h2 class="section-title">Runtime Metrics</h2>
-
     <button
       class="n-btn n-btn--outline n-btn--compact"
       hx-get="/admin/metrics/status"
@@ -82,26 +103,26 @@
     </button>
   </div>
 
-  {% include "admin/_metrics_status.html" with context %}
+  <div
+    id="metrics-grid"
+    hx-get="/admin/metrics/status"
+    hx-trigger="load"
+    hx-swap="outerHTML"
+    role="region"
+    aria-label="Metrics"
+  >
+    {{ async_content(state='loading') }}
+  </div>
 
-  {# ── System Health (footer) ── #}
+  {# ── System Health (Lazy-loaded, footer) ── #}
   <div class="admin-footer">
     <div class="section-header" style="border-bottom: none; margin-bottom: var(--pico-spacing);">
       <h2 class="section-title">System Health</h2>
-
-      <span class="section-meta">v{{ health_vm.version }} &nbsp;&#183;&nbsp;
-        {% if health_vm.overall == 'healthy' %}
-          <span style="color: var(--n-green);">HEALTHY</span>
-        {% else %}
-          <span style="color: var(--n-accent);">UNHEALTHY</span>
-        {% endif %}
-      </span>
-
       <button
         class="n-btn n-btn--outline n-btn--compact"
         hx-get="/admin/health/status"
-        hx-target="#health-checks"
-        hx-swap="outerHTML"
+        hx-target="#health-container"
+        hx-swap="innerHTML"
         aria-label="Refresh system health"
       >
         <i class="fas fa-sync-alt refresh-action__icon" aria-hidden="true"></i>
@@ -109,7 +130,16 @@
       </button>
     </div>
 
-    {% include "admin/_health_status.html" with context %}
+    <div
+      id="health-container"
+      hx-get="/admin/health/status"
+      hx-trigger="load"
+      hx-swap="innerHTML"
+      role="region"
+      aria-label="System health"
+    >
+      {{ async_content(state='loading') }}
+    </div>
   </div>
 
 {% endblock %}

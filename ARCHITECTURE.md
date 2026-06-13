@@ -163,6 +163,41 @@ flowchart LR
 - **Scope:** metadata should migrate to SQLite first if the current file-backed stores stop being operationally safe; time-series storage can be reassessed separately.
 - **Revisit trigger:** sustained concurrent writers, stronger backup/restore requirements, richer metadata queries, or long-retention analytics needs.
 
+## TinyFlux Analysis for TaskRunState
+
+**Why TinyFlux for task_status_use_case instead of TinyDB:**
+
+TaskRunState is time-series data (task execution history), not metadata. TinyFlux is optimized for append-heavy workloads with time-based queries, while TinyDB rewrites entire JSON files on each write.
+
+**TinyFlux advantages for task execution timeline:**
+
+1. **Append-only storage:** Each task event = 1 insert (O(1)), TinyDB rewrites entire JSON file each time.
+
+2. **Time-based queries:** `get_task_events_since(task_method=FETCH, since=7_days_ago)` uses TinyFlux's native time indexing.
+
+3. **Multiple measurements in single file:** Single `db_timeseries.csv` contains:
+   - "Video visualizations" (VideoPoint data)
+   - "Task run state" (TaskRunState data)
+   - "Operational metrics" (pipeline stage metrics)
+
+4. **Retention support:** OperationalMetricsRepository already uses `retention_days` parameter for automatic cleanup.
+
+**Current architecture:**
+- `TaskRunStateRepository.get_latest_task_event()` → fetches most recent event
+- `TaskRunStateRepository.get_task_events_since()` → fetches 7-day history for timeline
+- `GetAdminTaskStatusUseCase.execute()` → combines both for status + timeline
+
+**Timeline display:**
+Admin panel now shows 7-day task execution timeline with:
+- Timestamp (HH:MM for recent, MMM DD HH:MM for older)
+- Status (queued/success/failed)
+- Error messages (when available)
+
+**Future considerations:**
+- If concurrent writers appear → consider InfluxDB/TimescaleDB
+- If retention needs become complex → split into separate files
+- If metadata queries need indexing → migrate to SQLite
+
 ## ADR-002: Scoring in Domain Service
 
 - Scoring is canonically implemented in `src/domain/services/scoring_service.py`.

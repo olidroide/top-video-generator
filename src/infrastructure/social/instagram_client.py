@@ -109,8 +109,8 @@ def _configure_http_noise_reduction_for_development(settings: AppSettings) -> No
 
 
 def _configure_delay_range(instagram_client_instance: Any) -> None:
-    instagram_client_instance.delay_range = [1, 3]
-    logger.debug("instagram_client.delay_range_configured", min_delay=1, max_delay=3)
+    instagram_client_instance.delay_range = [2, 6]
+    logger.debug("instagram_client.delay_range_configured", min_delay=2, max_delay=6)
 
 
 def _configure_challenge_handler(instagram_client_instance: Any) -> None:
@@ -138,7 +138,7 @@ def _load_session(instagram_client_instance: Any, settings_file_path: Path) -> A
         session = instagram_client_instance.load_settings(settings_file_path)
         logger.info("instagram_client.session_load_succeeded", has_session=bool(session))
         return session
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - instagrapi may raise transport or schema errors
         logger.warning("instagram_client.session_load_failed", error=str(exc), session_file=str(settings_file_path))
         return None
 
@@ -180,7 +180,7 @@ def _try_auth_with_session(
             settings_file_path=settings_file_path,
             settings=settings,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - session probe failures are non-fatal for auth fallback
         logger.warning("instagram_client.session_auth_failed", error=str(exc))
         return False
 
@@ -203,7 +203,7 @@ def _reauth_with_password(
             instagram_client_instance.login(username, password)
         try:
             instagram_client_instance.dump_settings(settings_file_path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - persisting refreshed session should not fail login flow
             logger.warning(
                 "instagram_client.session_persist_failed",
                 error=str(exc),
@@ -211,7 +211,7 @@ def _reauth_with_password(
             )
         logger.info("instagram_client.password_reauth_succeeded", session_file=str(settings_file_path))
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - reauth should degrade to False instead of crashing caller
         logger.warning("instagram_client.password_reauth_failed", error=str(exc))
         return False
 
@@ -239,7 +239,7 @@ def _try_auth_with_password(
         if result:
             try:
                 instagram_client_instance.dump_settings(settings_file_path)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - persisting session is best-effort after successful login
                 logger.warning(
                     "instagram_client.session_persist_failed",
                     error=str(exc),
@@ -250,7 +250,7 @@ def _try_auth_with_password(
 
         logger.warning("instagram_client.password_login_returned_false")
         return False
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - SDK login may fail with heterogeneous exception types
         # Log the full exception type for diagnostics
         exc_type = type(exc).__name__
         logger.warning(
@@ -269,16 +269,17 @@ def _get_totp_code(settings: AppSettings) -> str | None:
         return None
 
     try:
-        import pyotp
+        if importlib.util.find_spec("pyotp") is None:
+            logger.warning("instagram_client.totp_pyotp_missing", message="pyotp not installed, TOTP disabled")
+            return None
+
+        pyotp_module = importlib.import_module("pyotp")
 
         seed = totp_seed_secret.get_secret_value()
-        code = pyotp.TOTP(seed).now()
+        code = pyotp_module.TOTP(seed).now()
         logger.debug("instagram_client.totp_code_generated")
         return code
-    except ImportError:
-        logger.warning("instagram_client.totp_pyotp_missing", message="pyotp not installed, TOTP disabled")
-        return None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - TOTP provider failures should disable TOTP gracefully
         logger.warning("instagram_client.totp_generation_failed", error=str(exc))
         return None
 
@@ -296,7 +297,12 @@ def _get_client_with_fresh_login() -> Any:
     settings_file_path = Path(settings_session_file)
 
     instagrapi_client_lib, _, _, _, _, _, _, _ = _import_instagram_client_types()
-    client = instagrapi_client_lib()
+    client = instagrapi_client_lib(
+        request_timeout=2,
+        session_retry_total=1,
+        session_retry_backoff_factor=1,
+        session_retry_statuses=[429, 502, 503, 504],
+    )
     _configure_optional_ssl_bypass_for_development(client, settings)
     _configure_delay_range(client)
     _configure_challenge_handler(client)
@@ -308,7 +314,7 @@ def _get_client_with_fresh_login() -> Any:
             if old_session and "uuids" in old_session:
                 old_uuids = old_session["uuids"]
                 logger.debug("instagram_client.preserved_device_uuids", uuid_count=len(old_uuids))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - legacy session shape may fail to load across SDK versions
             logger.warning("instagram_client.load_old_session_failed", error=str(exc))
 
     if old_uuids:
@@ -325,7 +331,7 @@ def _get_client_with_fresh_login() -> Any:
 
     try:
         client.dump_settings(settings_file_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - persisting fresh session is best-effort
         logger.warning("instagram_client.session_persist_failed", error=str(exc))
     logger.info("instagram_client.fresh_login_succeeded")
     return client
@@ -353,7 +359,12 @@ def _get_instagram_client() -> Any:
 
     instagrapi_client_lib, login_required_exception, _, _, _, _, _, _ = _import_instagram_client_types()
 
-    instagram_client_instance = instagrapi_client_lib()
+    instagram_client_instance = instagrapi_client_lib(
+        request_timeout=2,
+        session_retry_total=1,
+        session_retry_backoff_factor=1,
+        session_retry_statuses=[429, 502, 503, 504],
+    )
     _configure_optional_ssl_bypass_for_development(instagram_client_instance, settings)
     _configure_delay_range(instagram_client_instance)
     _configure_challenge_handler(instagram_client_instance)
@@ -427,6 +438,10 @@ def _get_instagram_client() -> Any:
 
 
 class InstagramClient:
+    _CLIP_CONFIGURE_MAX_RETRIES: int = 3
+    _CLIP_CONFIGURE_RETRY_BASE_SECONDS: int = 45
+    _CLIP_CONFIGURE_TIMEOUT_SECONDS: int = 20
+
     async def check_connection(self) -> bool:
         try:
             await asyncio.to_thread(_get_instagram_client)
@@ -440,11 +455,7 @@ class InstagramClient:
         try:
             logger.info("instagram_client.upload_started", video_path=video_path, caption=caption)
 
-            def _do_upload_with_normal_client() -> Any:
-                client = _get_instagram_client()
-                return client.clip_upload(path=Path(video_path), caption=caption)
-
-            media = await asyncio.to_thread(_do_upload_with_normal_client)
+            media = await self._upload_with_clip_configure_hardening(video_path, caption)
             return self._extract_media_id(media)
         except Exception as exc:
             error_type = self._classify_error(exc)
@@ -459,6 +470,48 @@ class InstagramClient:
                 return None
             logger.exception("instagram_client.upload_failed", error=str(exc))
             return None
+
+    async def _upload_with_clip_configure_hardening(self, video_path: str, caption: str) -> Any:
+        for attempt in range(self._CLIP_CONFIGURE_MAX_RETRIES):
+            try:
+                return await asyncio.to_thread(self._upload_with_normal_client, video_path, caption)
+            except Exception as exc:
+                is_transient = self._is_clip_configure_transient_error(exc)
+                last_attempt = attempt == self._CLIP_CONFIGURE_MAX_RETRIES - 1
+                if not is_transient or last_attempt:
+                    raise
+
+                wait_seconds = self._CLIP_CONFIGURE_RETRY_BASE_SECONDS * (attempt + 1)
+                logger.warning(
+                    "instagram_client.clip_configure_retry_scheduled",
+                    attempt=attempt + 1,
+                    max_attempts=self._CLIP_CONFIGURE_MAX_RETRIES,
+                    wait_seconds=wait_seconds,
+                    error=str(exc),
+                )
+                await asyncio.sleep(wait_seconds)
+
+        # Defensive fallback; loop always returns or raises.
+        raise RuntimeError("instagram clip upload exhausted retries")
+
+    @staticmethod
+    def _upload_with_normal_client(video_path: str, caption: str) -> Any:
+        client = _get_instagram_client()
+        return client.clip_upload(
+            path=Path(video_path),
+            caption=caption,
+            configure_timeout=InstagramClient._CLIP_CONFIGURE_TIMEOUT_SECONDS,
+        )
+
+    @staticmethod
+    def _is_clip_configure_transient_error(exc: Exception) -> bool:
+        error_msg = str(exc).lower()
+        patterns = (
+            "configure_to_clips",
+            "too many 500 error responses",
+            "transcode not finished yet",
+        )
+        return any(pattern in error_msg for pattern in patterns)
 
     def _classify_error(self, exc: Exception) -> str:
         exc_type = type(exc).__name__

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
     from src.domain.ports import ReleaseStore, TaskRunStateReader
 
 logger = get_logger(__name__)
+_RUNNING_WINDOW = timedelta(minutes=3)
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,9 @@ class TaskStatusResult:
 
     running_methods: set[str] = field(default_factory=set)
     """Methods whose latest status is 'queued' (task is currently executing)."""
+
+    timeline_data: dict[str, list[dict]] = field(default_factory=dict)
+    """Timeline data for each task method over the last 7 days."""
 
 
 class GetAdminTaskStatusUseCase:
@@ -86,32 +91,12 @@ class GetAdminTaskStatusUseCase:
             status=TaskRunStatus.SUCCESS,
         )
 
-        latest_status_by_method: dict[str, str] = {}
-        latest_error_by_method: dict[str, str] = {}
-        for task_method in TaskMethod:
-            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
-            if latest is not None:
-                latest_status_by_method[task_method.value] = latest.status.value
-                if latest.error_message:
-                    latest_error_by_method[task_method.value] = latest.error_message
-
-        daily_publish_timestamps_by_platform: dict[str, float] = {}
-        for platform in (Platform.YOUTUBE, Platform.TIKTOK, Platform.INSTAGRAM):
-            latest_release = self._release_store.get_latest_release(
-                platform=platform.value,
-                release_kind=ReleaseKind.DAILY_VERTICAL.value,
-            )
-            if latest_release is None or latest_release.published_at is None:
-                continue
-            daily_publish_timestamps_by_platform[platform.value] = latest_release.published_at
-
+        latest_status_by_method = self._build_latest_status_by_method()
+        latest_error_by_method = self._build_latest_error_by_method()
+        daily_publish_timestamps_by_platform = self._build_daily_publish_timestamps_by_platform()
         latest_artifact_path, latest_artifact_timestamp = self._resolve_latest_video_artifact()
-
-        running_methods: set[str] = set()
-        for task_method in TaskMethod:
-            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
-            if latest is not None and latest.status == TaskRunStatus.QUEUED:
-                running_methods.add(task_method.value)
+        running_methods = self._build_running_methods()
+        timeline_data = self._build_timeline_data()
 
         logger.debug(
             "admin_task_status_fetched",
@@ -123,6 +108,7 @@ class GetAdminTaskStatusUseCase:
             daily_publish_platforms=len(daily_publish_timestamps_by_platform),
             latest_video_artifact_path=latest_artifact_path,
             running_methods=list(running_methods),
+            timeline_events_count=sum(len(events) for events in timeline_data.values()),
         )
 
         return TaskStatusResult(
@@ -135,7 +121,88 @@ class GetAdminTaskStatusUseCase:
             latest_video_artifact_path=latest_artifact_path,
             latest_video_artifact_timestamp=latest_artifact_timestamp,
             running_methods=running_methods,
+            timeline_data=timeline_data,
         )
+
+    def _build_latest_status_by_method(self) -> dict[str, str]:
+        latest_status_by_method: dict[str, str] = {}
+        for task_method in TaskMethod:
+            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
+            if latest is not None:
+                latest_status_by_method[task_method.value] = latest.status.value
+        return latest_status_by_method
+
+    def _build_latest_error_by_method(self) -> dict[str, str]:
+        latest_error_by_method: dict[str, str] = {}
+        for task_method in TaskMethod:
+            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
+            if latest is not None and latest.error_message:
+                latest_error_by_method[task_method.value] = latest.error_message
+        return latest_error_by_method
+
+    def _build_daily_publish_timestamps_by_platform(self) -> dict[str, float]:
+        daily_publish_timestamps_by_platform: dict[str, float] = {}
+        for platform in (Platform.YOUTUBE, Platform.TIKTOK, Platform.INSTAGRAM):
+            latest_release = self._release_store.get_latest_release(
+                platform=platform.value,
+                release_kind=ReleaseKind.DAILY_VERTICAL.value,
+            )
+            if latest_release is None or latest_release.published_at is None:
+                continue
+            daily_publish_timestamps_by_platform[platform.value] = latest_release.published_at
+        return daily_publish_timestamps_by_platform
+
+    def _build_running_methods(self) -> set[str]:
+        running_methods: set[str] = set()
+        now = datetime.now(UTC)
+
+        for task_method in TaskMethod:
+            latest = self._task_run_state_reader.get_latest_task_event(task_method=task_method)
+            if latest is None or latest.status != TaskRunStatus.QUEUED:
+                continue
+            if now - latest.event_at > _RUNNING_WINDOW:
+                continue
+
+            latest_success = self._task_run_state_reader.get_latest_task_event(
+                task_method=task_method,
+                status=TaskRunStatus.SUCCESS,
+            )
+            latest_failed = self._task_run_state_reader.get_latest_task_event(
+                task_method=task_method,
+                status=TaskRunStatus.FAILED,
+            )
+
+            latest_terminal_at = None
+            if latest_success is not None:
+                latest_terminal_at = latest_success.event_at
+            if latest_failed is not None and (
+                latest_terminal_at is None or latest_failed.event_at > latest_terminal_at
+            ):
+                latest_terminal_at = latest_failed.event_at
+
+            if latest_terminal_at is None or latest_terminal_at < latest.event_at:
+                running_methods.add(task_method.value)
+
+        return running_methods
+
+    def _build_timeline_data(self) -> dict[str, list[dict]]:
+        timeline_data: dict[str, list[dict]] = {}
+        now = datetime.now(UTC)
+        seven_days_ago = now - timedelta(days=7)
+        for task_method in TaskMethod:
+            events = self._task_run_state_reader.get_task_events_since(
+                task_method=task_method,
+                since=seven_days_ago,
+            )
+            timeline_data[task_method.value] = [
+                {
+                    "status": event.status.value,
+                    "timestamp": event.event_at.timestamp(),
+                    "error_message": event.error_message,
+                }
+                for event in events
+            ]
+        return timeline_data
 
     def _resolve_latest_video_artifact(self) -> tuple[str | None, float | None]:
         root = Path(self._video_generated_folder)

@@ -1,13 +1,28 @@
 {#
   HTMX partial — returned by GET /admin/health/status
-  Replaces #health-checks via hx-swap="outerHTML"
+  Replaces inner HTML of #health-container via hx-swap="innerHTML"
+
+  Wrapped in async_content macro for consistent state handling.
 #}
-<div
-  id="health-checks"
-  class="platforms-grid"
-  role="list"
-  aria-label="System health checks"
->
+{% from "common/partials/async_content.html" import async_content %}
+
+{% call async_content(state='success') %}
+  <div class="section-meta-banner">
+    <span>v{{ health_vm.version }} &nbsp;&#183;&nbsp;
+      {% if health_vm.overall == 'healthy' %}
+        <span style="color: var(--n-green);">HEALTHY</span>
+      {% else %}
+        <span style="color: var(--n-accent);">UNHEALTHY</span>
+      {% endif %}
+    </span>
+  </div>
+
+  <div
+    id="health-checks"
+    class="platforms-grid"
+    role="list"
+    aria-label="System health checks"
+  >
   {% for check in health_vm.checks %}
     {% set dot_key = 'on' if check.status == 'ok' else 'off' %}
     {% set status_label = 'OK' if check.status == 'ok' else 'ERROR' %}
@@ -35,4 +50,5 @@
       </div>
     </article>
   {% endfor %}
-</div>
+  </div>
+{% endcall %}

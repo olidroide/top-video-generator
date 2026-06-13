@@ -17,7 +17,7 @@ class TestGetAdminTaskStatusUseCase:
 
     @pytest.fixture
     def task_run_state_reader_mock(self) -> MagicMock:
-        return MagicMock(spec=["get_latest_task_event"])
+        return MagicMock(spec=["get_latest_task_event", "get_task_events_since"])
 
     @pytest.fixture
     def release_store_mock(self) -> MagicMock:
@@ -83,12 +83,21 @@ class TestGetAdminTaskStatusUseCase:
                 event_at=now,
             ),
             (TaskMethod.WEEKLY, TaskRunStatus.QUEUED): None,
+            (TaskMethod.FETCH, TaskRunStatus.FAILED): None,
+            (TaskMethod.DAILY, TaskRunStatus.FAILED): None,
+            (TaskMethod.WEEKLY, TaskRunStatus.FAILED): TaskRunState(
+                task_method=TaskMethod.WEEKLY,
+                status=TaskRunStatus.FAILED,
+                event_at=now,
+                error_message="boom",
+            ),
         }
 
         def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
             return latest_map[(task_method, status)]
 
         task_run_state_reader_mock.get_latest_task_event.side_effect = _side_effect
+        task_run_state_reader_mock.get_task_events_since.return_value = []
         release_store_mock.get_latest_release.return_value = None
 
         result = use_case.execute()
@@ -111,6 +120,7 @@ class TestGetAdminTaskStatusUseCase:
         release_store_mock: MagicMock,
     ) -> None:
         task_run_state_reader_mock.get_latest_task_event.return_value = None
+        task_run_state_reader_mock.get_task_events_since.return_value = []
         release_store_mock.get_latest_release.return_value = None
 
         result = use_case.execute()
@@ -127,6 +137,7 @@ class TestGetAdminTaskStatusUseCase:
         tmp_path: Path,
     ) -> None:
         task_run_state_reader_mock.get_latest_task_event.return_value = None
+        task_run_state_reader_mock.get_task_events_since.return_value = []
 
         now = datetime.now(UTC).timestamp()
         release_store_mock.get_latest_release.side_effect = [
@@ -160,49 +171,101 @@ class TestGetAdminTaskStatusUseCase:
         task_run_state_reader_mock: MagicMock,
         release_store_mock: MagicMock,
     ) -> None:
-        now = datetime.now(UTC)
         from datetime import timedelta
 
+        now = datetime.now(UTC)
+
+        # fetch: QUEUED recent (no terminal after it) -> running
         fetch_queued = TaskRunState(
             task_method=TaskMethod.FETCH,
             status=TaskRunStatus.QUEUED,
-            event_at=now - timedelta(seconds=60),
+            event_at=now - timedelta(seconds=30),
+        )
+
+        # daily: QUEUED, but SUCCESS is MORE RECENT (newer timestamp) → NOT running
+        daily_queued = TaskRunState(
+            task_method=TaskMethod.DAILY,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(seconds=10),  # QUEUED 10 sec ago
         )
         daily_success = TaskRunState(
             task_method=TaskMethod.DAILY,
             status=TaskRunStatus.SUCCESS,
-            event_at=now - timedelta(minutes=1),
+            event_at=now - timedelta(seconds=5),  # SUCCESS 5 sec ago (NEWER)
         )
-        weekly_failed = TaskRunState(
+
+        # weekly: QUEUED recent (FAILED happened before QUEUED) -> running
+        weekly_queued = TaskRunState(
+            task_method=TaskMethod.WEEKLY,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(seconds=40),
+        )
+        weekly_failed_older = TaskRunState(
             task_method=TaskMethod.WEEKLY,
             status=TaskRunStatus.FAILED,
-            event_at=now - timedelta(hours=1),
-            error_message="boom",
+            event_at=now - timedelta(minutes=5),
+            error_message="older failure",
         )
 
         def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
             if status is None:
                 return {
                     TaskMethod.FETCH: fetch_queued,
-                    TaskMethod.DAILY: daily_success,
-                    TaskMethod.WEEKLY: weekly_failed,
+                    TaskMethod.DAILY: daily_queued,
+                    TaskMethod.WEEKLY: weekly_queued,
                 }[task_method]
             if status == TaskRunStatus.QUEUED:
-                return fetch_queued if task_method == TaskMethod.FETCH else None
+                return {
+                    TaskMethod.FETCH: fetch_queued,
+                    TaskMethod.DAILY: daily_queued,
+                    TaskMethod.WEEKLY: weekly_queued,
+                }[task_method]
             if status == TaskRunStatus.SUCCESS:
                 return daily_success if task_method == TaskMethod.DAILY else None
             if status == TaskRunStatus.FAILED:
-                return weekly_failed if task_method == TaskMethod.WEEKLY else None
+                return weekly_failed_older if task_method == TaskMethod.WEEKLY else None
             return None
 
         task_run_state_reader_mock.get_latest_task_event.side_effect = _side_effect
+        task_run_state_reader_mock.get_task_events_since.return_value = []
         release_store_mock.get_latest_release.return_value = None
 
         result = use_case.execute()
 
+        # fetch: Latest is QUEUED (no terminal after) -> running
         assert "fetch" in result.running_methods
+        # daily: Latest terminal (SUCCESS) is newer than QUEUED -> not running
         assert "daily" not in result.running_methods
-        assert "weekly" not in result.running_methods
+        # weekly: FAILED exists but is older than QUEUED -> still running
+        assert "weekly" in result.running_methods
+
+    def test_running_methods_ignores_stale_queued_events(
+        self,
+        use_case: GetAdminTaskStatusUseCase,
+        task_run_state_reader_mock: MagicMock,
+        release_store_mock: MagicMock,
+    ) -> None:
+        from datetime import timedelta
+
+        now = datetime.now(UTC)
+        stale_fetch_queued = TaskRunState(
+            task_method=TaskMethod.FETCH,
+            status=TaskRunStatus.QUEUED,
+            event_at=now - timedelta(minutes=10),
+        )
+
+        def _side_effect(*, task_method: TaskMethod, status: TaskRunStatus | None = None):
+            if task_method == TaskMethod.FETCH and status is None:
+                return stale_fetch_queued
+            return None
+
+        task_run_state_reader_mock.get_latest_task_event.side_effect = _side_effect
+        task_run_state_reader_mock.get_task_events_since.return_value = []
+        release_store_mock.get_latest_release.return_value = None
+
+        result = use_case.execute()
+
+        assert "fetch" not in result.running_methods
 
     def test_get_task_started_at_returns_queued_timestamp(
         self,

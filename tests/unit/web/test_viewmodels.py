@@ -143,6 +143,71 @@ def test_build_admin_tasks_view_model_no_running_tasks() -> None:
         assert task.is_running is False
 
 
+def test_build_admin_tasks_view_model_enriches_timeline_with_run_and_duration() -> None:
+    now = datetime.now(UTC)
+    queued_at = now - timedelta(minutes=3)
+    success_at = now - timedelta(minutes=1)
+
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        timeline_data={
+            "fetch": [
+                {
+                    "status": "queued",
+                    "timestamp": queued_at.timestamp(),
+                    "error_message": None,
+                },
+                {
+                    "status": "success",
+                    "timestamp": success_at.timestamp(),
+                    "error_message": None,
+                },
+            ]
+        },
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+    fetch_events = tasks_vm.timeline_data["fetch"]
+
+    assert len(fetch_events) == 2
+    assert fetch_events[0]["run_label"] == "Run 01"
+    assert fetch_events[1]["run_label"] == "Run 01"
+    assert fetch_events[1]["duration_label"] is not None
+    assert fetch_events[1]["duration_label"].startswith("Duration ")
+    assert fetch_events[0]["relative_label"].endswith("ago")
+    assert fetch_events[1]["status_label"] == "SUCCESS"
+
+
+def test_build_admin_tasks_view_model_enriches_timeline_error_summary() -> None:
+    now = datetime.now(UTC)
+    long_error = "Timeout contacting upstream service after multiple retries and partial response corruption in payload"
+
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        timeline_data={
+            "daily": [
+                {
+                    "status": "failed",
+                    "timestamp": (now - timedelta(minutes=5)).timestamp(),
+                    "error_message": long_error,
+                }
+            ]
+        },
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+    event = tasks_vm.timeline_data["daily"][0]
+
+    assert event["error_message"] == long_error
+    assert event["error_summary"] is not None
+    assert len(event["error_summary"]) <= 90
+    assert event["timestamp_full"].endswith("+00:00")
+
+
 # ---------------------------------------------------------------------------
 # build_admin_publishers_view_model — exhaustive coverage
 # ---------------------------------------------------------------------------
