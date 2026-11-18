@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     name: Build linux/amd64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -80,7 +80,7 @@ jobs:
 
   release-notes:
     name: Publish Release Notes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
 

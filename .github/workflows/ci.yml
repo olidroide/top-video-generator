@@ -9,7 +9,7 @@ on:
 jobs:
   quality:
     name: Format · Lint · Type · Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v6
@@ -42,7 +42,7 @@ jobs:
 
   slow-tests:
     name: Media Pipeline Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
