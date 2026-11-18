@@ -25,7 +25,7 @@
                 <div class="column right has-text-centered">
                     <h1 class="title is-4">Connect</h1>
                     <p class="description"></p>
-                    <form>
+                    <div>
                         <div class="field">
                             <div class="control">
                                 {% if vm.tiktok_credentials %}
@@ -34,9 +34,11 @@
                                     </a>
                                     <p class="detail-button"><i class="fas fa-check"></i> is connected</p>
                                 {% else %}
-                                    <label class="label has-text-left">TikTok cookies</label>
+                                    <label class="label has-text-left" for="tiktok-cookies">TikTok cookies</label>
                                     <form action="/tiktok_credentials/" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                         <textarea
+                                            id="tiktok-cookies"
                                             class="textarea"
                                             name="tiktok_cookies"
                                             placeholder="Paste TikTok cookies payload"
@@ -46,7 +48,7 @@
                                         <button class="button is-block is-primary is-fullwidth is-medium mt-2" type="submit">
                                             <i class="fab fa-tiktok"></i> Save TikTok Cookies
                                         </button>
-                                    </form>
+                                    </div>
                                 {% endif %}
                             </div>
                         </div>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from src.application.get_admin_task_status_use_case import TaskStatusResult
 from src.application.get_operational_metrics_use_case import OperationalMetricsResult
 from src.application.get_setup_page_use_case import GetSetupPageResult
+from src.application.trigger_admin_task_use_case import TriggerAdminTaskRequest, TriggerAdminTaskResult
 from src.config.settings import AppSettings
 from src.domain.models import IntegrationCheckResult, IntegrationCheckStatus, IntegrationPlatform
 from src.web.dependencies import (
@@ -19,9 +21,23 @@ from src.web.dependencies import (
     get_publisher_state_repo,
     get_release_repo,
     get_setup_page_use_case,
+    get_trigger_admin_task_use_case,
 )
 from src.web.main import create_app
 from src.web.state import get_app_version
+
+
+def _login_admin(client: TestClient) -> object:
+    login_page = client.get("/admin/login")
+    match = re.search(r'name="csrf_token" value="([^"]+)"', login_page.text)
+    assert match is not None
+    csrf_token = match.group(1)
+    client.headers["X-CSRF-Token"] = csrf_token
+    return client.post(
+        "/admin/login",
+        data={"password": "admin-pass", "csrf_token": csrf_token},
+        follow_redirects=False,
+    )
 
 
 @dataclass
@@ -30,6 +46,28 @@ class _SetupPageUseCaseStub:
 
     async def execute(self, _request: object) -> GetSetupPageResult:
         return self.result
+
+
+@dataclass
+class _TriggerAdminTaskUseCaseStub:
+    completed_methods: list[str]
+    failed_methods: list[tuple[str, str]]
+
+    def preflight(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
+        return TriggerAdminTaskResult(
+            queued=True,
+            message=f"Task '{request.task_method}' scheduled. Background execution will begin shortly.",
+            normalized_publisher=request.publisher.lower() if request.publisher else None,
+        )
+
+    def execute(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
+        return self.preflight(request)
+
+    def mark_completed(self, *, task_method: str) -> None:
+        self.completed_methods.append(task_method)
+
+    def mark_failed(self, *, task_method: str, error_message: str) -> None:
+        self.failed_methods.append((task_method, error_message))
 
 
 @dataclass
@@ -148,11 +186,7 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
 
         dashboard_response = client.get("/admin")
         health_response = client.get("/admin/health/status")
@@ -168,6 +202,57 @@ def test_admin_login_accepts_admin_password_env_var(monkeypatch) -> None:
     assert f"v{get_app_version()}" in health_response.text
 
 
+def test_admin_login_rejects_invalid_csrf(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        client.get("/admin/login")
+        response = client.post(
+            "/admin/login",
+            data={"password": "admin-pass", "csrf_token": "invalid"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 403
+    assert "Invalid or expired security token." in response.text
+
+
+def test_admin_logout_revokes_captured_session(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        login_response = _login_admin(client)
+        captured_session = client.cookies["session"]
+        logout_response = client.post(
+            "/admin/logout",
+            data={"csrf_token": client.headers["X-CSRF-Token"]},
+            follow_redirects=False,
+        )
+        client.cookies.set("session", captured_session)
+        replay_response = client.get("/admin", follow_redirects=False)
+
+    assert login_response.status_code == 303
+    assert logout_response.status_code == 303
+    assert replay_response.status_code == 303
+    assert replay_response.headers["location"] == "/admin/login"
+
+
+def test_admin_mutation_rejects_invalid_csrf(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        login_response = _login_admin(client)
+        client.headers["X-CSRF-Token"] = "invalid"
+        response = client.post("/admin/tasks/fetch/trigger")
+
+    assert login_response.status_code == 303
+    assert response.status_code == 403
+    assert "Invalid CSRF token" in response.text
+
+
 def test_admin_status_requires_authenticated_session() -> None:
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
 
@@ -175,6 +260,9 @@ def test_admin_status_requires_authenticated_session() -> None:
         response = client.get("/admin/connections/status")
 
     assert response.status_code == 403
+    assert 'id="admin-auth-error"' in response.text
+    assert "Admin session expired or required." in response.text
+    assert response.headers["hx-redirect"] == "/admin/login"
 
 
 def test_admin_status_returns_partial_when_authenticated(monkeypatch) -> None:
@@ -183,11 +271,7 @@ def test_admin_status_returns_partial_when_authenticated(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         status_response = client.get("/admin/connections/status")
 
     app.dependency_overrides.clear()
@@ -208,11 +292,7 @@ def test_admin_connection_check_returns_single_card_partial(monkeypatch) -> None
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         check_response = client.post("/admin/connections/instagram/check")
 
     app.dependency_overrides.clear()
@@ -220,6 +300,7 @@ def test_admin_connection_check_returns_single_card_partial(monkeypatch) -> None
     assert login_response.status_code == 303
     assert check_response.status_code == 200
     assert "platform-card-instagram" in check_response.text
+    assert 'hx-disabled-elt="this"' in check_response.text
     assert "VERIFIED" in check_response.text
     assert "Instagram session verified." in check_response.text
     rendered_label = next(label for label in ("Check publish", "Check connection") if label in check_response.text)
@@ -240,11 +321,7 @@ def test_admin_publisher_toggle_returns_single_publisher_card_fragment(monkeypat
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         toggle_response = client.post("/admin/publishers/instagram/toggle")
 
     app.dependency_overrides.clear()
@@ -278,11 +355,7 @@ def test_admin_publishers_status_shows_instagram_check_auth_button(monkeypatch) 
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.get("/admin/publishers/status")
 
     app.dependency_overrides.clear()
@@ -309,11 +382,7 @@ def test_admin_publisher_check_auth_returns_single_card_fragment(monkeypatch) ->
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/publishers/instagram/check-auth")
 
     app.dependency_overrides.clear()
@@ -334,11 +403,7 @@ def test_admin_publisher_toggle_returns_404_for_invalid_slug(monkeypatch) -> Non
     app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/publishers/not-a-slug/toggle")
 
     app.dependency_overrides.clear()
@@ -352,11 +417,7 @@ def test_admin_health_status_returns_partial(monkeypatch) -> None:
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         health_response = client.get("/admin/health/status")
 
     assert login_response.status_code == 303
@@ -389,11 +450,7 @@ def test_admin_metrics_status_returns_partial_when_authenticated(monkeypatch) ->
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.get("/admin/metrics/status")
 
     app.dependency_overrides.clear()
@@ -423,11 +480,7 @@ def test_admin_tasks_status_renders_retry_and_video_details(monkeypatch) -> None
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.get("/admin/tasks/status")
 
     app.dependency_overrides.clear()
@@ -449,11 +502,7 @@ def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         dashboard_response = client.get("/admin")
 
     app.dependency_overrides.clear()
@@ -479,11 +528,7 @@ def test_admin_task_trigger_returns_400_for_invalid_method(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/not-a-method/trigger")
 
     app.dependency_overrides.clear()
@@ -491,13 +536,16 @@ def test_admin_task_trigger_returns_400_for_invalid_method(monkeypatch) -> None:
     assert login_response.status_code == 303
     assert response.status_code == 400
     assert "Invalid task method" in response.text
+    assert 'id="tasks-feedback"' in response.text
+    assert 'role="alert"' in response.text
 
 
 def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeypatch) -> None:
     from src.entrypoints import fetch_data
 
-    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> None:
+    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> bool:
         del force_fetch
+        return True
 
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     monkeypatch.setattr(fetch_data, "main_async", _fake_fetch_main_async)
@@ -505,11 +553,7 @@ def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeyp
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/fetch/trigger")
 
     app.dependency_overrides.clear()
@@ -521,13 +565,39 @@ def test_admin_task_trigger_returns_feedback_fragment_when_authenticated(monkeyp
     assert "Task &#39;fetch&#39; scheduled. Background execution will begin shortly." in response.text
 
 
+def test_admin_task_trigger_records_failed_when_execution_lock_is_busy(monkeypatch) -> None:
+    from src.entrypoints import fetch_data
+
+    async def _busy_fetch_main_async(*, force_fetch: bool = False) -> bool:
+        del force_fetch
+        return False
+
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    monkeypatch.setattr(fetch_data, "main_async", _busy_fetch_main_async)
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    trigger_stub = _TriggerAdminTaskUseCaseStub(completed_methods=[], failed_methods=[])
+    app.dependency_overrides[get_trigger_admin_task_use_case] = lambda: trigger_stub
+
+    with TestClient(app) as client:
+        login_response = _login_admin(client)
+        response = client.post("/admin/tasks/fetch/trigger")
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert trigger_stub.completed_methods == []
+    assert trigger_stub.failed_methods == [
+        ("fetch", "Task skipped because the execution lock is busy."),
+    ]
+
+
 def test_admin_task_trigger_force_fetch_query_param(monkeypatch) -> None:
     from src.entrypoints import fetch_data
 
     received_force: list[bool] = []
 
-    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> None:
+    async def _fake_fetch_main_async(*, force_fetch: bool = False) -> bool:
         received_force.append(force_fetch)
+        return True
 
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     monkeypatch.setattr(fetch_data, "main_async", _fake_fetch_main_async)
@@ -535,11 +605,7 @@ def test_admin_task_trigger_force_fetch_query_param(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/fetch/trigger?force=true")
 
     app.dependency_overrides.clear()
@@ -565,11 +631,7 @@ def test_admin_connection_check_instagram_not_configured_aligns_card_state(monke
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         check_response = client.post("/admin/connections/instagram/check")
 
     app.dependency_overrides.clear()
@@ -599,11 +661,7 @@ def test_admin_tasks_status_shows_running_indicator(monkeypatch) -> None:
     )
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.get("/admin/tasks/status")
 
     app.dependency_overrides.clear()
@@ -612,6 +670,7 @@ def test_admin_tasks_status_shows_running_indicator(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Running" in response.text
     assert "Task running" in response.text
+    assert response.text.count('hx-disabled-elt="this"') >= 1
 
 
 def test_admin_task_logs_requires_authenticated_session() -> None:
@@ -628,11 +687,7 @@ def test_admin_task_logs_returns_404_for_invalid_method(monkeypatch) -> None:
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.get("/admin/tasks/logs/not-a-method")
 
     assert login_response.status_code == 303
@@ -644,8 +699,9 @@ def test_admin_task_trigger_daily_with_publisher_filter(monkeypatch) -> None:
 
     received_targets: list[tuple[str, ...] | None] = []
 
-    async def _fake_publish_vertical_main_async(*, target_publishers: tuple[str, ...] | None = None) -> None:
+    async def _fake_publish_vertical_main_async(*, target_publishers: tuple[str, ...] | None = None) -> bool:
         received_targets.append(target_publishers)
+        return True
 
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     monkeypatch.setattr(publish_vertical, "main_async", _fake_publish_vertical_main_async)
@@ -653,11 +709,7 @@ def test_admin_task_trigger_daily_with_publisher_filter(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/daily/trigger?publisher=instagram")
 
     app.dependency_overrides.clear()
@@ -673,11 +725,7 @@ def test_admin_task_trigger_daily_rejects_invalid_publisher(monkeypatch) -> None
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/daily/trigger?publisher=invalid")
 
     app.dependency_overrides.clear()
@@ -685,6 +733,8 @@ def test_admin_task_trigger_daily_rejects_invalid_publisher(monkeypatch) -> None
     assert login_response.status_code == 303
     assert response.status_code == 400
     assert "Invalid publisher" in response.text
+    assert 'id="tasks-feedback"' in response.text
+    assert 'role="alert"' in response.text
 
 
 def test_admin_task_trigger_fetch_rejects_publisher_filter(monkeypatch) -> None:
@@ -693,11 +743,7 @@ def test_admin_task_trigger_fetch_rejects_publisher_filter(monkeypatch) -> None:
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
 
     with TestClient(app) as client:
-        login_response = client.post(
-            "/admin/login",
-            data={"password": "admin-pass"},
-            follow_redirects=False,
-        )
+        login_response = _login_admin(client)
         response = client.post("/admin/tasks/fetch/trigger?publisher=instagram")
 
     app.dependency_overrides.clear()

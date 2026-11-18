@@ -49,9 +49,10 @@ async def test_main_async_delegates_to_fetch_data_use_case(monkeypatch: pytest.M
     monkeypatch.setattr(fetch_data_entrypoint, "TimeSeriesRepository", lambda _path: MagicMock())
     monkeypatch.setattr(fetch_data_entrypoint, "FetchDataUseCase", lambda *args, **kwargs: mock_use_case)
 
-    await fetch_data_entrypoint.main_async()
+    acquired = await fetch_data_entrypoint.main_async()
 
     mock_use_case.execute.assert_awaited_once()
+    assert acquired is True
 
 
 @pytest.mark.asyncio
@@ -70,9 +71,10 @@ async def test_main_async_handles_lock_not_acquired(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(fetch_data_entrypoint, "TimeSeriesRepository", lambda _path: MagicMock())
     monkeypatch.setattr(fetch_data_entrypoint, "FetchDataUseCase", lambda *args, **kwargs: mock_use_case)
 
-    await fetch_data_entrypoint.main_async()
+    acquired = await fetch_data_entrypoint.main_async()
 
     mock_use_case.execute.assert_not_awaited()
+    assert acquired is False
 
 
 @pytest.mark.asyncio

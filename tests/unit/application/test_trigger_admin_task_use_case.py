@@ -68,6 +68,43 @@ class TestTriggerAdminTaskUseCase:
 
         assert result.queued is True
 
+    def test_preflight_rejects_invalid_publisher_without_writing(
+        self,
+        use_case: TriggerAdminTaskUseCase,
+        writer_mock,
+    ) -> None:
+        request = TriggerAdminTaskRequest(task_method="daily", publisher="invalid")
+
+        result = use_case.execute(request)
+
+        assert result.queued is False
+        assert "Invalid publisher" in result.message
+        writer_mock.record_task_event.assert_not_called()
+
+    def test_preflight_rejects_publisher_for_fetch_without_writing(
+        self,
+        use_case: TriggerAdminTaskUseCase,
+        writer_mock,
+    ) -> None:
+        request = TriggerAdminTaskRequest(task_method="fetch", publisher="instagram")
+
+        result = use_case.execute(request)
+
+        assert result.queued is False
+        assert "only supported for daily task" in result.message
+        writer_mock.record_task_event.assert_not_called()
+
+    def test_preflight_normalizes_valid_publisher(
+        self,
+        use_case: TriggerAdminTaskUseCase,
+    ) -> None:
+        request = TriggerAdminTaskRequest(task_method="daily", publisher="Instagram")
+
+        result = use_case.preflight(request)
+
+        assert result.queued is True
+        assert result.normalized_publisher == "instagram"
+
     def test_mark_completed_records_success(self, use_case: TriggerAdminTaskUseCase, writer_mock) -> None:
         use_case.mark_completed(task_method="daily")
 

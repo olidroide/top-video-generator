@@ -26,11 +26,19 @@ if TYPE_CHECKING:
         YtAuth,
     )
 
-OAuthResultT = TypeVar("OAuthResultT", bound=BaseModel)
+OAuthResultT_co = TypeVar("OAuthResultT_co", bound=BaseModel, covariant=True)
 
 
 class TrendingVideoFetcher(Protocol):
-    async def fetch_trending_videos(self, *, region: str, date: str | None = None) -> list[CanonicalVideo]: ...
+    async def fetch_trending_videos(
+        self,
+        *,
+        region: str,
+        date: str | None = None,
+        limit: int = 50,
+    ) -> list[CanonicalVideo]: ...
+
+    async def fetch_video_details_batch(self, video_ids: list[str]) -> list[CanonicalVideo]: ...
 
 
 class VideoPublisher(Protocol):
@@ -68,6 +76,13 @@ class TimeSeriesReader(Protocol):
     def get_video_points_by_date_range(self, start_time: datetime, end_time: datetime) -> list[VideoPoint]: ...
 
 
+class TimeSeriesWriter(Protocol):
+    def add_video_point(self, video_point: VideoPoint) -> None: ...
+
+
+class TimeSeriesStore(TimeSeriesReader, TimeSeriesWriter, Protocol): ...
+
+
 class OperationalMetricsWriter(Protocol):
     def record_metric_event(
         self,
@@ -84,6 +99,13 @@ class OperationalMetricsReader(Protocol):
 
 class VideoMetadataReader(Protocol):
     def get(self, video_id: str) -> CanonicalVideo | None: ...
+
+
+class VideoMetadataWriter(Protocol):
+    def upsert(self, video: CanonicalVideo) -> None: ...
+
+
+class VideoMetadataStore(VideoMetadataReader, VideoMetadataWriter, Protocol): ...
 
 
 class AuthCredentialStore(Protocol):
@@ -169,10 +191,10 @@ class VideoPublishExecutor(Protocol):
     ) -> PublishingResult: ...
 
 
-class OAuthProvider(Protocol[OAuthResultT]):
-    async def step_1_get_authentication_url(self) -> str: ...
+class OAuthProvider(Protocol[OAuthResultT_co]):
+    async def step_1_get_authentication_url(self, state: str | None = None) -> str: ...
 
-    async def step_2_exchange_code_authentication(self, authorization_value: str) -> OAuthResultT: ...
+    async def step_2_exchange_code_authentication(self, authorization_value: str) -> OAuthResultT_co: ...
 
 
 class VideoVerifier(Protocol):
@@ -203,3 +225,6 @@ class PublisherStateReader(Protocol):
 
 class PublisherStateWriter(Protocol):
     def set_enabled(self, platform: str, enabled: bool) -> None: ...
+
+
+class PublisherStateStore(PublisherStateReader, PublisherStateWriter, Protocol): ...

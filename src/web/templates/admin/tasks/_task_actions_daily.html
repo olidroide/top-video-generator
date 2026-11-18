@@ -1,8 +1,10 @@
 <button
   class="n-btn"
   hx-post="/admin/tasks/daily/trigger"
+  hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
   hx-target="#tasks-feedback"
   hx-swap="outerHTML"
+  hx-disabled-elt="this"
   hx-confirm="This task can take several minutes. Continue?"
   title="Manually trigger daily vertical publish"
   aria-label="Trigger daily task"
@@ -15,8 +17,10 @@
 <button
   class="n-btn n-btn--outline"
   hx-post="/admin/tasks/daily/trigger?publisher=instagram"
+  hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
   hx-target="#tasks-feedback"
   hx-swap="outerHTML"
+  hx-disabled-elt="this"
   hx-confirm="This will retry Daily Vertical for Instagram only. Continue?"
   title="Manually trigger daily vertical publish for Instagram"
   aria-label="Trigger daily task for Instagram"

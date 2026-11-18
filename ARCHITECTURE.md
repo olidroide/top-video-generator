@@ -1,6 +1,6 @@
 # Top Video Generator — Architecture Decision Record
 
-## Status: Phase 1.5 complete (data resilience tests); Phase 2.1 skipped by YAGNI (single-instance); Phase 2.2 in progress (TaskRunState persistence) (2026-05-15)
+## Status: TaskRunState persistence implemented; P0 web secret/CSRF hardening and task-trigger preflight complete (2026-11-18)
 
 ## Overview
 
@@ -8,15 +8,19 @@ Automated pipeline: fetch YouTube trending music data → score and rank → ren
 
 The active architecture is hexagonal (Ports & Adapters). The migration away from legacy god files is largely complete.
 
-## Implementation Snapshot (2026-05)
+## Implementation Snapshot (2026-11-18)
 
 - Hexagonal split is operational across `domain`, `application`, `adapters`, `infrastructure`, and web/entrypoint delivery layers.
-- Canonical domain ports are stable and used by adapters (`TrendingVideoFetcher`, `TimeSeriesReader`, `VideoMetadataReader`, `AuthCredentialStore`, `ReleaseDateValidator`, `VideoPublisher`, `OAuthProvider[OAuthResultT]`).
-- Structured logging and centralized settings are consistently applied (`src/shared/logging.py`, `src/config/settings.py`).
-- Fetch-data orchestration now lives in `src/application/fetch_data_use_case.py` instead of the delivery entrypoint.
-- Concurrent publishing uses `asyncio.TaskGroup` with per-platform failure capture in application orchestration, including fault isolation in the vertical publish flow.
-- Integration connectivity checks are normalized at the application boundary so unexpected checker failures return stable `IntegrationCheckResult` values.
-- Remaining boundary debt is concentrated in route/template contract coverage, scheduler resilience, and final entrypoint wiring simplification.
+- `TaskRunState` persists in TinyFlux and feeds the split admin routes; task status and timeline are read through application use cases.
+- `RUNNING` is derived by `GetAdminTaskStatusUseCase`: the latest event must be `QUEUED`, no later terminal event may exist, and the event must fall within a 3-minute window. `RUNNING` is not persisted.
+- Operational metrics persist in TinyFlux and are exposed through `GET /admin/metrics/status`; `GET /metrics`, `POST /metrics/increment/*`, and related `/metrics` routes do not exist.
+- Production startup rejects missing or weak session secrets. Session cookies use production-safe flags and mutation routes enforce a session-bound CSRF token.
+- Task trigger preflight validates method, publisher, and force parameters before persisting `QUEUED`; invalid triggers return accessible HTML error fragments.
+- Expired admin sessions return a visible HTMX-compatible authentication fragment instead of an empty `403`.
+- Admin setup mutations are guarded by the admin session. YouTube OAuth callbacks validate a one-time state, and TikTok cookies are submitted from a valid non-nested form.
+- Logout revokes the captured server-known admin session identifier. Busy execution locks return a skipped result so task tracking cannot report false success.
+- Route thinness and the Jinja2/HTMX fragment contract remain priority P1 hardening areas.
+- TinyDB and TinyFlux remain retained; no SQLite/SQLAlchemy migration is active and no migration readiness gate is currently established.
 
 ## Current Layers
 
@@ -97,6 +101,21 @@ The web layer uses `Annotated[...]` + `Depends(...)` factories in `src/web/depen
 
 This pattern keeps web routes thin and improves deterministic test setup.
 
+### FastAPI As-Is / Target Contract
+
+| Concern | As-is | Target |
+|---|---|---|
+| Session secret | Production startup requires a strong `TOP_MUSIC_APP_SECRET_KEY`; development uses an ephemeral key. Session cookies use `Secure=True`, `HttpOnly=True`, `SameSite=lax`, and a 14-day maximum age in production. | Preserve validated startup configuration and production cookie flags. |
+| Session revocation | Successful admin login creates a server-known session identifier; logout revokes it and clears the complete session cookie state. | Preserve revocation across all admin routes and test captured-cookie replay. |
+| Mutation/CSRF | Admin login, logout, task, publisher, connection, and TikTok credential mutations require a session-bound CSRF token. | Keep CSRF validation on every future admin mutation and cover login, rejection, and valid submission paths. |
+| Task preflight | `TriggerAdminTaskUseCase.preflight()` validates method, publisher, and force parameters before route runner resolution. `QUEUED` is persisted only after successful preflight and runner resolution. | Preserve durable terminal events and reject duplicate/invalid dispatches before persistence. |
+| Execution lock | Fetch, vertical, and weekly entrypoints return whether the execution lock was acquired. Admin task tracking records `FAILED` for busy locks instead of `SUCCESS`. | Keep runner return values explicit and preserve lock-skipped semantics across entrypoints and tests. |
+| OAuth/setup | YouTube setup uses a one-time session state and the setup/TikTok mutation routes require admin authentication. | Preserve state mismatch/logout behavior and keep setup forms single and non-nested. |
+| Task status | `TaskRunState` is persisted in TinyFlux; the admin use case derives a 3-minute `RUNNING` window from the latest queued event and later terminal events. | Preserve durable terminal events and derived transient status; expose it through typed use cases, not route-local state. |
+| SSR/HTMX | Admin routes use Jinja2 SSR and HTMX partial templates. | Keep full-page SSR and fragment responses distinct, and preserve fragment IDs/status/labels under HTMX contract tests. |
+| Route thinness | Split route modules exist, with dependencies and use cases available through `src/web/dependencies.py`. | Keep route handlers limited to HTTP validation, use-case dispatch, redirects, and rendering; no business or storage orchestration in routes. |
+| Metrics routes | Operational metrics persist in TinyFlux and `GET /admin/metrics/status` exposes status. `/metrics` and `/metrics/increment/...` do not exist. | Preserve the admin metrics contract and add tests; do not document or rely on absent `/metrics` routes. |
+
 ## Async Publishing Pattern
 
 Publishing fan-out is coordinated with `asyncio.TaskGroup` in application/use-case flows.
@@ -160,7 +179,8 @@ flowchart LR
 
 - **Decision:** keep TinyDB + TinyFlux for the current phase.
 - **Rationale:** workload and deployment are still mostly single-instance.
-- **Scope:** metadata should migrate to SQLite first if the current file-backed stores stop being operationally safe; time-series storage can be reassessed separately.
+- **Scope:** retain both stores until a concrete, measured migration need is established. No SQLite/SQLAlchemy migration is active or currently justified by the reviewed evidence.
+- **Migration readiness:** no readiness gate is established, and the ADR-001 revisit triggers are not evidence that migration should begin now.
 - **Revisit trigger:** sustained concurrent writers, stronger backup/restore requirements, richer metadata queries, or long-retention analytics needs.
 
 ## TinyFlux Analysis for TaskRunState
@@ -196,7 +216,7 @@ Admin panel now shows 7-day task execution timeline with:
 **Future considerations:**
 - If concurrent writers appear → consider InfluxDB/TimescaleDB
 - If retention needs become complex → split into separate files
-- If metadata queries need indexing → migrate to SQLite
+- If metadata queries need indexing or SQLite migration readiness is demonstrated → reassess separately; no SQLite migration is active now
 
 ## ADR-002: Scoring in Domain Service
 
@@ -214,16 +234,17 @@ Admin panel now shows 7-day task execution timeline with:
   - Reads: accept null (fallback to DAILY_VERTICAL).
   - Writes: always include explicit `release_kind`.
   - Telemetry: track count of legacy null reads; fail-fast if residual legacy > threshold.
-- **Phase 2.1 (Day 30 in 30/60 roadmap):** Backfill null → inferred kind in `db_release.json`.
-- **Phase 2.2 (Day 60):** Reads no longer accept null; any remaining null → error + operator alert.
+- **Later backfill phase:** Backfill null → inferred kind in `db_release.json` after the legacy-read residual is understood.
+- **Later strict-read phase:** Stop accepting null reads; any remaining null → error + operator alert.
 - **Rationale:** Eliminates ambiguity in daily vs weekly idempotence checks; allows confident separation of publish workflows by schedule.
 ## Current Priority Debt
 
-1. **Task state persistence:** TaskRunState (task execution history) is being migrated to TinyFlux-backed persistence for admin observability and durable task status history.
-2. **Publisher factory refactoring:** Publish entrypoint dependency wiring is still repeated across `publish_video.py` and `publish_vertical.py`; needs extraction into shared factory.
-3. **Health dashboard:** Admin panel needs operational visibility (task history, storage integrity, recent errors). Requires TaskRunState persistence + metrics export (Fase 2.3-2.4).
-4. **Scheduler observability:** Scheduler job heartbeats and isolation reporting need hardening to detect stuck jobs and partial failures quickly.
-5. **Migration gating:** SQLite migration decision deferred to Fase 3 pending Fase 2.5 metrics (per-instance data volume, lock contention, timeseries query patterns).
+1. **P0 complete — Session and mutation security:** production rejects missing/weak session secrets, session cookies are hardened, and admin mutations validate session-bound CSRF tokens.
+2. **P0 complete — Task-trigger preflight:** method, publisher, and force parameters are validated before runner resolution and `QUEUED` persistence.
+3. **P1 — Web contract hardening:** keep split FastAPI routes thin and preserve Jinja2 SSR/HTMX fragment IDs, labels, statuses, redirects, and accessible auth/error feedback under route and fragment tests.
+4. **P1 — Operational visibility:** continue hardening task history, scheduler heartbeat/error reporting, storage integrity, and the persisted metrics/status contract.
+5. **P2 — Publisher and entrypoint wiring:** reduce repeated publish dependency wiring and keep application orchestration outside entrypoints and routes.
+6. **P2 — Storage migration readiness:** retain TinyDB/TinyFlux; collect concrete concurrency, backup, query, and retention evidence before considering SQLite/SQLAlchemy migration. No migration is currently active.
 
 ## Operational State Semantics
 
@@ -231,12 +252,12 @@ Canonical task states and their sources of truth:
 
 | State | Meaning | Source | Transition Trigger |
 |-------|---------|--------|--------------------|
-| **Requested** | Task triggered by operator; execution not started | TaskRunState.status | Immediate feedback from trigger endpoint |
-| **Running** | Job process executing (fetch_data / publish_vertical / publish_video) | TaskRunState.status + background job start signal | Background job heartbeat after acquired lock |
-| **Succeeded** | Job completed without error; artifacts written (videos, releases, metrics) | TaskRunState.status + background job completion signal | Background job exit code 0 + state persist |
-| **Failed** | Job terminated with error; may have partial artifacts | TaskRunState.status + background job error signal + error detail | Background job exception caught + state persist with error |
+| **QUEUED** | Operator dispatch was accepted; execution is not confirmed | Persisted `TaskRunState.status=QUEUED` | Trigger preflight accepts dispatch and persists the queued event |
+| **RUNNING** | Transient inferred state inside a 3-minute window | Derived by `GetAdminTaskStatusUseCase`; not persisted | Latest persisted event is `QUEUED`, no later terminal event exists, and the queued event is within 3 minutes |
+| **SUCCESS** | Job completed without error; terminal state | Persisted `TaskRunState.status=SUCCESS` | Job completion is persisted as a terminal event |
+| **FAILED** | Job terminated with error; terminal state | Persisted `TaskRunState.status=FAILED` | Job exception is persisted with error detail as a terminal event |
 
-**Key invariant:** "Requested" does NOT imply execution will start or succeed. Admin feedback must always clarify "acceptance of request" not "confirmation of success".
+**Key invariant:** `QUEUED` means only that a request was accepted, not that execution started or succeeded. Any later terminal `SUCCESS` or `FAILED` event supersedes an earlier `QUEUED` event. `RUNNING` is derived for recent queued events and disappears outside the 3-minute window.
 
 **Admin panel cards:**
 - Daily/Weekly task cards show last TaskRunState, not inferred timestamp.
@@ -244,116 +265,34 @@ Canonical task states and their sources of truth:
 
 ## Immediate Next Steps
 
-**Fase 2.1: YAGNI Decision (Closed)**
-- ✅ Single-machine, single-instance runtime confirmed.
-- ✅ TinyDB + TinyFlux retained (no atomic-storage migration in this phase).
-- ✅ Concurrency-hardening work deferred unless architecture shifts to multi-instance writers.
-
-**Fase 2.2-2.5: Structural Improvements**
-- 🔄 Persist `TaskRunState` (task execution history) to TinyFlux-backed repository and use it as source of truth for admin task status.
-- Extract publisher dependency factories from publish entrypoints
-- Build operational health dashboard (task history, error timeline, recent events)
-- Collect metrics for SQLite migration decision gate (Fase 3)
-
-**Validation:** All fases require `make pre-push-check` pass gate + new test coverage for behavior changes.
-
-## Next Steps: 30/60-Day Analysis Plan
-
-### 30-Day Window (Quick Wins, Low Effort — Can Run in Parallel)
-
-These three items are standalone and require no structural changes.
-
-**1. Complete LOW-Priority Settings Cleanup**
-- **Task:** Remove unused settings (`yt_search_language_code`, `yt_search_category_code` already verified active; identify truly unused ones).
-- **Scope:** Audit `src/config/settings.py` for deprecated toggles; confirm no lingering references.
-- **Effort:** 1 session (~1 hour)
-- **Validation:** All tests pass; `make pre-push-check` green; no new `reportUnusedVariable` warnings.
-- **Rationale:** Keeps settings file lean and operational awareness high.
-
-**2. Harden Web Route Error Messages**
-- **Task:** Ensure all adapter error exceptions map to actionable user-facing messages in route handlers instead of generic 500 responses.
-- **Examples:** Instagram login failure → "Invalid credentials"; TikTok cookie expired → "Refresh cookies".
-- **Scope:** Touch `src/web/routes/` handlers that wrap publish and platform-check use cases.
-- **Effort:** 2–3 sessions (~2 hours)
-- **Validation:** Manual web UX tests; existing route handler unit tests still pass.
-- **Rationale:** Improves operator debugging without distributed logging; single-server advantage.
-
-**3. Expand Integration Checker Error Resilience**
-- **Task:** Verify all integration checkers catch platform SDK exceptions and return stable `IntegrationCheckResult(status=ERROR, reason=...)` instead of uncaught stack traces.
-- **Current State:** Validate YouTube, Instagram, TikTok.
-- **Scope:** `src/adapters/{platform}_integration_checker.py` files.
-- **Effort:** 1 session (~45 minutes)
-- **Validation:** Raise SDK exceptions in test mocks; confirm use case returns ERROR, not exception.
-- **Rationale:** Admin panel reliability; single-server simplicity.
-
----
-
-### 60-Day Window (Structural Improvements, Medium Effort — Sequential, Depends on 30-Day Baseline)
-
-These three items unlock observability, resilience, and entrypoint simplification.
-
-**1. Scheduler Fault Isolation and Heartbeat Visibility**
-- **Task:** Extend scheduler job isolation so that one job failure (fetch_data exception, publish_video timeout, etc.) does not crash the scheduler process or suppress other scheduled tasks.
-- **Current State:** Jobs catch exceptions; scheduler main loop is stable. Missing: per-job heartbeat logging and lingering background task cleanup.
-- **Scope:** `src/entrypoints/scheduler.py` and job dispatch behavior.
-- **Effort:** 2–3 sessions (~3 hours)
-- **Validation:** Write integration tests that raise exceptions in use cases; confirm scheduler continues and logs heartbeat events.
-- **Rationale:** Single-server reliability; operator visibility without a message queue or centralized logging.
-- **Follow-up:** Scheduler logs will show which tasks are stuck; can then add timeouts or async cleanup in subsequent work.
-
-**2. Entrypoint Dependency Wiring Factory (Simplify Publish Entrypoints)**
-- **Task:** Consolidate shared dependency-building logic from publish entrypoints into a reusable factory.
-- **Current State:** `publish_vertical.py` already uses a context dataclass and factory functions; `publish_video.py` now delegates orchestration to `WeeklyHorizontalPublishUseCase` and should continue moving shared wiring into factory modules.
-- **Scope:** Consolidate repository and adapter initialization into `src/entrypoints/_publisher_factories.py` or similar module.
-- **Effort:** 2 sessions (~2 hours)
-- **Validation:** All entrypoint integration tests still pass; no behavior change; code is simpler to read.
-- **Rationale:** Sets template for future entrypoints; reduces copy-paste risk.
-
-**3. Optional Storage Safety (Graceful Degradation for TinyDB/TinyFlux Missing Data)**
-- **Task:** Verify that absence of historical data (e.g., empty timeseries on startup, corrupted release metadata) does not crash publish flows.
-- **Current State:** Scoring logic falls back to default ranking; publish logic validates metadata before use.
-- **Scope:** Unit tests for edge cases: no timeseries records, no video metadata, malformed JSON in storage.
-- **Effort:** 2 sessions (~2 hours)
-- **Validation:** Write parametrized tests for edge cases; confirm flows return graceful error results or skip safely.
-- **Rationale:** Operational resilience without a distributed store; important for single-server deployments where manual recovery is the only option.
-
----
-
-### Validation Strategy per Window
-
-**30-Day Checkpoints:**
-- Day 7: LOW settings audit complete and documented.
-- Day 14: Web route error messages updated; manual smoke test.
-- Day 21: Integration checker tests expanded; all checkers return stable results.
-- Day 30: All three items merged; `make pre-push-check` passes; no test regressions.
-
-**60-Day Checkpoints:**
-- Day 37: Scheduler isolation tests written; one failed job no longer cascades.
-- Day 44: Entrypoint factory extracted; both publish entrypoints refactored.
-- Day 51: Storage edge-case tests written and passing.
-- Day 60: All improvements merged; scheduler stability verified in test environment.
+1. **P0 complete production configuration:** production startup validates the session secret and cookie policy is production-safe.
+2. **P0 complete mutation protection:** admin POST mutations validate session-bound CSRF tokens.
+3. **P0 complete task dispatch preflight:** trigger parameters are validated and runner resolution occurs before `QUEUED` persistence.
+4. **P1 web contracts:** test Jinja2 SSR and HTMX partial IDs, status labels, redirects, auth/error fragments, and thin route dispatch.
+5. **P1 operational observability:** retain durable terminal `TaskRunState` events and harden task history, heartbeat/error reporting, and `/admin/metrics/status`.
+6. **P2 storage readiness:** keep TinyDB/TinyFlux; base any later migration decision on concrete concurrency, backup, query, retention, and write-latency evidence.
 
 ---
 
 ### Rationale: Why Not Prometheus/Broker/Metadata Migration?
 
-**Prometheus metrics backend:** Out of scope because metrics are currently in-memory counters observed via the `/metrics` route. A centralized backend requires infrastructure, scraping, and multi-instance complexity. Single-server logs provide sufficient observability until workload scales to multiple instances.
+**Prometheus metrics backend:** Out of scope because operational metrics are persisted in TinyFlux and exposed through `GET /admin/metrics/status`. The `/metrics` route and `/metrics/increment/...` routes do not exist, so they are not a current metrics contract. A centralized backend would add infrastructure and scraping complexity without evidence of current need.
 
 **Message broker (Redis/RabbitMQ):** Out of scope because all jobs are orchestrated from a single scheduler and entrypoints. Async retry, job queuing, and worker pools make sense only after distributed deployment. Current single-server design has no distributed failure modes that a broker would solve.
 
-**Migrating metadata off TinyDB:** Out of scope because the current file-backed approach remains operationally sound for a single-server workload. The revisit criteria in ADR-001 have not been met. A metadata migration is expensive, brings new failure modes (database connection, schema changes), and benefits only multi-instance deployments or very large datasets.
+**Migrating metadata off TinyDB or time-series data off TinyFlux:** Out of scope while the stores remain operational for the current workload and no migration readiness gate is established. ADR-001 revisit triggers are planning criteria, not proof that SQLite/SQLAlchemy or another migration is due now.
 
 ## Explicit Non-Goals
 
-- Prometheus or any centralized metrics backend is out of scope while the application continues to run on a single server.
+- Prometheus or any centralized metrics backend is out of scope while `GET /admin/metrics/status` remains the persisted metrics contract. `/metrics` is absent.
 - A message broker such as Redis or RabbitMQ is out of scope because the workload is not distributed across multiple machines.
-- Replacing TinyDB metadata storage is out of scope for the current project phase; the existing single-server file-backed approach is still acceptable for the current workload.
+- Replacing TinyDB or TinyFlux with SQLite/SQLAlchemy is not active or currently readiness-gated; retaining both file-backed stores is the current decision.
 
 ## Improvement Roadmap
 
 ### Storage Notes: Single-Server Persistence
 
-TinyDB and TinyFlux are still acceptable for the current single-server phase. The project does not currently plan a metadata migration because the operational model is intentionally simple and local.
+TinyDB and TinyFlux remain the retained stores for the current single-server phase. No SQLite/SQLAlchemy metadata or time-series migration is active or currently readiness-gated.
 
 #### Revisit Criteria
 
@@ -377,6 +316,12 @@ Enforced via pre-commit + ruff rules:
 4. **Pydantic v1 APIs:** `Optional[X]` instead of `X | None` in new code → linting failure.
 5. **Mutable default args:** `def func(x={}):` → linting failure.
 6. **Raw API dicts crossing boundaries:** Domain/application receive canonical models, not raw JSON/SDK objects → architectural review.
+7. **Development-secret fallback in production:** Do not rely on a fallback secret or weak session-cookie policy for deployed admin access; require validated configuration.
+8. **Task state fake success:** A trigger route must report accepted/rejected/preflight-failed semantics only. Do not claim `SUCCESS`, `FAILED`, or execution start unless that state is persisted or otherwise established.
+9. **Business logic in routes:** Route handlers must not implement scoring, ranking, persistence, task-state derivation, or publish orchestration; delegate to application use cases and typed dependencies.
+10. **HTMX fragment contract drift:** Do not change HTMX fragment IDs, status labels, or partial response behavior without matching route/fragment tests.
+11. **CSRF omission:** Do not add or change admin mutation endpoints without session-bound CSRF validation and login/invalid/valid submission tests.
+12. **Queued event without preflight:** Do not persist `QUEUED` until method, publisher, force, and runner resolution have passed validation.
 
 ## Minimum Validation for Architecture-Relevant Changes
 
@@ -386,3 +331,11 @@ Enforced via pre-commit + ruff rules:
 | Lint | `ruff check src/ tests/` |
 | Type check | `ty check src/ tests/` |
 | Tests | Run tests relevant to touched areas |
+| P0 secret startup | Production rejects missing/weak `TOP_MUSIC_APP_SECRET_KEY`; development uses an explicit or ephemeral app secret. |
+| P0 mutation CSRF | Admin login, logout, task, publisher, connection, and TikTok credential mutations reject missing/invalid CSRF tokens. |
+| P0 trigger preflight | Invalid method, publisher, or force is rejected before task-state persistence. Runner resolution happens before `QUEUED`. |
+| P0 auth/HTMX feedback | Expired admin sessions return a visible auth fragment and mutations expose repeat-click protection. |
+| P0 session revocation | Captured authenticated cookies replay after logout are rejected by the server-known session revocation set. |
+| P0 OAuth state | YouTube setup callbacks accept only the one-time state stored in the admin session. |
+| P0 setup form | TikTok setup uses one form with no nested form, valid label/textarea association, and admin/CSRF validation. |
+| P0 lock result | Busy execution locks return `False` and task tracking records `FAILED`, never `SUCCESS`. |

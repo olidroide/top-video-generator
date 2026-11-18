@@ -15,6 +15,7 @@ from src.application.publish_vertical_use_case import (
     PublishVerticalUseCase,
 )
 from src.config.settings import AppSettings, get_app_settings
+from src.infrastructure.integration_checker_registry import build_integration_checkers
 from src.infrastructure.publisher_registry import build_publishers
 from src.infrastructure.storage.operational_metrics_repository import OperationalMetricsRepository
 from src.infrastructure.storage.publisher_state_repository import PublisherStateRepository
@@ -105,13 +106,14 @@ def _normalize_target_publishers(target_publishers: tuple[str, ...] | None) -> s
     return normalized
 
 
-async def main_async(*, target_publishers: tuple[str, ...] | None = None) -> None:
+async def main_async(*, target_publishers: tuple[str, ...] | None = None) -> bool:
     target_platforms = _normalize_target_publishers(target_publishers)
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "vertical_publish") as execution_lock:
         if not execution_lock.acquired:
-            return
+            return False
         await _run_vertical_publish_job(settings, target_platforms=target_platforms)
+        return True
 
 
 async def _run_vertical_publish_job(settings: AppSettings, *, target_platforms: set[str] | None = None) -> None:
@@ -161,6 +163,7 @@ async def _run_vertical_publish_job(settings: AppSettings, *, target_platforms: 
                 instagram_client_id=settings.instagram_client_username,
                 tiktok_client_id=settings.tiktok_user_openid,
             ),
+            integration_checkers=build_integration_checkers(),
             yt_title_template=settings.yt_title_template,
             yt_description_template=settings.yt_description_template,
         )

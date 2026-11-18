@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from src.domain.ports import TaskRunStateWriter
 
 logger = get_logger(__name__)
+_VALID_TASK_METHODS = frozenset({"fetch", "daily", "weekly"})
+_VALID_PUBLISHER_SLUGS = frozenset({"youtube", "tiktok", "instagram"})
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,12 @@ class TriggerAdminTaskRequest:
     user_ip: str | None = None
     """Optional user IP for audit logging."""
 
+    force: bool = False
+    """Whether a fetch task should force snapshot regeneration."""
+
+    publisher: str | None = None
+    """Optional publisher filter for a daily vertical task."""
+
 
 @dataclass(frozen=True)
 class TriggerAdminTaskResult:
@@ -34,6 +42,9 @@ class TriggerAdminTaskResult:
 
     message: str
     """Status/feedback message."""
+
+    normalized_publisher: str | None = None
+    """Normalized publisher accepted by preflight."""
 
 
 class TriggerAdminTaskUseCase:
@@ -49,6 +60,45 @@ class TriggerAdminTaskUseCase:
         """Initialize use case with task-run persistence writer."""
         self._task_run_state_writer = task_run_state_writer
 
+    def preflight(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
+        """Validate dispatch parameters without persisting task state."""
+        if request.task_method not in _VALID_TASK_METHODS:
+            logger.warning(
+                "admin_task_trigger_invalid_method",
+                method=request.task_method,
+                user_ip=request.user_ip,
+            )
+            return TriggerAdminTaskResult(
+                queued=False,
+                message=(
+                    f"Invalid task method '{request.task_method}'. "
+                    f"Must be one of: {', '.join(sorted(_VALID_TASK_METHODS))}"
+                ),
+            )
+
+        normalized_publisher = request.publisher.lower() if request.publisher else None
+        if normalized_publisher and normalized_publisher not in _VALID_PUBLISHER_SLUGS:
+            return TriggerAdminTaskResult(
+                queued=False,
+                message=f"Invalid publisher '{request.publisher}'.",
+            )
+        if request.task_method != "daily" and normalized_publisher:
+            return TriggerAdminTaskResult(
+                queued=False,
+                message="'publisher' is only supported for daily task.",
+            )
+        if request.force and request.task_method != "fetch":
+            return TriggerAdminTaskResult(
+                queued=False,
+                message="'force' is only supported for fetch task.",
+            )
+
+        return TriggerAdminTaskResult(
+            queued=True,
+            message=f"Task '{request.task_method}' scheduled. Background execution will begin shortly.",
+            normalized_publisher=normalized_publisher,
+        )
+
     def execute(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
         """
         Validate and return status for task trigger request.
@@ -59,18 +109,9 @@ class TriggerAdminTaskUseCase:
         Returns:
             TriggerAdminTaskResult indicating if task can be queued.
         """
-        valid_methods = {"fetch", "daily", "weekly"}
-
-        if request.task_method not in valid_methods:
-            logger.warning(
-                "admin_task_trigger_invalid_method",
-                method=request.task_method,
-                user_ip=request.user_ip,
-            )
-            return TriggerAdminTaskResult(
-                queued=False,
-                message=f"Invalid task method '{request.task_method}'. Must be one of: {', '.join(valid_methods)}",
-            )
+        preflight = self.preflight(request)
+        if not preflight.queued:
+            return preflight
 
         logger.info(
             "admin_task_trigger_validated",
@@ -83,10 +124,7 @@ class TriggerAdminTaskUseCase:
             status=TaskRunStatus.QUEUED,
         )
 
-        return TriggerAdminTaskResult(
-            queued=True,
-            message=f"Task '{request.task_method}' scheduled. Background execution will begin shortly.",
-        )
+        return preflight
 
     def mark_completed(self, *, task_method: str) -> None:
         """Persist successful completion for a task method."""

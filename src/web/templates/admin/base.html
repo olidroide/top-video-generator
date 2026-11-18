@@ -42,7 +42,12 @@
             aria-label="Toggle light/dark mode"
           >🌙</button>
         </li>
-        <li><a href="/admin/logout" class="contrast">Logout</a></li>
+        <li>
+          <form method="post" action="/admin/logout" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <button type="submit" class="contrast" style="width: auto;">Logout</button>
+          </form>
+        </li>
       </ul>
     </nav>
   </header>

@@ -18,6 +18,7 @@ class GetSetupPageRequest:
     tiktok_session_client_id: str | None = None
     yt_auth_user_id: str | None = None
     tiktok_user_openid: str | None = None
+    yt_oauth_state: str | None = None
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,9 @@ class GetSetupPageUseCase:
             self._get_tiktok_credentials(request.tiktok_session_client_id) or tiktok_persisted_credentials
         )
 
-        yt_authentication_url = None if yt_credentials else await self._yt_provider.step_1_get_authentication_url()
+        yt_authentication_url = (
+            None if yt_credentials else await self._yt_provider.step_1_get_authentication_url(request.yt_oauth_state)
+        )
         tiktok_authentication_url = None
 
         is_completed = bool(yt_persisted_credentials and tiktok_persisted_credentials)

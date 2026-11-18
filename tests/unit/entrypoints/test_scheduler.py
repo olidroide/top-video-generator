@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from src.entrypoints.scheduler import ScheduledJob, _job_is_due, _job_run_key, heartbeat_is_fresh
 
 
-async def _noop() -> None:
-    return None
+async def _noop() -> bool:
+    return True
 
 
 def test_job_is_due_only_after_scheduled_time() -> None:

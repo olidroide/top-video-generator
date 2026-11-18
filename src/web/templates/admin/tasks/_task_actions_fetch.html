@@ -1,8 +1,10 @@
 <button
   class="n-btn"
   hx-post="/admin/tasks/fetch/trigger?force=true"
+  hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
   hx-target="#tasks-feedback"
   hx-swap="outerHTML"
+  hx-disabled-elt="this"
   hx-confirm="This task can take several minutes. Continue?"
   title="Manually trigger fetch from YouTube and overwrite current snapshot"
   aria-label="Trigger fetch task"

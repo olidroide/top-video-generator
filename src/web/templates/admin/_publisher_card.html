@@ -40,8 +40,10 @@
         {% if not pub.can_run_auth_check %}disabled{% endif %}
         class="secondary outline"
         hx-post="/admin/publishers/{{ pub.slug }}/check-auth"
+        hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
         hx-target="#publisher-card-{{ pub.slug }}"
         hx-swap="outerHTML"
+        hx-disabled-elt="this"
         hx-indicator="#check-auth-spinner-{{ pub.slug }}"
         aria-label="{{ pub.auth_check_action_label }} for {{ pub.name }}"
       >
@@ -61,8 +63,10 @@
         role="switch"
         aria-checked="{{ pub.enabled | lower }}"
         hx-post="/admin/publishers/{{ pub.slug }}/toggle"
+        hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
         hx-target="#publisher-card-{{ pub.slug }}"
         hx-swap="outerHTML"
+        hx-disabled-elt="this"
         hx-indicator="#toggle-spinner-{{ pub.slug }}"
         {% if pub.enabled %}checked{% endif %}
       />

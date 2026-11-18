@@ -35,12 +35,13 @@ def _resolve_storage_paths(settings: AppSettings) -> tuple[str, str, str, str]:
     return db_video_file, db_release_file, db_timeseries_file, metrics_db_path
 
 
-async def main_async() -> None:
+async def main_async() -> bool:
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "weekly_publish") as execution_lock:
         if not execution_lock.acquired:
-            return
+            return False
         await _run_weekly_publish_job(settings)
+        return True
 
 
 async def _run_weekly_publish_job(settings: AppSettings) -> None:

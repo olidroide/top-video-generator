@@ -80,8 +80,10 @@
       {% if not p.can_run_check %}disabled{% endif %}
       class="secondary outline"
       hx-post="/admin/connections/{{ p.slug }}/check"
+      hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'
       hx-target="#platform-card-{{ p.slug }}"
       hx-swap="outerHTML"
+      hx-disabled-elt="this"
       hx-indicator="#check-spinner-{{ p.slug }}"
       aria-label="{{ p.check_action_label }} for {{ p.name }}"
     >

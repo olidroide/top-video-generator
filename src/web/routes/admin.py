@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hmac
+import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
-from urllib.parse import parse_qs
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import RedirectResponse, Response
 from starlette.status import HTTP_303_SEE_OTHER
@@ -16,6 +16,7 @@ from src.application.check_platform_connection_use_case import CheckPlatformConn
 from src.application.get_setup_page_use_case import GetSetupPageRequest
 from src.application.trigger_admin_task_use_case import TriggerAdminTaskRequest
 from src.domain.models import IntegrationCheckResult, IntegrationPlatform
+from src.web.csrf import get_csrf_token, is_valid_csrf_token
 from src.web.dependencies import (
     CheckPlatformConnectionUseCaseDep,
     GetAdminTaskStatusUseCaseDep,
@@ -30,7 +31,14 @@ from src.web.dependencies import (
     get_setup_page_use_case,
 )
 from src.web.routes import ops as ops_routes
-from src.web.state import get_app_version, logger, templates
+from src.web.state import (
+    ADMIN_SESSION_ID_KEY,
+    ADMIN_SESSION_KEY,
+    get_app_version,
+    is_admin_authenticated,
+    logger,
+    templates,
+)
 from src.web.viewmodels import (
     AdminConnectionsViewModel,
     build_admin_connections_view_model,
@@ -48,23 +56,28 @@ else:
 
 router = APIRouter(prefix="/admin")
 
-_SESSION_KEY = "admin_authenticated"
+_SESSION_KEY = ADMIN_SESSION_KEY
 
 
 def _is_admin(request: Request) -> bool:
-    return bool(request.session.get(_SESSION_KEY))
+    return is_admin_authenticated(request)
+
+
+def _admin_auth_error(request: Request) -> Response | None:
+    if _is_admin(request):
+        return None
+    return HTMLResponse(
+        status_code=403,
+        content=(
+            '<div id="admin-auth-error" role="alert" aria-live="assertive">Admin session expired or required.</div>'
+        ),
+        headers={"HX-Redirect": "/admin/login"},
+    )
 
 
 def _password_matches(submitted: str, expected: str) -> bool:
     """Constant-time comparison to prevent timing attacks."""
     return hmac.compare_digest(submitted.encode(), expected.encode())
-
-
-async def _extract_password(request: Request) -> str:
-    body_text = (await request.body()).decode("utf-8")
-    parsed = parse_qs(body_text, keep_blank_values=True)
-    values = parsed.get("password")
-    return values[0] if values else ""
 
 
 async def _build_connections_context(
@@ -101,6 +114,7 @@ async def admin_login_page(
 ) -> Response:
     if _is_admin(request):
         return RedirectResponse("/admin", status_code=HTTP_303_SEE_OTHER)
+    csrf_token = get_csrf_token(request)
     return templates.TemplateResponse(
         request=request,
         name="admin/login.html",
@@ -108,6 +122,7 @@ async def admin_login_page(
             "request": request,
             "error": None,
             "password_configured": bool(settings.admin_password),
+            "csrf_token": csrf_token,
         },
     )
 
@@ -116,11 +131,30 @@ async def admin_login_page(
 async def admin_login_submit(
     request: Request,
     settings: Annotated[Any, Depends(get_settings)],
+    password: Annotated[str, Form()],
+    csrf_token: Annotated[str, Form()],
 ) -> Response:
-    password = await _extract_password(request)
+    if not is_valid_csrf_token(request, csrf_token):
+        logger.warning(
+            "admin.login_csrf_failed",
+            remote=request.client.host if request.client else "unknown",
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/login.html",
+            context={
+                "request": request,
+                "error": "Invalid or expired security token.",
+                "password_configured": bool(settings.admin_password),
+                "csrf_token": get_csrf_token(request),
+            },
+            status_code=403,
+        )
+
     expected = settings.admin_password or ""
     if expected and _password_matches(password, expected):
         request.session[_SESSION_KEY] = True
+        request.session[ADMIN_SESSION_ID_KEY] = secrets.token_urlsafe(32)
         logger.info(
             "admin.login_success",
             remote=request.client.host if request.client else "unknown",
@@ -138,14 +172,24 @@ async def admin_login_submit(
             "request": request,
             "error": "Invalid credentials.",
             "password_configured": bool(expected),
+            "csrf_token": get_csrf_token(request),
         },
         status_code=401,
     )
 
 
-@router.get("/logout")
-async def admin_logout(request: Request) -> Response:
-    request.session.pop(_SESSION_KEY, None)
+@router.post("/logout", response_class=HTMLResponse)
+async def admin_logout(
+    request: Request,
+    csrf_token: Annotated[str, Form()],
+) -> Response:
+    if not is_valid_csrf_token(request, csrf_token):
+        return HTMLResponse(status_code=403, content="Invalid CSRF token")
+    session_id = request.session.get(ADMIN_SESSION_ID_KEY)
+    if isinstance(session_id, str) and session_id:
+        revoked_session_ids = getattr(request.app.state, "revoked_admin_sessions", set())
+        revoked_session_ids.add(session_id)
+    request.session.clear()
     logger.info(
         "admin.logout",
         remote=request.client.host if request.client else "unknown",
@@ -174,8 +218,9 @@ async def admin_connections_status(
     settings: Annotated[Any, Depends(get_settings)],
 ) -> Response:
     """HTMX partial — returns the #connections-grid fragment only."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
     ctx = await _build_connections_context(request, use_case, settings)
     return templates.TemplateResponse(
         request=request,
@@ -191,10 +236,14 @@ async def admin_connection_check(
     setup_use_case: Annotated[Any, Depends(get_setup_page_use_case)],
     check_use_case: CheckPlatformConnectionUseCaseDep,
     settings: Annotated[Any, Depends(get_settings)],
+    csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> Response:
     """HTMX partial — returns a single platform card after a live check."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
+    if not is_valid_csrf_token(request, csrf_token):
+        return HTMLResponse(status_code=403, content="Invalid CSRF token")
 
     integration_platform = _parse_integration_platform(platform)
     if integration_platform is None:
@@ -227,8 +276,9 @@ async def admin_health_status(
     timeseries_repo: TimeSeriesRepositoryDep,
 ) -> Response:
     """HTMX partial — returns the #health-checks fragment only."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
     checks = {
         "ffmpeg": ops_routes.check_ffmpeg(),
         "templates": ops_routes.check_templates(settings),
@@ -250,8 +300,9 @@ async def admin_tasks_status(
     task_status_use_case: GetAdminTaskStatusUseCaseDep,
 ) -> Response:
     """HTMX partial — returns the #tasks-grid fragment with task status cards."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
 
     # Build view model from repos
     from src.web.viewmodels import build_admin_tasks_view_model, format_timeline_timestamp
@@ -275,8 +326,9 @@ async def admin_metrics_status(
     metrics_use_case: GetOperationalMetricsUseCaseDep,
 ) -> Response:
     """HTMX partial — returns the #metrics-grid fragment with persisted counters."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
 
     return templates.TemplateResponse(
         request=request,
@@ -288,16 +340,6 @@ async def admin_metrics_status(
     )
 
 
-def _normalize_task_publisher(method: str, publisher: str | None) -> str | None:
-    normalized_publisher = publisher.lower() if publisher else None
-    if normalized_publisher and normalized_publisher not in _VALID_PUBLISHER_SLUGS:
-        msg = f"Invalid publisher '{publisher}'."
-        raise ValueError(msg)
-    if method != "daily" and normalized_publisher:
-        raise ValueError("'publisher' is only supported for daily task.")
-    return normalized_publisher
-
-
 def _resolve_task_runner(
     *,
     method: str,
@@ -307,15 +349,15 @@ def _resolve_task_runner(
     if method == "fetch":
         from src.entrypoints.fetch_data import main_async as fetch_main_async
 
-        async def _run_fetch_task() -> None:
-            await fetch_main_async(force_fetch=force)
+        async def _run_fetch_task() -> bool:
+            return await fetch_main_async(force_fetch=force)
 
         return ("fetch", _run_fetch_task)
     if method == "daily":
         from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 
-        async def _run_daily_task() -> None:
-            await publish_vertical_main_async(
+        async def _run_daily_task() -> bool:
+            return await publish_vertical_main_async(
                 target_publishers=(normalized_publisher,) if normalized_publisher else None,
             )
 
@@ -323,7 +365,10 @@ def _resolve_task_runner(
     if method == "weekly":
         from src.entrypoints.publish_video import main_async as publish_weekly_main_async
 
-        return ("weekly", publish_weekly_main_async)
+        async def _run_weekly_task() -> bool:
+            return await publish_weekly_main_async()
+
+        return ("weekly", _run_weekly_task)
     msg = f"Unsupported task method '{method}'"
     raise ValueError(msg)
 
@@ -336,45 +381,66 @@ async def trigger_admin_task(
     trigger_use_case: TriggerAdminTaskUseCaseDep,
     force: bool = False,
     publisher: str | None = None,
+    csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> Response:
     """HTMX endpoint — validates and triggers a background task (fetch/daily/weekly)."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
+    if not is_valid_csrf_token(request, csrf_token):
+        return HTMLResponse(status_code=403, content="Invalid CSRF token")
 
-    # Validate and authorize
-    trigger_result = trigger_use_case.execute(
-        TriggerAdminTaskRequest(
-            task_method=method,
-            user_ip=request.client.host if request.client else "unknown",
-        )
+    trigger_request = TriggerAdminTaskRequest(
+        task_method=method,
+        user_ip=request.client.host if request.client else "unknown",
+        force=force,
+        publisher=publisher,
     )
+    preflight = trigger_use_case.preflight(trigger_request)
+    if not preflight.queued:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/_task_error.html",
+            context={"request": request, "message": preflight.message},
+            status_code=400,
+        )
 
-    if not trigger_result.queued:
-        # Validation failed
-        from starlette.responses import PlainTextResponse
+    try:
+        run_task_method, task_fn = _resolve_task_runner(
+            method=method,
+            force=force,
+            normalized_publisher=preflight.normalized_publisher,
+        )
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/_task_error.html",
+            context={"request": request, "message": str(exc)},
+            status_code=400,
+        )
 
-        return PlainTextResponse(content=f"Error: {trigger_result.message}", status_code=400)
-
-    # Dispatch background task
     async def _run_with_task_tracking(task_method: str, task_fn: Any) -> None:
         try:
-            await task_fn()
-            trigger_use_case.mark_completed(task_method=task_method)
+            acquired = await task_fn()
+            if acquired is False:
+                trigger_use_case.mark_failed(
+                    task_method=task_method,
+                    error_message="Task skipped because the execution lock is busy.",
+                )
+            else:
+                trigger_use_case.mark_completed(task_method=task_method)
         except Exception as exc:
             trigger_use_case.mark_failed(task_method=task_method, error_message=str(exc))
             raise
 
-    try:
-        normalized_publisher = _normalize_task_publisher(method, publisher)
-        run_task_method, task_fn = _resolve_task_runner(
-            method=method,
-            force=force,
-            normalized_publisher=normalized_publisher,
+    trigger_result = trigger_use_case.execute(trigger_request)
+    if not trigger_result.queued:
+        return templates.TemplateResponse(
+            request=request,
+            name="admin/_task_error.html",
+            context={"request": request, "message": trigger_result.message},
+            status_code=400,
         )
-    except ValueError as exc:
-        from starlette.responses import PlainTextResponse
-
-        return PlainTextResponse(content=f"Error: {exc}", status_code=400)
 
     background_tasks.add_task(_run_with_task_tracking, run_task_method, task_fn)
 
@@ -395,8 +461,9 @@ async def admin_verify_published(
     request: Request,
     verify_use_case: VerifyPublishedVideosUseCaseDep,
 ) -> Response:
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
 
     report = await verify_use_case.execute()
     return templates.TemplateResponse(
@@ -414,8 +481,9 @@ async def admin_task_logs(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Response:
     """HTMX partial — returns live log lines for a running task."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
 
     valid_methods = {"fetch", "daily", "weekly"}
     if method not in valid_methods:
@@ -460,8 +528,9 @@ async def admin_connectors_status(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Response:
     """HTMX partial — returns the #connectors-grid fragment."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
     connectors = build_admin_data_connectors_view_model(settings=settings)
     return templates.TemplateResponse(
         request=request,
@@ -478,8 +547,9 @@ async def admin_publishers_status(
     settings: Annotated[AppSettings, Depends(get_settings)],
 ) -> Response:
     """HTMX partial — returns the #publishers-grid fragment."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
     publishers = build_admin_publishers_view_model(
         state_reader=publisher_state,
         release_store=release_repo,
@@ -503,10 +573,14 @@ async def toggle_publisher(
     publisher_state_writer: PublisherStateWriterDep,
     release_repo: ReleaseRepositoryDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
+    csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> Response:
     """HTMX endpoint — toggle publisher enabled state."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
+    if not is_valid_csrf_token(request, csrf_token):
+        return HTMLResponse(status_code=403, content="Invalid CSRF token")
     if slug not in _VALID_PUBLISHER_SLUGS:
         return HTMLResponse(status_code=404, content="")
 
@@ -544,10 +618,14 @@ async def check_publisher_auth(
     release_repo: ReleaseRepositoryDep,
     check_use_case: CheckPlatformConnectionUseCaseDep,
     settings: Annotated[AppSettings, Depends(get_settings)],
+    csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> Response:
     """HTMX endpoint — check auth status for a publisher and return single card."""
-    if not _is_admin(request):
-        return HTMLResponse(status_code=403, content="")
+    auth_error = _admin_auth_error(request)
+    if auth_error is not None:
+        return auth_error
+    if not is_valid_csrf_token(request, csrf_token):
+        return HTMLResponse(status_code=403, content="Invalid CSRF token")
     if slug not in _VALID_PUBLISHER_SLUGS:
         return HTMLResponse(status_code=404, content="")
 

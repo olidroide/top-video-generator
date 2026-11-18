@@ -54,6 +54,7 @@
       {% endif %}
 
       <form method="post" action="/admin/login" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label for="password">Password</label>
         <input
           type="password"

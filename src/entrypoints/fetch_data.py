@@ -16,12 +16,13 @@ from src.shared.utils import resolve_project_path
 logger = get_logger(__name__)
 
 
-async def main_async(*, force_fetch: bool = False) -> None:
+async def main_async(*, force_fetch: bool = False) -> bool:
     settings = get_app_settings()
     with FileExecutionLock(Path(settings.scheduler_lock_file), "fetch_data") as execution_lock:
         if not execution_lock.acquired:
-            return
+            return False
         await _run_fetch_data_job(settings, force_fetch=force_fetch)
+        return True
 
 
 async def _run_fetch_data_job(settings: AppSettings | None = None, *, force_fetch: bool = False) -> None:
@@ -38,7 +39,7 @@ async def _run_fetch_data_job(settings: AppSettings | None = None, *, force_fetc
     )
 
     fetch_data_use_case = FetchDataUseCase(
-        youtube_source=youtube_source,
+        trending_fetcher=youtube_source,
         video_repo=video_repo,
         timeseries_repo=timeseries_repo,
         settings=settings,

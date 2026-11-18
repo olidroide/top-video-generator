@@ -68,11 +68,12 @@ class YouTubeAuthManager:
         flow.redirect_uri = self._redirect_uri
         return flow
 
-    def get_authentication_url(self) -> str:
+    def get_authentication_url(self, state: str | None = None) -> str:
         flow = self._get_flow()
         authorization_url, _state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
+            state=state,
         )
         return authorization_url
 

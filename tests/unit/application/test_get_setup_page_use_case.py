@@ -105,3 +105,20 @@ class TestGetSetupPageUseCase:
         assert result.is_completed is False
         assert result.yt_authentication_url == "https://yt.example/auth"
         assert result.tiktok_authentication_url is None
+
+    async def test_passes_youtube_oauth_state_to_provider(self) -> None:
+        auth_repo: AuthCredentialStore = create_autospec(AuthCredentialStore, instance=True)
+        auth_repo.get_yt_auth.return_value = None
+        auth_repo.get_tiktok_auth.return_value = None
+        provider = _build_youtube_provider()
+
+        use_case = GetSetupPageUseCase(auth_repo, provider)
+        await use_case.execute(
+            GetSetupPageRequest(
+                yt_oauth_state="expected-state",
+                yt_auth_user_id="yt-user",
+                tiktok_user_openid="tt-user",
+            )
+        )
+
+        provider.step_1_get_authentication_url.assert_awaited_once_with("expected-state")

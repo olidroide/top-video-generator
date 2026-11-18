@@ -59,8 +59,8 @@ class YTClient:
             )
         return self._authenticated_service
 
-    async def step_1_get_authentication_url(self) -> str:
-        return self._auth_manager.get_authentication_url()
+    async def step_1_get_authentication_url(self, state: str | None = None) -> str:
+        return await asyncio.to_thread(self._auth_manager.get_authentication_url, state)
 
     async def step_2_exchange_code_authentication(self, authorization_value: str) -> YtAuth:
         return await asyncio.to_thread(self._auth_manager.exchange_code_authentication, authorization_value)

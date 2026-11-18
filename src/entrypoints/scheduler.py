@@ -18,7 +18,7 @@ from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
-JobRunner = Callable[[], Awaitable[None]]
+JobRunner = Callable[[], Awaitable[bool]]
 
 
 @dataclass(frozen=True)
@@ -158,9 +158,12 @@ async def main_async() -> None:
                 last_successful_job_name=last_successful_job_name,
             )
             try:
-                await job.runner()
-                last_successful_job_name = job.name
-                logger.info("scheduler.job_finished", job=job.name)
+                acquired = await job.runner()
+                if acquired is False:
+                    logger.info("scheduler.job_skipped", job=job.name, reason="execution lock busy")
+                else:
+                    last_successful_job_name = job.name
+                    logger.info("scheduler.job_finished", job=job.name)
                 await _write_heartbeat(
                     heartbeat_file,
                     status="idle",
