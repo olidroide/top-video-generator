@@ -28,7 +28,10 @@ def mock_video_repo() -> VideoRepository:
 
 @pytest.fixture
 def mock_timeseries_repo() -> TimeSeriesRepository:
-    return create_autospec(TimeSeriesRepository, instance=True)
+    repository = create_autospec(TimeSeriesRepository, instance=True)
+    repository.get_last_timestamp.return_value = None
+    repository.get_video_points_by_date_range.return_value = []
+    return repository
 
 
 @pytest.fixture
@@ -68,6 +71,7 @@ class TestFetchDataUseCase:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test that execute returns video points and calls dependencies correctly."""
+        del monkeypatch
         points_added: list[VideoPoint] = []
 
         class _TimeseriesRepoStub:
@@ -103,9 +107,6 @@ class TestFetchDataUseCase:
         mock_youtube_source.fetch_trending_videos = AsyncMock(return_value=[SimpleNamespace(video_id="test123")])
         mock_youtube_source.fetch_video_details_batch = AsyncMock(return_value=[canonical])
 
-        monkeypatch.setattr("src.application.fetch_data_use_case.TimeSeriesRepository", _TimeseriesRepoStub)
-        monkeypatch.setattr("src.application.fetch_data_use_case.VideoRepository", _VideoRepoStub)
-
         # Execute
         result = await fetch_data_use_case.execute()
 
@@ -113,9 +114,12 @@ class TestFetchDataUseCase:
         assert isinstance(result, list)
         mock_youtube_source.fetch_trending_videos.assert_called_once()
         mock_youtube_source.fetch_video_details_batch.assert_called_once()
-        assert points_added
-        assert all(point.score is not None and point.score >= 1 for point in points_added)
-        assert all(point.views_growth is not None and point.views_growth > 0 for point in points_added)
+        fetch_data_use_case.timeseries_repo.add_video_point.assert_called()
+        added_points = [
+            call.kwargs["video_point"] for call in fetch_data_use_case.timeseries_repo.add_video_point.call_args_list
+        ]
+        assert all(point.score is not None and point.score >= 1 for point in added_points)
+        assert all(point.views_growth is not None and point.views_growth > 0 for point in added_points)
         assert all(point.score is not None and point.score >= 1 for point in result)
         assert all(point.views_growth is not None and point.views_growth > 0 for point in result)
 
@@ -137,6 +141,7 @@ class TestFetchDataUseCase:
 
         # Same calendar day as frozen_now → should be blocked
         same_day_time = datetime(2026, 6, 2, 9, 0, 0, tzinfo=UTC)
+        fetch_data_use_case.timeseries_repo.get_last_timestamp.return_value = same_day_time
 
         class _TimeseriesRepoStub:
             def __init__(self, _path: str) -> None:
@@ -160,9 +165,6 @@ class TestFetchDataUseCase:
 
         fetch_data_use_case.youtube_source.fetch_trending_videos = AsyncMock()
 
-        monkeypatch.setattr("src.application.fetch_data_use_case.TimeSeriesRepository", _TimeseriesRepoStub)
-        monkeypatch.setattr("src.application.fetch_data_use_case.VideoRepository", _VideoRepoStub)
-
         # Execute
         result = await fetch_data_use_case.execute()
 
@@ -179,6 +181,7 @@ class TestFetchDataUseCase:
         mock_settings: AppSettings,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        del monkeypatch
         recent_time = datetime.now(UTC) - timedelta(hours=1)
         points_added: list[VideoPoint] = []
 
@@ -214,9 +217,7 @@ class TestFetchDataUseCase:
 
         mock_youtube_source.fetch_trending_videos = AsyncMock(return_value=[SimpleNamespace(video_id="forced123")])
         mock_youtube_source.fetch_video_details_batch = AsyncMock(return_value=[canonical])
-
-        monkeypatch.setattr("src.application.fetch_data_use_case.TimeSeriesRepository", _TimeseriesRepoStub)
-        monkeypatch.setattr("src.application.fetch_data_use_case.VideoRepository", _VideoRepoStub)
+        mock_timeseries_repo.add_video_point.side_effect = lambda video_point: points_added.append(video_point)
 
         use_case = FetchDataUseCase(
             youtube_source=mock_youtube_source,

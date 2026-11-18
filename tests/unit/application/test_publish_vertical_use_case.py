@@ -334,6 +334,7 @@ class TestPublishVerticalUseCase:
                 instagram_client_id="ig-owner",
                 tiktok_client_id="tt-owner",
             ),
+            integration_checkers=(_FakeTikTokChecker(),),
             yt_title_template="@@TOP_DATE@@ @@HASHTAGS@@",
             yt_description_template="@@TOP_DATE@@\n@@VIDEO_LIST@@\n@@DISCLAIMER@@",
         )
@@ -430,6 +431,7 @@ class TestPublishVerticalUseCase:
                 instagram_client_id="ig-owner",
                 tiktok_client_id="tt-owner",
             ),
+            integration_checkers=(_FakeTikTokChecker(),),
             yt_title_template="@@TOP_DATE@@ @@HASHTAGS@@",
             yt_description_template="@@TOP_DATE@@\n@@VIDEO_LIST@@\n@@DISCLAIMER@@",
         )

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from src.application.fetch_top_videos_use_case import FetchTopVideosRequest, FetchTopVideosUseCase
 from src.domain.models import CanonicalVideo, Platform, PublishingResult, Release, ReleaseKind, TimeseriesRange, Video
+from src.domain.services.video_metadata_service import generate_youtube_description, generate_youtube_title
 from src.domain.utils import extract_video_hashtags
 from src.shared.logging import get_logger
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from src.domain.ports import (
+        IntegrationChecker,
         ReleaseStore,
         VerticalVideoPipeline,
         VideoPublisher,
@@ -80,6 +82,7 @@ class PublishVerticalUseCase:
         pending_publishers: Sequence[VideoPublisher],
         video_list: Sequence[Video],
         publisher_client_identity: PublisherClientIdentity,
+        integration_checkers: Sequence[IntegrationChecker] = (),
         yt_title_template: str,
         yt_description_template: str,
     ) -> None:
@@ -102,39 +105,21 @@ class PublishVerticalUseCase:
         yt_description = content.yt_description
         logger.debug("generated description:", yt_description=yt_description)
 
+        checker_by_platform: dict[str, IntegrationChecker] = {
+            checker.platform_name.value.upper(): checker
+            for checker in integration_checkers
+            if getattr(checker, "platform_name", None) is not None
+        }
+        if not checker_by_platform and integration_checkers:
+            checker_by_platform[Platform.TIKTOK.value.upper()] = integration_checkers[0]
+
         async def _publish_one(publisher: VideoPublisher) -> PublishingResult:
             description = yt_description if publisher.platform_name == Platform.YOUTUBE else yt_title
             try:
                 if publisher.platform_name == Platform.TIKTOK:
-                    from src.adapters.tiktok_integration_checker import TikTokIntegrationChecker
-
-                    try:
-                        checker = TikTokIntegrationChecker()
-                    except Exception:  # noqa: BLE001
-                        logger.warning("publish_vertical.tiktok_skipped_settings_unavailable")
-                        return PublishingResult(
-                            platform=publisher.platform_name,
-                            success=False,
-                            error="TikTok settings unavailable",
-                        )
-                    if not checker.is_configured:
-                        return PublishingResult(
-                            platform=publisher.platform_name,
-                            success=False,
-                            error="TikTok not configured",
-                        )
-                    result = await checker.check_connection()
-                    if result.status.value != "ok":
-                        logger.warning(
-                            "publish_vertical.tiktok_skipped_by_connection_check",
-                            status=result.status.value,
-                            message=result.message,
-                        )
-                        return PublishingResult(
-                            platform=publisher.platform_name,
-                            success=False,
-                            error=f"TikTok connection failed: {result.message}",
-                        )
+                    connection_error = await self._check_tiktok_connection(checker_by_platform)
+                    if connection_error is not None:
+                        return connection_error
 
                 coro = publish_executor.publish(
                     publisher=publisher,
@@ -180,6 +165,39 @@ class PublishVerticalUseCase:
                     result=result,
                     publisher_client_identity=publisher_client_identity,
                 )
+
+    async def _check_tiktok_connection(
+        self,
+        checker_by_platform: dict[str, IntegrationChecker],
+    ) -> PublishingResult | None:
+        checker = checker_by_platform.get(Platform.TIKTOK.value.upper())
+        if checker is None:
+            logger.warning("publish_vertical.tiktok_skipped_missing_checker")
+            return PublishingResult(
+                platform=Platform.TIKTOK,
+                success=False,
+                error="TikTok checker unavailable",
+            )
+        if not checker.is_configured:
+            return PublishingResult(
+                platform=Platform.TIKTOK,
+                success=False,
+                error="TikTok not configured",
+            )
+
+        result = await checker.check_connection()
+        if result.status.value != "ok":
+            logger.warning(
+                "publish_vertical.tiktok_skipped_by_connection_check",
+                status=result.status.value,
+                message=result.message,
+            )
+            return PublishingResult(
+                platform=Platform.TIKTOK,
+                success=False,
+                error=f"TikTok connection failed: {result.message}",
+            )
+        return None
 
     async def build_job_context(
         self,
@@ -251,15 +269,15 @@ class PublishVerticalUseCase:
         hashtag_list = tuple(extract_video_hashtags(list(selected_videos)))
 
         now = request.now or datetime.now(UTC)
-        yt_title = self._generate_yt_title(
+        yt_title = generate_youtube_title(
             video_list=selected_videos,
-            hashtag_list=hashtag_list,
-            yt_title_template=request.yt_title_template,
+            title_template=request.yt_title_template,
+            hashtags=list(hashtag_list),
             now=now,
         )
-        yt_description = self._generate_yt_description(
+        yt_description = generate_youtube_description(
             video_list=selected_videos,
-            yt_description_template=request.yt_description_template,
+            description_template=request.yt_description_template,
             now=now,
         )
 
@@ -281,64 +299,6 @@ class PublishVerticalUseCase:
             reverse=True,
         )
         return tuple(selected)
-
-    @staticmethod
-    def _generate_yt_title(
-        video_list: tuple[Video, ...],
-        hashtag_list: tuple[str, ...],
-        yt_title_template: str,
-        now: datetime,
-    ) -> str:
-        text_date = now.astimezone(UTC).strftime("%d/%m/%Y")
-        hashtags = " ".join(hashtag_list) if hashtag_list else ""
-        return yt_title_template.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}").replace(
-            "@@HASHTAGS@@", f"\n{hashtags}"
-        )
-
-    @staticmethod
-    def _generate_yt_description(
-        video_list: tuple[Video, ...],
-        yt_description_template: str,
-        now: datetime,
-    ) -> str:
-        text_date = now.astimezone(UTC).strftime("%d / %m / %Y")
-
-        channels_names = list(
-            {(video.channel.name if video.channel and video.channel.name else "") for video in video_list}
-        )
-        channels_names = [name for name in channels_names if name]
-        original_publishers = ", ".join(channels_names)
-
-        fair_use_text = (
-            "As per the 3rd section of fair use guidelines borrowing small bits of material from "
-            "an original work is more likely to be considered fair use. Copyright disclaimer under "
-            "section 107 of the copyright act 1976, allowance is made for fair use"
-        )
-        legal_notice = (
-            "This publication and the information included in it are not intended to serve "
-            "a substitute for consultation with an attonery."
-        )
-        copyright_notice = (
-            "Please note no copyright infringement is intended, and I do not own nor claim to own "
-            "any of the original publishers recordings used in this video. "
-            f"Original publishers : {original_publishers}."
-        )
-        disclaimer = f"------\nDisclaimer\n  - {legal_notice}\n\n  - {copyright_notice}\n\n  - {fair_use_text}\n------"
-
-        video_list_names = ""
-        for video in video_list:
-            score = video.score if video.score is not None else "-"
-            title = video.title_cleaned or (video.title or "")
-            url = video.yt_video_url
-            video_list_names += f"{score}.- {title} {url} \n"
-            if video.channel and video.channel.name:
-                video_list_names += f"© {video.channel.name}\n\n"
-
-        return (
-            yt_description_template.replace("@@TOP_DATE@@", f"{text_date} #top{len(video_list)}")
-            .replace("@@VIDEO_LIST@@", f"{video_list_names}")
-            .replace("@@DISCLAIMER@@", disclaimer)
-        )
 
     @staticmethod
     def _video_to_canonical(video: Video) -> CanonicalVideo:

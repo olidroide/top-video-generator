@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.domain.models import Channel, VideoPoint
 from src.domain.services.scoring_service import score_and_rank_video_points
-from src.infrastructure.storage.timeseries_repository import TimeSeriesRepository
-from src.infrastructure.storage.video_repository import VideoRepository
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
-    from src.adapters.youtube_source import YouTubeSource
     from src.config.settings import AppSettings
+    from src.domain.ports import TimeSeriesStore, TrendingVideoFetcher, VideoMetadataStore
 
 logger = get_logger(__name__)
 
@@ -24,13 +21,24 @@ class FetchDataUseCase:
 
     def __init__(
         self,
-        youtube_source: YouTubeSource,
-        video_repo: VideoRepository,
-        timeseries_repo: TimeSeriesRepository,
+        trending_fetcher: TrendingVideoFetcher | None = None,
+        video_repo: VideoMetadataStore | None = None,
+        timeseries_repo: TimeSeriesStore | None = None,
         settings: AppSettings | None = None,
         force_fetch: bool = False,
+        *,
+        youtube_source: TrendingVideoFetcher | None = None,
     ) -> None:
-        self.youtube_source = youtube_source
+        source = trending_fetcher or youtube_source
+        if source is None:
+            raise ValueError("A trending video fetcher is required")
+        if video_repo is None:
+            raise ValueError("A video metadata store is required")
+        if timeseries_repo is None:
+            raise ValueError("A timeseries store is required")
+
+        self.trending_fetcher = source
+        self.youtube_source = source
         self.video_repo = video_repo
         self.timeseries_repo = timeseries_repo
         self.settings = settings
@@ -43,43 +51,36 @@ class FetchDataUseCase:
             List of VideoPoint objects that were added to timeseries.
         """
         settings = self.settings or self._get_settings()
-        db_video_file = settings.db_video_file
-        db_timeseries_file = settings.db_timeseries_file
 
-        # Repositories are already injected, but we need to ensure they use correct paths
-        # This maintains backward compatibility with existing repository constructors
-        video_repo = VideoRepository(Path(db_video_file))
-        timeseries_repo = TimeSeriesRepository(db_timeseries_file)
-
-        if not self.force_fetch and not self._is_passed_enough_time_from_last_fetch(timeseries_repo):
+        if not self.force_fetch and not self._is_passed_enough_time_from_last_fetch():
             logger.debug("Not enough time elapsed since last fetch")
             return []
 
         if self.force_fetch:
             logger.info("fetch_data.manual_force_enabled")
 
-        last_timestamp = timeseries_repo.get_last_timestamp()
+        last_timestamp = self.timeseries_repo.get_last_timestamp()
         if last_timestamp:
             from_dt = last_timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
             until_dt = from_dt + timedelta(days=1)
-            last_timeseries_videos_fetched = timeseries_repo.get_video_points_by_date_range(from_dt, until_dt)
+            last_timeseries_videos_fetched = self.timeseries_repo.get_video_points_by_date_range(from_dt, until_dt)
         else:
             last_timeseries_videos_fetched = []
 
         current_timeseries_videos_fetched: list[VideoPoint] = []
 
-        trending_videos = await self.youtube_source.fetch_trending_videos(
+        trending_videos = await self.trending_fetcher.fetch_trending_videos(
             region=settings.yt_search_region_code,
             limit=25,
         )
         video_id_list = [v.video_id for v in trending_videos]
 
         # Step 2: fetch full video details in batch
-        details = await self.youtube_source.fetch_video_details_batch(video_id_list)
+        details = await self.trending_fetcher.fetch_video_details_batch(video_id_list)
 
         for video_item in details:
             logger.debug("video details", video_details=video_item.model_dump())
-            video_repo.upsert(video_item)
+            self.video_repo.upsert(video_item)
 
             last_video_point = VideoPoint(
                 time=datetime.now(UTC),
@@ -105,7 +106,7 @@ class FetchDataUseCase:
         )
 
         for video_point in scored_points:
-            timeseries_repo.add_video_point(video_point=video_point)
+            self.timeseries_repo.add_video_point(video_point=video_point)
 
         logger.info(
             "Finish fetch YT Data",
@@ -119,7 +120,11 @@ class FetchDataUseCase:
 
         return get_app_settings()
 
-    def _is_passed_enough_time_from_last_fetch(self, timeseries_repo: TimeSeriesRepository, min_days: int = 1) -> bool:
+    def _is_passed_enough_time_from_last_fetch(
+        self,
+        timeseries_repo: TimeSeriesStore | None = None,
+        min_days: int = 1,
+    ) -> bool:
         """Check if enough calendar days have passed since last fetch.
 
         Uses calendar-day comparison instead of strict elapsed seconds to prevent
@@ -127,7 +132,8 @@ class FetchDataUseCase:
         seconds after the scheduled time (e.g. last fetch at 15:15, next run at
         15:00 the following day = 23h45m < 86400s but clearly a new day).
         """
-        if not (last_timeseries_datetime := timeseries_repo.get_last_timestamp()):
+        repository = timeseries_repo or self.timeseries_repo
+        if not (last_timeseries_datetime := repository.get_last_timestamp()):
             logger.debug("No timeseries found")
             return True
         current_date = datetime.now(UTC).date()

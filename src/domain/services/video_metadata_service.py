@@ -15,6 +15,7 @@ def generate_youtube_title(
     video_list: Sequence[Video],
     title_template: str,
     hashtags: list[str] | None = None,
+    now: datetime.datetime | None = None,
 ) -> str:
     """
     Generate YouTube video title from template.
@@ -27,7 +28,8 @@ def generate_youtube_title(
     Returns:
         Formatted title string.
     """
-    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
+    reference = now or datetime.datetime.now(datetime.UTC)
+    text_date = reference.astimezone(datetime.UTC).strftime("%d/%m/%Y")
     hashtags_str = " ".join(hashtags) if hashtags else ""
     return title_template.replace("@@TOP_DATE@@", f"[{text_date}] #top{len(video_list)}").replace(
         "@@HASHTAGS@@", f"\n{hashtags_str}"
@@ -37,6 +39,7 @@ def generate_youtube_title(
 def generate_youtube_description(
     video_list: Sequence[Video],
     description_template: str,
+    now: datetime.datetime | None = None,
 ) -> str:
     """
     Generate YouTube video description from template.
@@ -48,7 +51,8 @@ def generate_youtube_description(
     Returns:
         Formatted description string.
     """
-    text_date = datetime.datetime.now(datetime.UTC).strftime("%d/%m/%Y")
+    reference = now or datetime.datetime.now(datetime.UTC)
+    text_date = reference.astimezone(datetime.UTC).strftime("%d / %m / %Y")
     channels_names = sorted({video.channel.name for video in video_list if video.channel and video.channel.name})
     original_publishers = ",".join(channels_names)
 
