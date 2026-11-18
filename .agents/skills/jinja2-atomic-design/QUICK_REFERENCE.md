@@ -191,7 +191,7 @@ templates/
 
 ## Resources
 
-- Full Skill: `.github/skills/jinja2-atomic-design/SKILL.md`
+- Full Skill: `.agents/skills/jinja2-atomic-design/SKILL.md`
 - Example Atom: `templates/common/partials/file_source_icon.html.jinja`
 - Example Organism: `templates/data_management/files/partials/file_table_row.html.jinja`
 - Copilot Instructions: `.github/copilot-instructions.md` (Frontend Patterns section)

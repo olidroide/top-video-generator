@@ -1,7 +1,6 @@
 ---
 name: video-processing-migration
 description: "Video processing migration (C1 split): guidelines for decomposing src/video_processing.py into src/infrastructure/video/. Triggers on: video_processing, VideoAssetManager, VideoRenderer, ThumbnailGenerator, VideoCompositor, moviepy, CompositeVideoClip, PIL Image."
-compatibility: "Python 3.12+, moviepy 1.0+, Pillow 10+, segno (QR codes). Integration tests require @pytest.mark.slow. Media pipeline not testable in bare CI without Docker."
 ---
 
 # Video Processing Migration (C1 Split)

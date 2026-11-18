@@ -1,7 +1,6 @@
 ---
 name: hexagonal-architecture-video-publish
 description: "Hexagonal Architecture (Ports & Adapters) for the video publishing pipeline. Triggers on: VideoPublisher, TrendingVideoFetcher, TimeSeriesReader, VideoMetadataReader, AuthCredentialStore, ReleaseDateValidator, OAuthProvider, publisher_registry, ports, adapters, domain, hexagonal, build_publishers, TaskGroup publish."
-compatibility: "Project runtime declared in pyproject.toml. asyncio.TaskGroup. Pydantic v2. typing.Protocol with structural typing and generic OAuthProvider[OAuthResultT]."
 ---
 
 # Hexagonal Architecture — Video Publish Pipeline

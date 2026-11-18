@@ -1,7 +1,6 @@
 ---
 name: python-typing-patterns
 description: "Type hint patterns for this repo: Protocol, TypeVar, TypedDict, Literal, Final, and strict ty usage. Triggers on: type hints, typing, TypeVar, Protocol, Generic, TypedDict, ty check."
-compatibility: "Python 3.13+, Pydantic v2, uv run ty check src/ tests/."
 ---
 
 # Python Typing Patterns

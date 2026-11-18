@@ -90,7 +90,7 @@ markers = [
 cache-dir = ".ruff_cache"
 line-length = 120
 target-version = "py313"
-exclude = [".opencode", ".agents", ".github/skills", "*.html"]
+exclude = [".opencode", ".agents", "*.html"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -392,7 +392,7 @@ unsupported-dynamic-base = "ignore"
 # tests/unit excluded: create_autospec generates runtime-only mock attributes
 # (return_value, side_effect, assert_called, etc.) that ty can't infer → false positives.
 include = ["src", "tests/integration"]
-exclude = [".github/skills"]
+exclude = [".agents/skills"]
 respect-ignore-files = true
 
 [tool.ty.terminal]

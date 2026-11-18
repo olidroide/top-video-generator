@@ -1,7 +1,6 @@
 ---
 name: jinja2-atomic-design
 description: "Jinja2 + HTMX component patterns. Triggers on: jinja, html, template, macro, atom, molecule, htmx, ssr, tailwind, caller."
-compatibility: "Jinja2 3+, HTMX 1.9+, jinja2-fragments."
 ---
 
 # Jinja2 Atomic Design (HTMX + SSR)

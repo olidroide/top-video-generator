@@ -1,7 +1,6 @@
 ---
 name: uv-package-manager
-description: Master the uv package manager. Triggers on: pyproject.toml, uv.lock, dependency management, pip alternatives, Dockerfile with Python, CI/CD Python setup, venv, requirements.txt migration.
-compatibility: uv 0.4.x+
+description: "Master the uv package manager. Triggers on: pyproject.toml, uv.lock, dependency management, pip alternatives, Dockerfile with Python, CI/CD Python setup, venv, requirements.txt migration."
 ---
 
 # UV Package Manager

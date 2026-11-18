@@ -1,7 +1,6 @@
 ---
 name: python-fastapi-patterns
-description: "FastAPI delivery layer patterns for thin routes, SSR with Jinja2/HTMX, and hexagonal architecture wiring. Triggers on: fastapi, api endpoint, dependency injection, pydantic model, TemplateResponse, HTMX, Jinja2, starlette, route handler, uvicorn."
-compatibility: "FastAPI 0.100+, Pydantic v2, Python 3.12+. Requires uvicorn for production."
+description: "FastAPI 0.135.2+ delivery patterns for thin routes, SSR with Jinja2/HTMX, Pydantic v2, and hexagonal architecture wiring. Triggers on: fastapi, api endpoint, dependency injection, pydantic model, TemplateResponse, HTMX, Jinja2, starlette, route handler, uvicorn."
 ---
 
 # FastAPI Delivery Layer Patterns
@@ -33,6 +32,16 @@ async def index(db: DB):
     videos = await db.query(Video).order_by(Video.score.desc()).limit(10).all()
     return {"videos": videos}
 ```
+
+## FastAPI Conventions
+
+- Use `fastapi dev` locally and `fastapi run` in production. Prefer `[tool.fastapi] entrypoint = "src.web.main:app"` in `pyproject.toml` when the app entrypoint can be declared there.
+- Use `typing.Annotated` for parameters, `Query`, `Path`, `Header`, and `Depends` declarations. Reuse dependency types with aliases such as `CurrentUserDep = Annotated[User, Depends(get_current_user)]`.
+- Do not use `...` to mark required parameters or Pydantic fields.
+- Include a concrete return type or `response_model` for operations when it improves validation and serialization. Use `response_model` when the returned data must be filtered to a public shape.
+- Use `async def` for async I/O and plain `def` for blocking or synchronous work. One HTTP operation should belong to one path-operation function.
+- Register routers in `src/web/main.py` with `include_router`; keep routers thin and place orchestration in application use cases.
+- Use Pydantic v2 models instead of deprecated Pydantic v1 patterns or `RootModel` unless a root model is the explicit contract.
 
 ## Canonical Imports
 

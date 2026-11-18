@@ -1,7 +1,6 @@
 ---
 name: python-async-patterns
 description: "Python asyncio patterns. Triggers on: asyncio, TaskGroup, gather, await, concurrent, blocking I/O, to_thread, parallel execution."
-compatibility: "Python 3.12+. TaskGroup and modern timeouts required."
 ---
 
 # Python Async Patterns

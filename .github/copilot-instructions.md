@@ -280,7 +280,7 @@ Rules:
 
 ## Skill Routing
 
-Load relevant skill from .github/skills when task matches:
+Load relevant skill from .agents/skills when task matches:
 
 - tinyflux-time-series for TinyFlux schema, queries, aggregations.
 - python-async-patterns for async use cases, adapters, TaskGroup workflows.
