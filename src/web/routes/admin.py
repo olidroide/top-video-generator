@@ -46,6 +46,8 @@ from src.web.viewmodels import (
     build_admin_health_view_model,
     build_admin_metrics_view_model,
     build_admin_publishers_view_model,
+    build_admin_tasks_view_model,
+    format_timeline_timestamp,
     get_platform_connection_view_model,
 )
 
@@ -73,6 +75,12 @@ def _admin_auth_error(request: Request) -> Response | None:
         ),
         headers={"HX-Redirect": "/admin/login"},
     )
+
+
+def _redirect_non_htmx_fragment(request: Request) -> Response | None:
+    if request.headers.get("HX-Request") == "true":
+        return None
+    return RedirectResponse("/admin", status_code=HTTP_303_SEE_OTHER)
 
 
 def _password_matches(submitted: str, expected: str) -> bool:
@@ -202,12 +210,39 @@ async def admin_connections(
     request: Request,
     use_case: Annotated[Any, Depends(get_setup_page_use_case)],
     settings: Annotated[AppSettings, Depends(get_settings)],
+    task_status_use_case: GetAdminTaskStatusUseCaseDep,
+    metrics_use_case: GetOperationalMetricsUseCaseDep,
+    timeseries_repo: TimeSeriesRepositoryDep,
+    publisher_state: PublisherStateDep,
+    release_repo: ReleaseRepositoryDep,
 ) -> Response:
     if not settings.admin_password:
         return HTMLResponse(status_code=503, content="Admin password not configured")
     if not _is_admin(request):
         return RedirectResponse("/admin/login", status_code=HTTP_303_SEE_OTHER)
     ctx = await _build_connections_context(request, use_case, settings)
+    tasks_vm = build_admin_tasks_view_model(task_status_use_case.execute())
+    metrics_vm = build_admin_metrics_view_model(metrics_use_case.execute().to_dict())
+    checks = {
+        "ffmpeg": ops_routes.check_ffmpeg(),
+        "templates": ops_routes.check_templates(settings),
+        "database": ops_routes.check_database(timeseries_repo),
+        "timeseries": ops_routes.check_timeseries_freshness(timeseries_repo),
+    }
+    overall_status = "healthy" if all(check["status"] == "ok" for check in checks.values()) else "unhealthy"
+    health = {"status": overall_status, "version": get_app_version(), "checks": checks}
+    connectors_vm = build_admin_data_connectors_view_model(settings=settings)
+    publishers_vm = build_admin_publishers_view_model(
+        state_reader=publisher_state,
+        release_store=release_repo,
+        settings=settings,
+    )
+    ctx["tasks"] = tasks_vm
+    ctx["format_timeline_timestamp"] = format_timeline_timestamp
+    ctx["metrics_vm"] = metrics_vm
+    ctx["health_vm"] = build_admin_health_view_model(health)
+    ctx["connectors"] = connectors_vm
+    ctx["publishers"] = publishers_vm
     return templates.TemplateResponse(request=request, name="admin/connections.html", context=ctx)
 
 
@@ -221,6 +256,9 @@ async def admin_connections_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
     ctx = await _build_connections_context(request, use_case, settings)
     return templates.TemplateResponse(
         request=request,
@@ -279,6 +317,9 @@ async def admin_health_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
     checks = {
         "ffmpeg": ops_routes.check_ffmpeg(),
         "templates": ops_routes.check_templates(settings),
@@ -303,6 +344,9 @@ async def admin_tasks_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
 
     # Build view model from repos
     from src.web.viewmodels import build_admin_tasks_view_model, format_timeline_timestamp
@@ -329,6 +373,9 @@ async def admin_metrics_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
 
     return templates.TemplateResponse(
         request=request,
@@ -345,14 +392,14 @@ def _resolve_task_runner(
     method: str,
     force: bool,
     normalized_publisher: str | None,
-) -> tuple[str, Any]:
+) -> Any:
     if method == "fetch":
         from src.entrypoints.fetch_data import main_async as fetch_main_async
 
         async def _run_fetch_task() -> bool:
             return await fetch_main_async(force_fetch=force)
 
-        return ("fetch", _run_fetch_task)
+        return _run_fetch_task
     if method == "daily":
         from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 
@@ -361,14 +408,14 @@ def _resolve_task_runner(
                 target_publishers=(normalized_publisher,) if normalized_publisher else None,
             )
 
-        return ("daily", _run_daily_task)
+        return _run_daily_task
     if method == "weekly":
         from src.entrypoints.publish_video import main_async as publish_weekly_main_async
 
         async def _run_weekly_task() -> bool:
             return await publish_weekly_main_async()
 
-        return ("weekly", _run_weekly_task)
+        return _run_weekly_task
     msg = f"Unsupported task method '{method}'"
     raise ValueError(msg)
 
@@ -406,7 +453,7 @@ async def trigger_admin_task(
         )
 
     try:
-        run_task_method, task_fn = _resolve_task_runner(
+        task_fn = _resolve_task_runner(
             method=method,
             force=force,
             normalized_publisher=preflight.normalized_publisher,
@@ -419,30 +466,11 @@ async def trigger_admin_task(
             status_code=400,
         )
 
-    async def _run_with_task_tracking(task_method: str, task_fn: Any) -> None:
-        try:
-            acquired = await task_fn()
-            if acquired is False:
-                trigger_use_case.mark_failed(
-                    task_method=task_method,
-                    error_message="Task skipped because the execution lock is busy.",
-                )
-            else:
-                trigger_use_case.mark_completed(task_method=task_method)
-        except Exception as exc:
-            trigger_use_case.mark_failed(task_method=task_method, error_message=str(exc))
-            raise
-
-    trigger_result = trigger_use_case.execute(trigger_request)
-    if not trigger_result.queued:
-        return templates.TemplateResponse(
-            request=request,
-            name="admin/_task_error.html",
-            context={"request": request, "message": trigger_result.message},
-            status_code=400,
-        )
-
-    background_tasks.add_task(_run_with_task_tracking, run_task_method, task_fn)
+    background_tasks.add_task(
+        trigger_use_case.execute_tracked,
+        trigger_request,
+        task_fn,
+    )
 
     # Return feedback to HTMX
     return templates.TemplateResponse(
@@ -450,7 +478,7 @@ async def trigger_admin_task(
         name="admin/_task_feedback.html",
         context={
             "request": request,
-            "message": trigger_result.message,
+            "message": preflight.message,
             "task_method": method,
         },
     )
@@ -464,6 +492,9 @@ async def admin_verify_published(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
 
     report = await verify_use_case.execute()
     return templates.TemplateResponse(
@@ -484,6 +515,9 @@ async def admin_task_logs(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
 
     valid_methods = {"fetch", "daily", "weekly"}
     if method not in valid_methods:
@@ -531,6 +565,9 @@ async def admin_connectors_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
     connectors = build_admin_data_connectors_view_model(settings=settings)
     return templates.TemplateResponse(
         request=request,
@@ -550,6 +587,9 @@ async def admin_publishers_status(
     auth_error = _admin_auth_error(request)
     if auth_error is not None:
         return auth_error
+    fragment_redirect = _redirect_non_htmx_fragment(request)
+    if fragment_redirect is not None:
+        return fragment_redirect
     publishers = build_admin_publishers_view_model(
         state_reader=publisher_state,
         release_store=release_repo,

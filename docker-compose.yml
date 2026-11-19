@@ -14,8 +14,10 @@ x-top-video-generator-common: &top-video-generator-common
     - ./videos:/app/videos
     - ./logs:/app/logs
     - ./secrets:/app/secrets:ro
-  tmpfs:
-    - /app/run:mode=1777
+    - runtime-state:/app/run
+
+volumes:
+  runtime-state:
 
 services:
   web:

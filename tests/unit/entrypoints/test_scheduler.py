@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-from src.entrypoints.scheduler import ScheduledJob, _job_is_due, _job_run_key, heartbeat_is_fresh
+from src.entrypoints.scheduler import (
+    ScheduledJob,
+    _job_is_due,
+    _job_run_key,
+    heartbeat_is_fresh,
+    heartbeat_is_healthy,
+)
 
 
 async def _noop() -> bool:
@@ -35,3 +41,39 @@ def test_heartbeat_is_fresh_checks_timestamp_window(tmp_path) -> None:
 
     assert heartbeat_is_fresh(heartbeat_file, stale_seconds=60, now=now)
     assert not heartbeat_is_fresh(heartbeat_file, stale_seconds=10, now=now)
+
+
+def test_heartbeat_is_unhealthy_when_last_error_is_present(tmp_path) -> None:
+    heartbeat_file = tmp_path / "scheduler-heartbeat.json"
+    now = datetime(2026, 3, 31, 12, 0, tzinfo=UTC)
+    heartbeat_file.write_text(
+        json.dumps(
+            {
+                "updated_at": now.isoformat(),
+                "error": "fetch failed",
+                "last_failed_job": "fetch_data",
+                "last_failed_at": now.isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert heartbeat_is_healthy(heartbeat_file, stale_seconds=60, now=now) is False
+
+
+def test_heartbeat_is_healthy_without_error(tmp_path) -> None:
+    heartbeat_file = tmp_path / "scheduler-heartbeat.json"
+    now = datetime(2026, 3, 31, 12, 0, tzinfo=UTC)
+    heartbeat_file.write_text(
+        json.dumps(
+            {
+                "updated_at": now.isoformat(),
+                "error": None,
+                "last_failed_job": None,
+                "last_failed_at": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert heartbeat_is_healthy(heartbeat_file, stale_seconds=60, now=now) is True

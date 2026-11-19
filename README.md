@@ -97,9 +97,10 @@ Scoring note: ranking logic is canonically implemented in `src/domain/services/s
 
 #### 5. Web Interface (`src/web/main.py`)
 - FastAPI + Jinja2 SSR
-- OAuth callback handlers for all platforms
+- Protected admin setup and OAuth callback handlers
 - Video ranking viewer with date navigation
-- Background task triggers
+- Session-bound CSRF protection for admin mutations
+- Background task triggers with preflight validation
 
 ### Technology Stack
 
@@ -136,13 +137,13 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 
 1. **Entrypoint Boundary Debt**: fetch-data and weekly horizontal publish orchestration are now use-case owned, but selected entrypoints still contain dependency-wiring detail that should continue moving toward reusable factories and thinner delivery shells.
 
-2. **Web Delivery Layer Stabilization**: route modules are split under `src/web/routes/`, but route-level contracts and template boundary tests still need hardening.
+2. **Web Delivery Layer Stabilization**: route modules are split under `src/web/routes/`, but SSR/HTMX fragment contracts, auth/error feedback, and template boundary tests still need hardening.
 
 3. **Monolithic Deployment**: A single container still handles fetch, processing, publishing, and web delivery via the `STEP` environment variable.
 
 4. **Local Storage Limits**: TinyDB and TinyFlux remain a good fit for single-instance deployments, but they still lack native concurrency controls and stronger operational tooling.
 
-5. **Process-Local Observability**: `/health` and `/metrics` exist, but metrics are in-memory and local to a single process, not centralized or Prometheus-compatible.
+5. **Operational Observability**: `/health` and `/admin/metrics/status` expose operational state, but task history, scheduler heartbeat/error reporting, storage integrity, and cross-process observability still need hardening.
 
 6. **Scoring Consistency**: domain scoring service is canonical, but consistency hardening and regression coverage should continue for ranking semantics.
 
@@ -156,18 +157,25 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 ✅ **Async Isolation** (`src/infrastructure/`): Blocking integrations are isolated with `asyncio.to_thread()`
 ✅ **Retry Utilities** (`src/utils/retry.py`): Exponential backoff with jitter for resilient uploads
 ✅ **Health Checks** (`/health` endpoint): Validates ffmpeg, templates, database
-✅ **Metrics** (`/metrics` endpoint): Tracks fetch/upload/processing counts and errors
-✅ **CI/CD** (`.github/workflows/ci.yml`): Automated testing, linting, type checking
+✅ **Admin Metrics** (`/admin/metrics/status`): Persists fetch/upload/processing counters and errors through TinyFlux
+✅ **Admin Security**: Production session-secret validation, hardened cookies, session revocation, CSRF validation, OAuth state validation, and protected setup mutations
+✅ **Task Dispatch Preflight**: Validates task, publisher, force, and runner conditions before persisting queued state
+✅ **Lock-Safe Task Tracking**: Busy execution locks are reported as skipped/failed instead of successful
+✅ **CI/CD** (`.github/workflows/ci.yml`, `.github/workflows/docker-publish.yml`): Automated testing, linting, type checking, image publishing, and pinned Ubuntu 24.04 runners
 
 ### Planned Improvements
 
 - [ ] Separate container services for ingest/process/publish
 - [ ] Implement dead-letter queue for failed uploads
 - [ ] Add integration tests with mocked external APIs
+- [ ] Standardize SSR/HTMX auth and error fragment contracts
+- [ ] Add stronger scheduler heartbeat and storage-integrity reporting
+- [ ] Consolidate remaining entrypoint dependency wiring
+- [ ] Establish measured storage migration gates for TinyDB/TinyFlux
 
 ### Explicit Non-Goals
 
-- Prometheus metrics export is out of scope for this project. Metrics are intentionally process-local because the system runs on a single server.
+- Prometheus metrics export is out of scope for this project. Operational counters are persisted in TinyFlux and exposed through the authenticated `/admin/metrics/status` fragment; `/metrics` is not registered.
 - A message broker is out of scope for this project. Jobs are not distributed across multiple machines, so adding Redis or RabbitMQ would add operational complexity without solving a real problem.
 - Migrating metadata storage away from TinyDB is not a current project goal. For the current single-server workload, TinyDB and TinyFlux remain an acceptable fit.
 
@@ -176,6 +184,7 @@ TOP_MUSIC_YT_SEARCH_LANGUAGE_CODE=hi
 - Continue consolidating shared publish dependency wiring into reusable factories so entrypoints remain thin delivery shells.
 - Tighten web route and template contract tests under `src/web/routes/` to make SSR/HTMX fragments safer to change.
 - Keep improving scheduler resilience with stronger per-job isolation, retries, and explicit partial-failure reporting.
+- Complete storage integrity and migration-readiness metrics before reconsidering TinyDB/TinyFlux alternatives.
 
 ## Quick Start
 
@@ -303,4 +312,4 @@ The tracked `.env.example` file is now the single template for both local runs a
 
 ## License
 
-MIT
+GNU General Public License v3.0. See [LICENSE](LICENSE).

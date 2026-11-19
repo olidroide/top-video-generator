@@ -58,6 +58,21 @@
   {% endfor %}
 
   {# HTMX feedback region for async messages #}
+  {% if tasks.any_running %}
+    <div
+      id="tasks-feedback"
+      aria-live="polite"
+      aria-atomic="true"
+      role="status"
+      class="n-task-feedback n-task-feedback--requested tasks-grid__fullrow"
+      hx-get="/admin/tasks/status"
+      hx-trigger="every 3s"
+      hx-target="#tasks-grid"
+      hx-swap="outerHTML"
+    >
+      Monitoring execution - task grid is refreshing
+    </div>
+  {% else %}
     <div
       id="tasks-feedback"
       aria-live="polite"
@@ -65,5 +80,6 @@
       role="status"
       class="n-task-feedback-placeholder tasks-grid__fullrow"
     ></div>
+  {% endif %}
   </div>
 </div>

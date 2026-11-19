@@ -23,16 +23,7 @@
     </div>
   </div>
 
-  <div
-    id="connectors-grid"
-    hx-get="/admin/connectors/status"
-    hx-trigger="load"
-    hx-swap="outerHTML"
-    role="region"
-    aria-label="Data connectors"
-  >
-    {{ async_content(state='loading') }}
-  </div>
+  {% include "admin/_data_connectors_status.html" %}
 
   {# ── Publishers (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
@@ -51,16 +42,7 @@
     </div>
   </div>
 
-  <div
-    id="publishers-grid"
-    hx-get="/admin/publishers/status"
-    hx-trigger="load"
-    hx-swap="outerHTML"
-    role="region"
-    aria-label="Publishers"
-  >
-    {{ async_content(state='loading') }}
-  </div>
+  {% include "admin/_publishers_status.html" %}
 
   {# ── Task Operations (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
@@ -77,16 +59,7 @@
     </button>
   </div>
 
-  <div
-    id="tasks-grid"
-    hx-get="/admin/tasks/status"
-    hx-trigger="load"
-    hx-swap="outerHTML"
-    role="region"
-    aria-label="Tasks"
-  >
-    {{ async_content(state='loading') }}
-  </div>
+  {% include "admin/_tasks_status.html" %}
 
   {# ── Runtime Metrics (Lazy-loaded) ── #}
   <div class="section-header" style="margin-top: calc(var(--pico-spacing) * 2.5);">
@@ -103,16 +76,7 @@
     </button>
   </div>
 
-  <div
-    id="metrics-grid"
-    hx-get="/admin/metrics/status"
-    hx-trigger="load"
-    hx-swap="outerHTML"
-    role="region"
-    aria-label="Metrics"
-  >
-    {{ async_content(state='loading') }}
-  </div>
+  {% include "admin/_metrics_status.html" %}
 
   {# ── System Health (Lazy-loaded, footer) ── #}
   <div class="admin-footer">
@@ -132,13 +96,10 @@
 
     <div
       id="health-container"
-      hx-get="/admin/health/status"
-      hx-trigger="load"
-      hx-swap="innerHTML"
       role="region"
       aria-label="System health"
     >
-      {{ async_content(state='loading') }}
+      {% include "admin/_health_status.html" %}
     </div>
   </div>
 

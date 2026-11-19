@@ -180,6 +180,29 @@ def test_build_admin_tasks_view_model_enriches_timeline_with_run_and_duration() 
     assert fetch_events[1]["status_label"] == "SUCCESS"
 
 
+def test_build_admin_tasks_view_model_marks_stale_queued_state() -> None:
+    now = datetime.now(UTC)
+    result = TaskStatusResult(
+        fetch_last_timestamp=None,
+        daily_last_timestamp=None,
+        weekly_last_timestamp=None,
+        timeline_data={
+            "fetch": [
+                {
+                    "status": "queued",
+                    "timestamp": (now - timedelta(minutes=10)).timestamp(),
+                    "error_message": None,
+                }
+            ]
+        },
+    )
+
+    tasks_vm = build_admin_tasks_view_model(result)
+    event = tasks_vm.timeline_data["fetch"][0]
+
+    assert event["duration_label"] == "Stale queued state - no terminal event"
+
+
 def test_build_admin_tasks_view_model_enriches_timeline_error_summary() -> None:
     now = datetime.now(UTC)
     long_error = "Timeout contacting upstream service after multiple retries and partial response corruption in payload"

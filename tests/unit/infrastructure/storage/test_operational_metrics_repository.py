@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from tinyflux import MeasurementQuery, Point, TinyFlux
 
 from src.infrastructure.storage.operational_metrics_repository import OperationalMetricsRepository
 
@@ -47,6 +48,50 @@ def test_retention_prunes_old_metric_events(tmp_path) -> None:
 
     assert counts["fetch"]["count"] == 1
     assert counts["fetch"]["errors"] == 0
+    repo.close()
+
+
+def test_retention_preserves_other_measurements(tmp_path) -> None:
+    db_path = tmp_path / "timeseries.csv"
+    now = datetime.now(UTC)
+
+    db = TinyFlux(str(db_path))
+    db.insert(
+        Point(
+            measurement="Operational metrics",
+            time=now - timedelta(days=40),
+            tags={"stage": "fetch", "outcome": "success"},
+            fields={"count": 1},
+        )
+    )
+    db.insert(
+        Point(
+            measurement="Video visualizations",
+            time=now - timedelta(days=40),
+            tags={"video_id": "video-1", "score_status": "TRENDING"},
+            fields={"views": 100, "likes": 10, "views_growth": 5, "score": 20},
+        )
+    )
+    db.insert(
+        Point(
+            measurement="Task run state",
+            time=now - timedelta(days=40),
+            tags={"task_method": "fetch", "status": "success", "error_message": ""},
+            fields={"count": 1},
+        )
+    )
+    db.close()
+
+    repo = OperationalMetricsRepository(str(db_path), retention_days=30)
+    repo.record_metric_event(stage="fetch", is_error=False, event_time=now)
+
+    db = TinyFlux(str(db_path))
+    video_points = db.search(MeasurementQuery() == "Video visualizations")
+    task_points = db.search(MeasurementQuery() == "Task run state")
+    db.close()
+
+    assert len(video_points) == 1
+    assert len(task_points) == 1
     repo.close()
 
 

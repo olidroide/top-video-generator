@@ -10,15 +10,25 @@ from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.application.trigger_admin_task_use_case import (
+    TriggerAdminTaskRequest,
+    TriggerAdminTaskUseCase,
+)
 from src.config.settings import AppSettings, get_app_settings
 from src.entrypoints.fetch_data import main_async as fetch_data_main_async
 from src.entrypoints.publish_vertical import main_async as publish_vertical_main_async
 from src.entrypoints.publish_video import main_async as publish_weekly_main_async
+from src.infrastructure.storage.task_run_state_repository import TaskRunStateRepository
 from src.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
 JobRunner = Callable[[], Awaitable[bool]]
+_SCHEDULER_TASK_METHODS = {
+    "fetch_data": "fetch",
+    "vertical_publish": "daily",
+    "weekly_publish": "weekly",
+}
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,8 @@ async def _write_heartbeat(
     last_job_name: str | None,
     last_successful_job_name: str | None,
     error: str | None = None,
+    last_failed_job_name: str | None = None,
+    last_failed_at: str | None = None,
 ) -> None:
     payload: dict[str, str | None] = {
         "status": status,
@@ -96,6 +108,8 @@ async def _write_heartbeat(
         "last_job": last_job_name,
         "last_successful_job": last_successful_job_name,
         "error": error,
+        "last_failed_job": last_failed_job_name,
+        "last_failed_at": last_failed_at,
     }
     await asyncio.to_thread(_write_heartbeat_sync, heartbeat_file, payload)
 
@@ -120,13 +134,28 @@ def heartbeat_is_fresh(heartbeat_file: Path, stale_seconds: int, now: datetime |
     return (now.astimezone(UTC) - updated_at.astimezone(UTC)).total_seconds() <= stale_seconds
 
 
+def heartbeat_is_healthy(heartbeat_file: Path, stale_seconds: int, now: datetime | None = None) -> bool:
+    if not heartbeat_is_fresh(heartbeat_file, stale_seconds, now):
+        return False
+    try:
+        payload = json.loads(heartbeat_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    return not payload.get("error")
+
+
 async def main_async() -> None:
     settings = get_app_settings()
     heartbeat_file = Path(settings.scheduler_heartbeat_file)
     scheduler_timezone = _resolve_scheduler_timezone(settings)
     jobs = _build_jobs(settings)
+    task_state_repo = TaskRunStateRepository(settings.db_timeseries_file)
+    tracked_tasks = TriggerAdminTaskUseCase(task_state_repo)
     last_run_keys: dict[str, str] = {}
     last_successful_job_name: str | None = None
+    last_failed_job_name: str | None = None
+    last_failed_at: str | None = None
+    last_error: str | None = None
 
     logger.info(
         "scheduler.started",
@@ -141,6 +170,9 @@ async def main_async() -> None:
             status="idle",
             last_job_name=None,
             last_successful_job_name=last_successful_job_name,
+            error=last_error,
+            last_failed_job_name=last_failed_job_name,
+            last_failed_at=last_failed_at,
         )
         for job in jobs:
             if not _job_is_due(job, now):
@@ -156,28 +188,49 @@ async def main_async() -> None:
                 status="running",
                 last_job_name=job.name,
                 last_successful_job_name=last_successful_job_name,
+                error=last_error,
+                last_failed_job_name=last_failed_job_name,
+                last_failed_at=last_failed_at,
             )
             try:
-                acquired = await job.runner()
+                acquired = await tracked_tasks.execute_tracked(
+                    TriggerAdminTaskRequest(
+                        task_method=_SCHEDULER_TASK_METHODS[job.name],
+                        user_ip=None,
+                    ),
+                    job.runner,
+                )
                 if acquired is False:
+                    last_error = f"{job.name} skipped: execution lock busy"
+                    last_failed_job_name = job.name
+                    last_failed_at = datetime.now(UTC).isoformat()
                     logger.info("scheduler.job_skipped", job=job.name, reason="execution lock busy")
                 else:
                     last_successful_job_name = job.name
+                    last_error = None
                     logger.info("scheduler.job_finished", job=job.name)
                 await _write_heartbeat(
                     heartbeat_file,
                     status="idle",
                     last_job_name=job.name,
                     last_successful_job_name=last_successful_job_name,
+                    error=last_error,
+                    last_failed_job_name=last_failed_job_name,
+                    last_failed_at=last_failed_at,
                 )
             except Exception as exc:
+                last_error = f"{job.name} failed: {exc!s}"
+                last_failed_job_name = job.name
+                last_failed_at = datetime.now(UTC).isoformat()
                 logger.exception("scheduler.job_failed", job=job.name, error=str(exc))
                 await _write_heartbeat(
                     heartbeat_file,
                     status="idle",
                     last_job_name=job.name,
                     last_successful_job_name=last_successful_job_name,
-                    error=f"{job.name} failed: {exc!s}",
+                    error=last_error,
+                    last_failed_job_name=last_failed_job_name,
+                    last_failed_at=last_failed_at,
                 )
                 # Do NOT raise: allow other jobs in cycle to continue
 

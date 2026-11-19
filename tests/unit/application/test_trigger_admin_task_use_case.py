@@ -121,3 +121,41 @@ class TestTriggerAdminTaskUseCase:
             status=TaskRunStatus.FAILED,
             error_message="boom",
         )
+
+    @pytest.mark.asyncio
+    async def test_execute_tracked_records_success(
+        self,
+        use_case: TriggerAdminTaskUseCase,
+        writer_mock,
+    ) -> None:
+        async def task() -> bool:
+            return True
+
+        result = await use_case.execute_tracked(
+            TriggerAdminTaskRequest(task_method="fetch"),
+            task,
+        )
+
+        assert result is True
+        assert [call.kwargs["status"] for call in writer_mock.record_task_event.call_args_list] == [
+            TaskRunStatus.QUEUED,
+            TaskRunStatus.SUCCESS,
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_tracked_records_busy_as_failed(
+        self,
+        use_case: TriggerAdminTaskUseCase,
+        writer_mock,
+    ) -> None:
+        async def task() -> bool:
+            return False
+
+        result = await use_case.execute_tracked(
+            TriggerAdminTaskRequest(task_method="daily"),
+            task,
+        )
+
+        assert result is False
+        statuses = [call.kwargs["status"] for call in writer_mock.record_task_event.call_args_list]
+        assert statuses == [TaskRunStatus.QUEUED, TaskRunStatus.FAILED]

@@ -33,6 +33,7 @@ def _login_admin(client: TestClient) -> object:
     assert match is not None
     csrf_token = match.group(1)
     client.headers["X-CSRF-Token"] = csrf_token
+    client.headers["HX-Request"] = "true"
     return client.post(
         "/admin/login",
         data={"password": "admin-pass", "csrf_token": csrf_token},
@@ -62,6 +63,24 @@ class _TriggerAdminTaskUseCaseStub:
 
     def execute(self, request: TriggerAdminTaskRequest) -> TriggerAdminTaskResult:
         return self.preflight(request)
+
+    async def execute_tracked(
+        self,
+        request: TriggerAdminTaskRequest,
+        task,
+    ) -> bool:
+        preflight = self.preflight(request)
+        if not preflight.queued:
+            return False
+        acquired = await task()
+        if acquired is False:
+            self.mark_failed(
+                task_method=request.task_method,
+                error_message="Task skipped because the execution lock is busy.",
+            )
+            return False
+        self.mark_completed(task_method=request.task_method)
+        return True
 
     def mark_completed(self, *, task_method: str) -> None:
         self.completed_methods.append(task_method)
@@ -263,6 +282,44 @@ def test_admin_status_requires_authenticated_session() -> None:
     assert 'id="admin-auth-error"' in response.text
     assert "Admin session expired or required." in response.text
     assert response.headers["hx-redirect"] == "/admin/login"
+
+
+def test_admin_fragment_redirects_to_full_page_without_htmx(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+
+    with TestClient(app) as client:
+        login_response = _login_admin(client)
+        client.headers.pop("HX-Request", None)
+        response = client.get("/admin/tasks/status", follow_redirects=False)
+
+    assert login_response.status_code == 303
+    assert response.status_code == 303
+    assert response.headers["location"] == "/admin"
+
+
+def test_admin_fragment_returns_partial_with_htmx(monkeypatch) -> None:
+    monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
+    app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
+    app.dependency_overrides[get_admin_task_status_use_case] = lambda: _AdminTaskStatusUseCaseStub(
+        TaskStatusResult(
+            fetch_last_timestamp=None,
+            daily_last_timestamp=None,
+            weekly_last_timestamp=None,
+            latest_status_by_method={},
+            timeline_data={},
+        )
+    )
+
+    with TestClient(app) as client:
+        login_response = _login_admin(client)
+        response = client.get("/admin/tasks/status", headers={"HX-Request": "true"})
+
+    app.dependency_overrides.clear()
+
+    assert login_response.status_code == 303
+    assert response.status_code == 200
+    assert 'id="tasks-grid"' in response.text
 
 
 def test_admin_status_returns_partial_when_authenticated(monkeypatch) -> None:
@@ -500,6 +557,27 @@ def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:
     monkeypatch.setenv("TOP_MUSIC_ADMIN_PASSWORD", "admin-pass")
     app = create_app(AppSettings(yt_search_region_code="ES", app_secret_key="session-secret"))
     app.dependency_overrides[get_setup_page_use_case] = lambda: _SetupPageUseCaseStub(_build_setup_result())
+    app.dependency_overrides[get_admin_task_status_use_case] = lambda: _AdminTaskStatusUseCaseStub(
+        TaskStatusResult(
+            fetch_last_timestamp=None,
+            daily_last_timestamp=None,
+            weekly_last_timestamp=None,
+            latest_status_by_method={},
+            timeline_data={},
+        )
+    )
+    app.dependency_overrides[get_operational_metrics_use_case] = lambda: _OperationalMetricsUseCaseStub(
+        OperationalMetricsResult(
+            fetch_count=10,
+            fetch_errors=2,
+            upload_count=3,
+            upload_errors=1,
+            processing_count=5,
+            processing_errors=0,
+        )
+    )
+    app.dependency_overrides[get_publisher_state_repo] = lambda: _PublisherStateStub(enabled_by_slug={})
+    app.dependency_overrides[get_release_repo] = lambda: _ReleaseRepoStub()
 
     with TestClient(app) as client:
         login_response = _login_admin(client)
@@ -510,7 +588,11 @@ def test_admin_dashboard_renders_metrics_section(monkeypatch) -> None:
     assert login_response.status_code == 303
     assert dashboard_response.status_code == 200
     assert "Runtime Metrics" in dashboard_response.text
-    assert 'hx-get="/admin/metrics/status"' in dashboard_response.text
+    assert 'id="metrics-grid"' in dashboard_response.text
+    assert 'id="tasks-grid"' in dashboard_response.text
+    assert 'id="connectors-grid"' in dashboard_response.text
+    assert 'id="publishers-grid"' in dashboard_response.text
+    assert 'id="health-checks"' in dashboard_response.text
 
 
 def test_admin_task_trigger_requires_authenticated_session() -> None:

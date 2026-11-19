@@ -11,7 +11,7 @@ from typing import IO, TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from tinyflux import Point, TimeQuery, TinyFlux
+from tinyflux import MeasurementQuery, Point, TimeQuery, TinyFlux
 
 
 class OperationalMetricsRepository:
@@ -91,7 +91,8 @@ class OperationalMetricsRepository:
         cutoff = cutoff.replace(microsecond=0)
         cutoff_ts = cutoff.timestamp() - (self._retention_days * 24 * 3600)
         cutoff_dt = datetime.fromtimestamp(cutoff_ts, tz=UTC)
-        self._db.remove(TimeQuery() < cutoff_dt)
+        query = (MeasurementQuery() == self._MEASUREMENT) & (TimeQuery() < cutoff_dt)
+        self._db.remove(query)
 
     @contextmanager
     def _acquire_lock(self) -> Iterator[IO[str]]:

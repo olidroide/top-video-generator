@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 _SECONDS_PER_HOUR = 3600
 _HOURS_PER_DAY = 24
 _HOURS_PER_WEEK = _HOURS_PER_DAY * 7
+_RUNNING_WINDOW_SECONDS = 180
 _SECONDS_PER_MINUTE = 60
 _MINUTES_PER_HOUR = 60
 
@@ -535,8 +536,11 @@ def _enrich_timeline_events(events: list[dict[str, Any]], *, now_timestamp: floa
                     has_terminal_before_next_queue = True
                     break
 
-            if not has_terminal_before_next_queue:
+            queued_age = max(0.0, now_timestamp - timestamp)
+            if not has_terminal_before_next_queue and queued_age <= _RUNNING_WINDOW_SECONDS:
                 duration_label = f"Running for {_format_duration(now_timestamp - timestamp)}"
+            elif not has_terminal_before_next_queue:
+                duration_label = "Stale queued state - no terminal event"
 
         timestamp_full = datetime.fromtimestamp(timestamp, tz=UTC).isoformat(timespec="seconds")
         error_summary = _summarize_error_message(error_message) if error_message else None

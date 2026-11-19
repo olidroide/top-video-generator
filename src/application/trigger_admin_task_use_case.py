@@ -9,6 +9,8 @@ from src.domain.models import TaskMethod, TaskRunStatus
 from src.shared.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from src.domain.ports import TaskRunStateWriter
 
 logger = get_logger(__name__)
@@ -140,3 +142,35 @@ class TriggerAdminTaskUseCase:
             status=TaskRunStatus.FAILED,
             error_message=error_message,
         )
+
+    async def execute_tracked(
+        self,
+        request: TriggerAdminTaskRequest,
+        task: Callable[[], Awaitable[bool]],
+    ) -> bool:
+        """Record a complete task lifecycle around an explicit runner result."""
+        preflight = self.preflight(request)
+        if not preflight.queued:
+            return False
+
+        self._task_run_state_writer.record_task_event(
+            task_method=TaskMethod(request.task_method),
+            status=TaskRunStatus.QUEUED,
+        )
+
+        try:
+            acquired = await task()
+            if acquired is False:
+                self.mark_failed(
+                    task_method=request.task_method,
+                    error_message="Task skipped because the execution lock is busy.",
+                )
+                return False
+            self.mark_completed(task_method=request.task_method)
+            return True
+        except Exception as exc:
+            self.mark_failed(
+                task_method=request.task_method,
+                error_message=str(exc),
+            )
+            raise

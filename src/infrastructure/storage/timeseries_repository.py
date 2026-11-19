@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import fcntl
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import IO, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 from tinyflux import Point, TagQuery, TimeQuery, TinyFlux
 
@@ -28,6 +35,8 @@ class TimeSeriesRepository:
     def __init__(self, db_path: str) -> None:
         """Initialize repository with TinyFlux backend."""
         self._db = TinyFlux(db_path)
+        db_file = Path(db_path)
+        self._lock_path = db_file.with_suffix(f"{db_file.suffix}.lock")
 
     def add_video_point(self, video_point: VideoPoint) -> None:
         """
@@ -36,22 +45,23 @@ class TimeSeriesRepository:
         Args:
             video_point: VideoPoint with video_id, views, likes, score, timestamp.
         """
-        self._db.insert(
-            Point(
-                measurement=self._MEASUREMENT,
-                time=video_point.time,
-                tags={
-                    "video_id": video_point.video_id,
-                    "score_status": video_point.score_status.value if video_point.score_status else "UNKNOWN",
-                },
-                fields={
-                    "views": video_point.views,
-                    "likes": video_point.likes,
-                    "views_growth": video_point.views_growth or 0,
-                    "score": video_point.score or 0,
-                },
+        with self._acquire_lock():
+            self._db.insert(
+                Point(
+                    measurement=self._MEASUREMENT,
+                    time=video_point.time,
+                    tags={
+                        "video_id": video_point.video_id,
+                        "score_status": video_point.score_status.value if video_point.score_status else "UNKNOWN",
+                    },
+                    fields={
+                        "views": video_point.views,
+                        "likes": video_point.likes,
+                        "views_growth": video_point.views_growth or 0,
+                        "score": video_point.score or 0,
+                    },
+                )
             )
-        )
 
     def update_video_point(self, video_point: VideoPoint) -> None:
         """
@@ -61,16 +71,17 @@ class TimeSeriesRepository:
             video_point: Updated VideoPoint with matching video_id and timestamp.
         """
         query = (TagQuery().video_id == video_point.video_id) & (TimeQuery() == video_point.time.astimezone(UTC))
-        self._db.update(
-            query,
-            tags={
-                "score_status": video_point.score_status.value if video_point.score_status else "UNKNOWN",
-            },
-            fields={
-                "views_growth": video_point.views_growth or 0,
-                "score": video_point.score or 0,
-            },
-        )
+        with self._acquire_lock():
+            self._db.update(
+                query,
+                tags={
+                    "score_status": video_point.score_status.value if video_point.score_status else "UNKNOWN",
+                },
+                fields={
+                    "views_growth": video_point.views_growth or 0,
+                    "score": video_point.score or 0,
+                },
+            )
 
     def get_all_points_by_video(self, video_id: str) -> list[Point]:
         """
@@ -83,7 +94,8 @@ class TimeSeriesRepository:
             List of Point objects from TinyFlux (raw).
         """
         query = TagQuery().video_id == video_id
-        return [point for point in self._db.search(query) if self._is_video_measurement(point)]
+        with self._acquire_lock():
+            return [point for point in self._db.search(query) if self._is_video_measurement(point)]
 
     def get_last_timestamp(self) -> datetime | None:
         """
@@ -92,7 +104,8 @@ class TimeSeriesRepository:
         Returns:
             datetime of the last recorded point, or None if empty.
         """
-        points = self._db.search(TimeQuery() >= self._MIN_TIME, sorted=True)
+        with self._acquire_lock():
+            points = self._db.search(TimeQuery() >= self._MIN_TIME, sorted=True)
         if not points:
             return None
         for point in reversed(points):
@@ -115,7 +128,8 @@ class TimeSeriesRepository:
         start_utc = start_time.astimezone(UTC)
         end_utc = end_time.astimezone(UTC)
         query = (TimeQuery() > start_utc) & (TimeQuery() < end_utc)
-        return [point for point in self._db.search(query) if self._is_video_measurement(point)]
+        with self._acquire_lock():
+            return [point for point in self._db.search(query) if self._is_video_measurement(point)]
 
     def _is_video_measurement(self, point: Point) -> bool:
         """Check whether a TinyFlux point belongs to video timeseries."""
@@ -167,3 +181,14 @@ class TimeSeriesRepository:
     def close(self) -> None:
         """Close database connection."""
         self._db.close()
+
+    @contextmanager
+    def _acquire_lock(self) -> Iterator[IO[str]]:
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = self._lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            yield lock_file
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
