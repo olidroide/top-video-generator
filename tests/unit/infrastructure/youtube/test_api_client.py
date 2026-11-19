@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -79,8 +81,8 @@ async def test_yt_client_upload_video_builds_expected_requests(monkeypatch: pyte
     client._yt_search_category_code = "10"
     client._yt_tags = ["tag1", "@@YEAR@@", "tag3"]
 
-    async def _to_thread(func: object, /, *args: object, **kwargs: object) -> object:
-        return func(*args, **kwargs)  # type: ignore[misc]
+    async def _to_thread(func: Callable[..., object], /, *args: object, **kwargs: object) -> object:
+        return func(*args, **kwargs)
 
     monkeypatch.setattr("src.infrastructure.youtube.yt_client.asyncio.to_thread", _to_thread)
     monkeypatch.setattr("src.infrastructure.youtube.yt_client.MediaFileUpload", _FakeMediaFileUpload)
@@ -97,21 +99,26 @@ async def test_yt_client_upload_video_builds_expected_requests(monkeypatch: pyte
 
     assert result == "published-id"
 
-    insert_kwargs = service.calls["videos.insert"]
-    body = insert_kwargs["body"]
+    insert_kwargs = cast("dict[str, Any]", service.calls["videos.insert"])
+    body = cast("dict[str, object]", insert_kwargs["body"])
     assert body["snippet"]["title"] == "A" * 95
     assert body["snippet"]["description"] == "B" * 4900
     assert body["snippet"]["categoryId"] == "10"
     assert body["snippet"]["defaultAudioLanguage"] == "es"
     assert body["snippet"]["tags"] == ["tag1", "2026", "tag3", "custom", "other"]
 
-    assert service.calls["thumbnails.set"]["videoId"] == "published-id"
-    assert service.calls["playlistItems.insert"]["body"]["snippet"]["playlistId"] == "playlist-1"
+    thumbnails = cast("dict[str, object]", service.calls["thumbnails.set"])
+    playlist_insert = cast("dict[str, Any]", service.calls["playlistItems.insert"])
+    assert thumbnails["videoId"] == "published-id"
+    assert playlist_insert["body"]["snippet"]["playlistId"] == "playlist-1"
 
 
 @pytest.mark.asyncio
 async def test_upload_video_returns_none_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FailingRequest:
+    class _FailingRequest(_FakeRequest):
+        def __init__(self) -> None:
+            super().__init__({}, [])
+
         def execute(self) -> dict[str, object]:
             from googleapiclient.errors import HttpError
 
@@ -120,7 +127,7 @@ async def test_upload_video_returns_none_on_http_error(monkeypatch: pytest.Monke
     class _FailingService(_FakeYouTubeService):
         def videos(self) -> _FakeVideosResource:
             class _FailingVideosResource(_FakeVideosResource):
-                def insert(self, **kwargs: object) -> _FailingRequest:
+                def insert(self, **kwargs: object) -> _FakeRequest:
                     self._calls["videos.insert"] = kwargs
                     return _FailingRequest()
 
@@ -134,8 +141,52 @@ async def test_upload_video_returns_none_on_http_error(monkeypatch: pytest.Monke
     client._yt_search_category_code = "10"
     client._yt_tags = []
 
-    async def _to_thread(func: object, /, *args: object, **kwargs: object) -> object:
-        return func(*args, **kwargs)  # type: ignore[misc]
+    async def _to_thread(func: Callable[..., object], /, *args: object, **kwargs: object) -> object:
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("src.infrastructure.youtube.yt_client.asyncio.to_thread", _to_thread)
+    monkeypatch.setattr("src.infrastructure.youtube.yt_client.MediaFileUpload", _FakeMediaFileUpload)
+
+    result = await YTClient.upload_video(
+        client,
+        video_path="/tmp/video.mp4",
+        title="Title",
+        description="Description",
+    )
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_upload_video_returns_none_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _UnauthorizedRequest(_FakeRequest):
+        def __init__(self) -> None:
+            super().__init__({}, [])
+
+        def execute(self) -> dict[str, object]:
+            from googleapiclient.errors import HttpError
+
+            raise HttpError(resp=SimpleNamespace(status=401, reason="Unauthorized"), content=b"401")
+
+    class _UnauthorizedService(_FakeYouTubeService):
+        def videos(self) -> _FakeVideosResource:
+            class _UnauthorizedVideosResource(_FakeVideosResource):
+                def insert(self, **kwargs: object) -> _FakeRequest:
+                    del kwargs
+                    return _UnauthorizedRequest()
+
+            return _UnauthorizedVideosResource({"id": "unused"}, self.calls)
+
+    service = _UnauthorizedService()
+    client = YTClient.__new__(YTClient)
+    client.get_authenticated_service = lambda: service
+    client._yt_search_language_code = "es"
+    client._yt_search_region_code = "ES"
+    client._yt_search_category_code = "10"
+    client._yt_tags = []
+
+    async def _to_thread(func: Callable[..., object], /, *args: object, **kwargs: object) -> object:
+        return func(*args, **kwargs)
 
     monkeypatch.setattr("src.infrastructure.youtube.yt_client.asyncio.to_thread", _to_thread)
     monkeypatch.setattr("src.infrastructure.youtube.yt_client.MediaFileUpload", _FakeMediaFileUpload)

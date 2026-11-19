@@ -549,7 +549,23 @@ class InstagramClient:
             media = await asyncio.to_thread(self._upload_with_fresh_login, video_path, caption)
             return self._extract_media_id(media)
         except Exception as retry_exc:
-            logger.exception("instagram_client.upload_retry_failed", error=str(retry_exc))
+            error_type = type(retry_exc).__name__
+            missing_encryption_header = (
+                isinstance(retry_exc, TypeError) and "None" in str(retry_exc) and "password" in str(retry_exc).lower()
+            )
+            if missing_encryption_header:
+                logger.exception(
+                    "instagram_client.upload_retry_failed_missing_encryption_header",
+                    error_type=error_type,
+                    response_hint="Instagram did not return a usable password encryption key header",
+                    retry_url="Instagram password-encryption login",
+                )
+            else:
+                logger.exception(
+                    "instagram_client.upload_retry_failed",
+                    error=str(retry_exc),
+                    error_type=error_type,
+                )
             return None
 
     async def _retry_upload_with_backoff(self, video_path: str, caption: str) -> str | None:

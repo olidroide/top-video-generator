@@ -84,3 +84,26 @@ def test_upload_with_normal_client_passes_configure_timeout(monkeypatch: pytest.
 
     assert media.pk == "123"
     assert called["configure_timeout"] == InstagramClient._CLIP_CONFIGURE_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_fresh_login_retry_handles_missing_encryption_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = InstagramClient()
+
+    def _raise_missing_header(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("int() cannot convert None for ig-set-password-encryption-key-id")
+
+    async def _fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(client, "_upload_with_fresh_login", _raise_missing_header)
+    monkeypatch.setattr(instagram_client_module.asyncio, "to_thread", _fake_to_thread)
+
+    media_id = await client._retry_upload_with_fresh_login(
+        "videos/20261118_vertical_format.mp4",
+        "caption",
+    )
+
+    assert media_id is None

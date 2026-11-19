@@ -152,7 +152,7 @@ async def _run_vertical_publish_job(settings: AppSettings, *, target_platforms: 
             return
 
         # Publish pending vertical videos
-        await job.publish_vertical_use_case.publish_pending_vertical_videos(
+        publishing_results = await job.publish_vertical_use_case.publish_pending_vertical_videos(
             release_store=job.release_repo,
             publish_executor=job.video_publish_executor,
             vertical_video_pipeline=job.vertical_video_pipeline,
@@ -167,6 +167,16 @@ async def _run_vertical_publish_job(settings: AppSettings, *, target_platforms: 
             yt_title_template=settings.yt_title_template,
             yt_description_template=settings.yt_description_template,
         )
+        failed_results = [result for result in publishing_results if not result.success]
+        if failed_results:
+            for result in failed_results:
+                logger.error(
+                    "publish_vertical.platform_publish_failed",
+                    platform=result.platform.value,
+                    error=result.error,
+                )
+            metrics_repo.record_metric_event(stage="processing", is_error=True)
+            return
         metrics_repo.record_metric_event(stage="processing", is_error=False)
     except Exception:
         metrics_repo.record_metric_event(stage="processing", is_error=True)

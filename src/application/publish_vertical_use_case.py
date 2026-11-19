@@ -85,9 +85,9 @@ class PublishVerticalUseCase:
         integration_checkers: Sequence[IntegrationChecker] = (),
         yt_title_template: str,
         yt_description_template: str,
-    ) -> None:
+    ) -> tuple[PublishingResult, ...]:
         if not pending_publishers:
-            return
+            return ()
 
         content = self.execute(
             PublishVerticalContentRequest(
@@ -156,8 +156,10 @@ class PublishVerticalUseCase:
         # Sequential execution: one publisher at a time.
         # Prevents thread-pool saturation from blocking publishers
         # (e.g. TikTok Playwright timeout blocking Instagram/YouTube).
+        results: list[PublishingResult] = []
         for publisher in pending_publishers:
             result = await _publish_one(publisher)
+            results.append(result)
             if result.success:
                 self.persist_publisher_release(
                     release_store=release_store,
@@ -165,6 +167,7 @@ class PublishVerticalUseCase:
                     result=result,
                     publisher_client_identity=publisher_client_identity,
                 )
+        return tuple(results)
 
     async def _check_tiktok_connection(
         self,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -112,7 +112,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del release_date, release_kind
@@ -144,7 +144,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -186,7 +186,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -215,7 +215,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -249,7 +249,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -323,7 +323,7 @@ class TestPublishVerticalUseCase:
             make_video("v2", score=2, channel_name="B"),
         )
 
-        await use_case.publish_pending_vertical_videos(
+        results = await use_case.publish_pending_vertical_videos(
             release_store=release_store,
             publish_executor=executor,
             vertical_video_pipeline=pipeline,
@@ -344,6 +344,7 @@ class TestPublishVerticalUseCase:
         assert executor.calls[0][1] == "/tmp/final-vertical.mp4"
         assert len(release_store.saved) == 1
         assert release_store.saved[0].platform == Platform.YOUTUBE.value
+        assert tuple(result.platform for result in results) == (Platform.YOUTUBE, Platform.TIKTOK)
 
     @pytest.mark.asyncio
     async def test_publish_pending_vertical_videos_isolates_publisher_exceptions(self, monkeypatch) -> None:
@@ -354,7 +355,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -420,7 +421,7 @@ class TestPublishVerticalUseCase:
             SimpleNamespace(platform_name=Platform.YOUTUBE),
         )
 
-        await use_case.publish_pending_vertical_videos(
+        results = await use_case.publish_pending_vertical_videos(
             release_store=release_store,
             publish_executor=executor,
             vertical_video_pipeline=_VerticalPipelineFake(),
@@ -439,6 +440,9 @@ class TestPublishVerticalUseCase:
         assert executor.calls == [Platform.TIKTOK.value, Platform.YOUTUBE.value]
         assert len(release_store.saved) == 1
         assert release_store.saved[0].platform == Platform.YOUTUBE.value
+        assert len(results) == 2
+        assert results[0].success is False
+        assert results[1].success is True
 
     @pytest.mark.asyncio
     async def test_publish_pending_vertical_videos_skips_when_no_publishers(self) -> None:
@@ -446,7 +450,7 @@ class TestPublishVerticalUseCase:
             def is_release_at_date(
                 self,
                 platform: str,
-                release_date: datetime.date,
+                release_date: date,
                 release_kind: str | None = None,
             ) -> bool:
                 del platform, release_date, release_kind
@@ -479,7 +483,7 @@ class TestPublishVerticalUseCase:
         use_case = PublishVerticalUseCase()
         pipeline = _VerticalPipelineFake()
 
-        await use_case.publish_pending_vertical_videos(
+        results = await use_case.publish_pending_vertical_videos(
             release_store=_ReleaseStoreFake(),
             publish_executor=_PublishExecutorFake(),
             vertical_video_pipeline=pipeline,
@@ -493,5 +497,7 @@ class TestPublishVerticalUseCase:
             yt_title_template="@@TOP_DATE@@ @@HASHTAGS@@",
             yt_description_template="@@TOP_DATE@@\n@@VIDEO_LIST@@\n@@DISCLAIMER@@",
         )
+
+        assert results == ()
 
         assert pipeline.calls == 0
